@@ -2,20 +2,53 @@
 
 A fully featured live map override for [phpVMS 7](https://github.com/phpvms/phpvms) that adds real-time VATSIM integration, weather overlays, and a modern popup design.
 
+> **Weather overlay concept** based on [Weather Overlay on the Live Map](https://github.com/ncd200/Weather-Overlay-on-the-Live_Map) by **Rick Winkelman (Air Berlin Virtual)**
+
+---
+
+## 📦 Installation
+
+This repo contains a **single file**: `live_map.blade.php`
+
+Copy it to the correct path depending on your theme:
+
+| Theme | Path |
+|-------|------|
+| **seven** (default) | `resources/views/layouts/seven/widgets/live_map.blade.php` |
+| **beta** | `resources/views/layouts/beta/widgets/live_map.blade.php` |
+| **default** | `resources/views/layouts/default/widgets/live_map.blade.php` |
+| **SPTheme** | `resources/views/layouts/SPTheme/widgets/live_map.blade.php` |
+| **Disposable_v3** | `resources/views/layouts/Disposable_v3/widgets/live_map.blade.php` |
+
+> Not sure which theme you use? Check your phpVMS Admin → Settings → General → Theme.
+
+---
+
+## 🔑 OpenWeatherMap API Key (required for weather overlays)
+
+1. Register for free at [openweathermap.org](https://home.openweathermap.org/users/sign_up)
+2. Open `live_map.blade.php` and find:
+```javascript
+var OWM_API_KEY = "YOUR_OPENWEATHERMAP_API_KEY_HERE";
+```
+3. Replace with your key.
+
+> ⚠️ Without a valid key the weather buttons are hidden automatically — the map works fully without weather.
+
 ---
 
 ## ✨ Features
 
 ### VATSIM Integration
-- **Live pilots** with aircraft icons rotated by heading
-- **Controllers** with color-coded badges (DEL / GND / TWR / APP / CTR)
-- **FIR/UIR sector boundaries** from VATSpy data
-- **TRACON / Approach Control** automatically merged into the nearest airport marker
-- **ATIS** collapsed by default, expandable in the popup — no more giant popups
-- Full airport name shown in controller popups (from VATSpy data)
-- Refreshes every **30 seconds** (within VATSIM's fair-use policy)
+- Live pilots with aircraft icons rotated by heading
+- Controllers with color-coded badges (DEL / GND / TWR / APP / CTR)
+- FIR/UIR sector boundaries from VATSpy data
+- TRACON / Approach Control automatically merged into the nearest airport marker
+- ATIS collapsed by default, expandable — no more giant popups
+- Full airport name in controller popups
+- Refreshes every 30 seconds
 
-### Badge Legend
+### Badge Legend (built into VATSIM panel)
 | Badge | Color | Meaning |
 |-------|-------|---------|
 | **D** | 🔵 Blue | Delivery |
@@ -26,96 +59,63 @@ A fully featured live map override for [phpVMS 7](https://github.com/phpvms/phpv
 | **i** | 💙 Light Blue | ATIS only |
 
 ### Own VA Flights
-- Large distinctive white/red aircraft icon — always on top of all VATSIM markers
-- Click any aircraft (VA or VATSIM) → dashed red route line drawn to destination airport
-- **Follow Flight** toggle — auto-pan to own flight or scroll freely
+- Large distinctive aircraft icon — always visible above VATSIM traffic
+- Click any aircraft → dashed route line to destination airport
+- Follow Flight toggle — auto-pan or scroll freely
 
-### Weather Overlays (OpenWeatherMap)
+### Weather Overlays
 - Clouds, Radar, Storms, Wind, Temperature, Combo layers
-- Opacity slider
-- Dark map toggle
-- Requires a free [OpenWeatherMap API key](https://openweathermap.org/api)
+- Opacity slider + Dark map toggle
 
-### Design
-- Consistent card-style popups for pilots, controllers, FIR sectors
-- Airline logos loaded from your phpVMS database (always current)
-- Built-in badge legend in the VATSIM control panel
-- Light/dark mode compatible
-
----
-
-## 📦 Installation
-
-### Standard phpVMS 7
-
-1. Copy the file to your phpVMS installation:
-```
-resources/views/vendor/phpvms/maps/live_map.blade.php
-```
-
-2. Add your OpenWeatherMap API key (free at [openweathermap.org](https://openweathermap.org/api)):
-```javascript
-// In live_map.blade.php, find this line:
-var OWM_API_KEY = "YOUR_OPENWEATHERMAP_API_KEY_HERE";
-// Replace with your key:
-var OWM_API_KEY = "abc123yourkeyhere";
-```
-> ⚠️ Without a valid key the weather buttons are hidden automatically. The map works fully without it.
-
-3. Done — no other changes needed.
-
----
-
-### SPtheme (optional)
-
-If you are using [SPtheme](https://forum.phpvms.net/topic/...) the file goes in the same location. The map uses Bootstrap classes and is fully compatible. No additional changes needed.
+### Popup Design
+- Card-style popups for pilots, controllers and FIR sectors
+- Airline logos loaded from your own phpVMS database (always current)
 
 ---
 
 ## ⚙️ Configuration
 
-All configurable values are at the top of the `<script>` block:
+Find these variables near the top of the `<script>` block:
 
 ```javascript
-// VATSIM refresh interval (minimum 15000 = 15s per VATSIM policy)
+// VATSIM refresh interval in ms (VATSIM policy minimum = 15000)
 var VATSIM_REFRESH_MS = 30000;
 
-// Default layer states on page load
-var vatsimShowPilots  = false;   // true = Pilots visible on load
-var vatsimShowCtrl    = true;    // true = Controllers visible on load
-var vatsimShowSectors = false;   // true = FIR Sectors visible on load
+// Default layer visibility on page load
+var vatsimShowPilots  = false;   // Pilots
+var vatsimShowCtrl    = true;    // Controllers
+var vatsimShowSectors = false;   // FIR Sectors
 ```
 
 ---
 
 ## 🗺️ Data Sources
 
-| Source | What for |
-|--------|----------|
+| Source | Purpose |
+|--------|---------|
 | [VATSIM Data API v3](https://data.vatsim.net/v3/vatsim-data.json) | Live pilots & controllers |
-| [VATSpy Data](https://github.com/vatsimnetwork/vatspy-data-project) | Airport positions, FIR names & boundaries |
+| [VATSpy Data Project](https://github.com/vatsimnetwork/vatspy-data-project) | Airport positions & FIR boundaries |
 | [VATSIM Transceivers](https://data.vatsim.net/v3/transceivers-data.json) | Fallback controller positions |
-| [OpenWeatherMap](https://openweathermap.org/api/weathermaps) | Weather tile overlays |
-| phpVMS own database | Airline logos |
-
----
-
-## 🙏 Credits
-
-- **Weather overlay concept** based on [Weather Overlay on the Live Map](https://github.com/ncd200/Weather-Overlay-on-the-Live_Map) by **Rick Winkelman (Air Berlin Virtual)**
-- VATSIM integration, popup redesign, badge system, route lines, TRACON merging: **German Sky Group**
-- Built for [phpVMS 7](https://github.com/phpvms/phpvms)
+| [OpenWeatherMap](https://openweathermap.org/api/weathermaps) | Weather overlays |
+| phpVMS database | Airline logos |
 
 ---
 
 ## 📋 Requirements
 
 - phpVMS 7 (any recent version)
-- A web server serving over **HTTPS** (required for VATSIM API and weather tiles)
-- Optional: Free [OpenWeatherMap API key](https://home.openweathermap.org/users/sign_up) for weather overlays
+- HTTPS (required for VATSIM API and weather tiles)
+- Optional: Free [OpenWeatherMap API key](https://home.openweathermap.org/users/sign_up)
+
+---
+
+## 🙏 Credits
+
+- **Weather overlay concept:** [Rick Winkelman (Air Berlin Virtual)](https://github.com/ncd200/Weather-Overlay-on-the-Live_Map)
+- **VATSIM integration & design:** German Sky Group
 
 ---
 
 ## 📄 License
 
-MIT — free to use, modify and share. Credit appreciated but not required.
+MIT — free to use, modify and share. Credit appreciated.
