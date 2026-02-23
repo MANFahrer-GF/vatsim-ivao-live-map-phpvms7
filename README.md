@@ -43,9 +43,6 @@ Copy `live_map.blade.php` to the correct path for your active theme:
 
 | Theme | Path |
 |-------|------|
-| seven (default) | `resources/views/layouts/seven/widgets/live_map.blade.php` |
-| beta | `resources/views/layouts/beta/widgets/live_map.blade.php` |
-| default | `resources/views/layouts/default/widgets/live_map.blade.php` |
 | SPTheme | `resources/views/layouts/SPTheme/widgets/live_map.blade.php` |
 | Disposable_v3 | `resources/views/layouts/Disposable_v3/widgets/live_map.blade.php` |
 
@@ -233,7 +230,7 @@ The VA flights panel refresh interval is taken automatically from your phpVMS `a
 
 Tested with:
 - phpVMS 7 (dev branch)
-- Themes: seven, Disposable_v3, SPTheme
+- Themes: Disposable_v3, SPTheme
 - ACARS clients: vmsACARS, smartCARS 3
 
 ---
