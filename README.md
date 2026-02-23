@@ -6,6 +6,12 @@ A fully featured live map override for [phpVMS 7](https://github.com/phpvms/phpv
 
 ---
 
+## 🌍 Live Demo
+
+**[Live Karte - German Sky Group](https://german-sky-group.eu/livemap)**
+
+---
+
 ## 📦 Installation
 
 This repo contains a **single file**: `live_map.blade.php`
