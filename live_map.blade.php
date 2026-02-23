@@ -746,6 +746,23 @@
             function attachWeatherToMap(map) {
                 console.log('[LiveMap] attachWeatherToMap called, map:', map);
 
+                var mapDiv = document.getElementById("map");
+                var btnDarkMap  = document.getElementById("btnDarkMap");
+
+                // ── Dark map — funktioniert IMMER, unabhängig vom OWM-Key ──
+                if (btnDarkMap && mapDiv) {
+                    btnDarkMap.addEventListener("click", function () {
+                        var dark = mapDiv.classList.toggle("dark-map");
+                        btnDarkMap.classList.toggle("active", dark);
+                        localStorage.setItem('livemap_darkmode', dark ? '1' : '0');
+                    });
+                    // Zustand beim Laden wiederherstellen
+                    if (localStorage.getItem('livemap_darkmode') === '1') {
+                        mapDiv.classList.add("dark-map");
+                        btnDarkMap.classList.add("active");
+                    }
+                }
+
                 // 👉 PUT YOUR REAL OWM API KEY HERE
                 var OWM_API_KEY = "YOUR_OPENWEATHERMAP_API_KEY_HERE";
 
@@ -905,16 +922,6 @@
                     }
                 });
 
-                // Dark map toggle (CSS filter)
-                btnDarkMap.addEventListener("click", function () {
-                    var dark = mapDiv.classList.toggle("dark-map");
-                    if (dark) {
-                        btnDarkMap.classList.add("active");
-                    } else {
-                        btnDarkMap.classList.remove("active");
-                    }
-                });
-
                 // Opacity slider
                 opacitySlider.addEventListener("input", function () {
                     var op = parseFloat(this.value);
@@ -936,36 +943,39 @@
             var VATSIM_REFRESH_MS = 30000;
 
             // Statischer Airport-Positions-Cache aus VATSpy.dat (ICAO → [lat, lon])
-            // Deckt ALLE Airports ab — nie wieder falsche Positionen durch Transceivers
-            var staticAirportPos  = {};
-            var airportNameCache  = {}; // ICAO → full airport name
+            // Deckt alle ~7000 Airports ab — korrekte Positionen unabhängig von VATSIM-Daten
+            var staticAirportPos    = {};
+            var airportNameCache    = {}; // ICAO → vollständiger Flughafenname
             var staticAirportLoaded = false;
 
-            // Cache: ICAO → FIR-Name
+            // FIR-Namen-Cache: ICAO/Prefix → Name
             var firNameCache = {};
             var firNameLoaded = false;
 
-            // Default: Controllers + FIR Sectors ON, Pilots OFF
-            var vatsimShowPilots = false;
-            var vatsimShowCtrl   = true;
+            // Anzeigestatus der drei VATSIM-Layer
+            // Standard: nur Controller aktiv, Piloten und Sektoren deaktiviert
+            var vatsimShowPilots  = false;
+            var vatsimShowCtrl    = true;
+            var vatsimShowSectors = false;
 
             var vatsimPilotsLayer = L.layerGroup();
             var vatsimCtrlLayer   = L.layerGroup();
             var vatsimSectorLayer = L.layerGroup(); // FIR/CTR-Sektorgrenzen
-            var routeLineLayer    = L.layerGroup(); // Gestrichelte Linie zum Ziel
+            var routeLineLayer    = L.layerGroup(); // Gestrichelte Route-Linie zum Zielflughafen
+            var lastDrawnArr      = null;           // Zuletzt gezeichneter Ziel-ICAO (für Reset)
 
-            // Zeichnet gestrichelte Linie von Flugzeug zu Ziel-Airport
-            // Wird bei Klick auf Flugzeug gezeigt, bei Klick woanders entfernt
+            // Zeichnet gestrichelte Linie vom Flugzeug zum Ziel-Airport
+            // Wird bei Klick auf Flugzeug gezeigt, bei Klick auf die Karte wieder entfernt
             function showRouteLine(map, fromLatLng, toIcao) {
                 routeLineLayer.clearLayers();
                 var toPos = staticAirportPos[toIcao]
                          || staticAirportPos['K' + toIcao]
                          || staticAirportPos['C' + toIcao]
                          || staticAirportPos['P' + toIcao];
-                if (!toPos) return; // Ziel unbekannt
+                if (!toPos) return; // Ziel-Airport nicht in VATSpy-Daten
 
-                // Gestrichelte Linie
-                var line = L.polyline([fromLatLng, toPos], {
+                // Gestrichelte rote Linie
+                L.polyline([fromLatLng, toPos], {
                     color: '#e74c3c',
                     weight: 2,
                     opacity: 0.8,
@@ -973,7 +983,7 @@
                     dashOffset: '0',
                 }).addTo(routeLineLayer);
 
-                // Ziel-Marker: kleiner roter Punkt mit ICAO
+                // Ziel-Badge: roter ICAO-Label am Zielflughafen
                 L.marker(toPos, {
                     icon: L.divIcon({
                         html: '<div style="background:#e74c3c;color:#fff;font-size:9px;font-weight:700;' +
@@ -983,11 +993,7 @@
                     }),
                     interactive: false,
                 }).addTo(routeLineLayer);
-
-                // Klick auf Karte → Linie entfernen
-                map.once('click', function() { routeLineLayer.clearLayers(); });
             }
-            var vatsimShowSectors = false;
 
             // FIR-Boundaries-Cache: wird einmal geladen und gecacht
             var firBoundsGeoJson  = null;
@@ -1552,9 +1558,9 @@
             }
 
             // ── Zoom-basierte Sichtbarkeit für Controller-Marker ──
-            // Bei Zoom < 6: nur FIR-Sektoren sichtbar, Airport-Marker ausblenden
-            // Bei Zoom 6-8: Airport-Marker ohne ICAO-Label (nur Badges)
-            // Bei Zoom >= 9: volle Anzeige
+            // Bei Zoom < 3: Airport-Marker ausblenden (zu kleine Ansicht)
+            // Bei Zoom 3-4: Badges sichtbar, ICAO-Label ausgeblendet
+            // Bei Zoom >= 5: volle Anzeige (Badges + ICAO-Label)
             function updateCtrlZoom(map) {
                 var z = map.getZoom();
                 var markers = document.querySelectorAll('.vatsim-airport-marker');
@@ -1874,7 +1880,7 @@
                     attachWeatherToMap(this);
                 });
 
-                // Hook 2: VATSIM + Follow-Flight + VA-Icon
+                // Hook 2: VATSIM-Daten + VA-Icon + Follow Flight
                 console.log('[LiveMap] Registering Leaflet init hook for VATSIM');
                 L.Map.addInitHook(function () {
                     var map = this;
@@ -1889,66 +1895,71 @@
                     // Zoom-basierte Sichtbarkeit
                     map.on('zoomend', function() { updateCtrlZoom(map); });
 
-                    // ── VA-Flugzeug: Klick → Linie zum Ziel ──
-                    // phpvms setzt Marker via layeradd; wir hängen click-Handler dran
-                    map.on('layeradd', function(eAdd) {
-                        var layer = eAdd.layer;
-                        if (!layer || !layer.getIcon) return;
-                        try {
-                            var icon = layer.getIcon();
-                            var url = (icon && icon.options && icon.options.iconUrl) || '';
-                            if (url.indexOf('aircraft.png') === -1) return;
-                            // Ziel aus phpvms Rivets-Daten lesen
-                            layer.on('click', function() {
-                                var arrIcao = null;
-                                // Versuche Ziel aus dem sichtbaren pirep-Binding zu lesen
-                                var routeEl = document.querySelector('[rv-text="pirep.arr_airport.icao"]');
-                                if (routeEl && routeEl.textContent) arrIcao = routeEl.textContent.trim();
-                                if (arrIcao && layer.getLatLng) {
-                                    showRouteLine(map, layer.getLatLng(), arrIcao);
-                                }
-                            });
-                        } catch(err) {}
+                    // ── Karte klicken → Route-Linie entfernen ──
+                    // Einmalig registriert (nicht innerhalb showRouteLine, um Listener-Akkumulation zu vermeiden)
+                    map.on('click', function() {
+                        routeLineLayer.clearLayers();
+                        lastDrawnArr = null;
                     });
 
-                    // ── VA-Flugzeug: groß, weiß mit dunklem Rand — unübersehbar ──
-                    function makeVaIcon(heading) {
-                        var h = heading || 0;
+                    // ── VA-Flugzeug: phpVMS-Icon durch VA-SVG-Icon ersetzen ──
+                    // phpVMS setzt aircraft.png als Icon → wir ersetzen es durch unser SVG
+                    // phpVMS/leaflet-rotatedmarker übernimmt die CSS-Rotation automatisch
+                    function makeVaIcon() {
                         var svg =
                             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="38" height="38">' +
-                            '<g transform="rotate(' + h + ',20,20)">' +
-                            // Rumpf weiß
                             '<ellipse cx="20" cy="20" rx="3.5" ry="13" fill="#ffffff" stroke="#1a3a6b" stroke-width="1.8"/>' +
-                            // Roter Streifen auf dem Rumpf
                             '<rect x="17.5" y="14" width="5" height="12" rx="1.5" fill="#e74c3c" opacity="0.85"/>' +
-                            // Tragflächen
                             '<polygon points="20,17 2,25 2,28 20,23 38,28 38,25" fill="#ffffff" stroke="#1a3a6b" stroke-width="1.5"/>' +
-                            // Höhenleitwerk
                             '<polygon points="20,31 11,38 11,39.5 20,36 29,39.5 29,38" fill="#ffffff" stroke="#1a3a6b" stroke-width="1.3"/>' +
-                            // Cockpit blau
                             '<ellipse cx="20" cy="10" rx="2" ry="3.5" fill="rgba(100,160,255,0.7)"/>' +
-                            '</g></svg>';
+                            '</svg>';
                         return L.divIcon({
-                            html: '<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.8))">' +
+                            html: '<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.8));width:38px;height:38px">' +
                                   '<img src="data:image/svg+xml;base64,' + btoa(svg) + '" width="38" height="38" style="display:block"></div>',
                             className: '', iconSize: [38, 38], iconAnchor: [19, 19],
                         });
                     }
+
+                    // ── layeradd-Hook: VA-Marker erkennen, Icon ersetzen, Klick-Handler registrieren ──
+                    var infoBox = document.getElementById('map-info-box');
+
                     map.on('layeradd', function(e) {
                         var layer = e.layer;
                         if (!layer || !layer.getIcon) return;
                         try {
                             var icon = layer.getIcon();
                             var url  = (icon && icon.options && icon.options.iconUrl) || '';
-                            if (url.indexOf('aircraft.png') !== -1) {
-                                layer.setIcon(makeVaIcon(layer.options.rotationAngle || 0));
-                                // Immer über allen anderen Markern
-                                layer.setZIndexOffset(10000);
-                            }
+                            if (url.indexOf('aircraft.png') === -1) return;
+
+                            // VA-Icon setzen (phpVMS rotiert per CSS-Transform)
+                            layer.setIcon(makeVaIcon());
+                            layer.setZIndexOffset(10000);
+
+                            // Klick auf VA-Marker → Route-Linie zum Zielflughafen zeichnen
+                            layer.on('click', function(ev) {
+                                L.DomEvent.stopPropagation(ev); // verhindert gleichzeitigen Karten-Klick
+                                var pos = layer.getLatLng();
+                                // Rivets befüllt die Info-Card async → kurzes Timeout abwarten
+                                setTimeout(function() {
+                                    if (!infoBox) return;
+                                    var routeEl = infoBox.querySelector('.map-info-route-big');
+                                    if (!routeEl) return;
+                                    // Route-Text parsen: "EDJA › EGSS" → Arrival = "EGSS"
+                                    var parts = (routeEl.textContent || '').split('›');
+                                    if (parts.length < 2) return;
+                                    var arr = parts[1].trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                    if (arr && arr.length >= 3) {
+                                        lastDrawnArr = arr;
+                                        showRouteLine(map, pos, arr);
+                                    }
+                                }, 200);
+                            });
                         } catch(err) {}
                     });
 
-                    // ── Logo: https erzwingen via MutationObserver auf rv-src ──
+                    // ── Logo: HTTPS erzwingen via MutationObserver auf das Airline-Logo-Element ──
+                    // phpVMS setzt Logo-URLs manchmal als HTTP → Browser blockiert Mixed Content
                     var logoImg = document.getElementById('map-airline-logo');
                     if (logoImg) {
                         var logoObserver = new MutationObserver(function() {
@@ -1962,10 +1973,10 @@
                         logoObserver.observe(logoImg, { attributes: true, attributeFilter: ['src'] });
                     }
 
-                    // ── Follow-Flight Toggle ──
+                    // ── Follow Flight: phpVMS panTo/setView/flyTo abfangen ──
+                    // Wenn deaktiviert: Karte bleibt an aktueller Position, manuelles Scrollen möglich
                     var followEnabled = true;
 
-                    // phpvms ruft intern panTo / setView auf → intercepten
                     var _origPanTo   = map.panTo.bind(map);
                     var _origSetView = map.setView.bind(map);
                     var _origFlyTo   = map.flyTo ? map.flyTo.bind(map) : null;
@@ -1993,7 +2004,7 @@
                         };
                     }
 
-                    // Toggle-Buttons
+                    // ── Toggle-Buttons für VATSIM-Layer und Follow Flight ──
                     var btnPilots  = document.getElementById('btnVatsimPilots');
                     var btnCtrl    = document.getElementById('btnVatsimCtrl');
                     var btnSectors = document.getElementById('btnVatsimSectors');
