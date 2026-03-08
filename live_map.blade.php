@@ -1504,7 +1504,7 @@
                     }
                 }
 
-                var OWM_API_KEY = "YOUR_OPENWEATHERMAP_API_KEY_HERE";
+                var OWM_API_KEY = "3080038ebd8f0e05de42ee58e84cea74";
                 if (!OWM_API_KEY || OWM_API_KEY === "YOUR_OPENWEATHERMAP_API_KEY_HERE") {
                     console.warn('[LiveMap] OWM API key not set; skipping overlays');
                     return;
@@ -1964,6 +1964,7 @@
             var firBoundsGeoJson = null;
             var ctrlPosCache     = {};
             var firPrefixMap     = {};
+            var uirToFirsMap     = {};
 
             var CTRL_TYPES = {
                 0:{label:'OBS',color:'#95a5a6'}, 1:{label:'FSS',color:'#8e44ad'},
@@ -2179,23 +2180,21 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                 });
                 var claimedFeatures={};
                 var ctrlFeatureMap={};
+                function _norm(s){return s.replace(/-/g,'_');}
                 Object.keys(activeFirMap).forEach(function(mapKey){
                     var info=activeFirMap[mapKey];
                     var root=info.root||mapKey.split('_')[0];
                     var isSubKey=mapKey.indexOf('_')!==-1;
                     var resolvedRoot=firPrefixMap[root]||root;
                     var features=[];
-                    if(isSubKey){
-                        var f=featureById[mapKey]||featureById[mapKey.replace(/_/g,'-')];
-                        if(f){features=[f];claimedFeatures[mapKey]=true;claimedFeatures[mapKey.replace(/_/g,'-')]=true;}
-                        else{var rootF=featureById[resolvedRoot]||featureById['K'+resolvedRoot];if(rootF)features=[rootF];}
-                    } else {
-                        Object.keys(featureById).forEach(function(normId){
-                            if(claimedFeatures[normId]) return;
-                            var f2=featureById[normId];
-                            if(normId===resolvedRoot||normId===root||normId==='K'+root||root==='K'+normId){if(features.indexOf(f2)===-1)features.push(f2);}
-                        });
-                    }
+                    /* Phase 1: exact sub-key match (sectored callsigns like UNKL_N_CTR) */
+                    if(isSubKey){var f=featureById[mapKey]||featureById[mapKey.replace(/_/g,'-')];if(f){features=[f];claimedFeatures[mapKey]=true;claimedFeatures[mapKey.replace(/_/g,'-')]=true;}}
+                    /* Phase 2: broad normalised search — runs for ALL keys when Phase 1 missed */
+                    if(features.length===0){var nR=_norm(root),nRe=_norm(resolvedRoot);Object.keys(featureById).forEach(function(fK){if(claimedFeatures[fK])return;var nk=_norm(fK),ft=featureById[fK];if(nk===nRe||nk===nR||nk==='K'+nR||nR==='K'+nk){if(features.indexOf(ft)===-1)features.push(ft);}});}
+                    /* Phase 3: startsWith fallback for sub-sector GeoJSON IDs (e.g. UNKL-1) */
+                    if(features.length===0){var nR2=_norm(root),nRe2=_norm(resolvedRoot);Object.keys(featureById).forEach(function(fK){if(claimedFeatures[fK])return;var nk=_norm(fK),ft=featureById[fK];if(nk.indexOf(nRe2+'_')===0||nk.indexOf(nR2+'_')===0){if(features.indexOf(ft)===-1)features.push(ft);}});}
+                    /* Phase 4: UIR expansion — resolve UIR (e.g. RU-SC) to constituent FIR polygons */
+                    if(features.length===0){var uirFirs=uirToFirsMap[root]||uirToFirsMap[resolvedRoot]||uirToFirsMap[_norm(root)]||null;if(uirFirs){uirFirs.forEach(function(fid){var nfid=_norm(fid);var ft=featureById[nfid]||featureById[fid];if(ft&&features.indexOf(ft)===-1)features.push(ft);});if(features.length)info.isUpper=true;}}
                     if(features.length>0) ctrlFeatureMap[mapKey]=features;
                 });
 
@@ -2286,6 +2285,20 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                         } else if(section==='firs'&&parts.length>=2){
                             var ficao=parts[0].trim().toUpperCase(),name=parts[1].trim(),prefix=(parts[2]||'').trim().toUpperCase();
                             if(ficao&&name){firNameCache[ficao]=name;if(prefix){firNameCache[prefix]=name;firPrefixMap[prefix]=ficao;firPrefixMap[ficao]=ficao;}}
+                        } else if(section==='uirs'&&parts.length>=2){
+                            /* UIR format varies: ID|FIR1,FIR2 or ID|Name|FIR1,FIR2 */
+                            var uid=parts[0].trim().toUpperCase();
+                            /* Collect ALL fields after the ID, split each by comma/space */
+                            var allFirs=[];
+                            for(var pi=1;pi<parts.length;pi++){
+                                var chunk=parts[pi].trim().toUpperCase();
+                                chunk.split(/[,\s]+/).forEach(function(tok){
+                                    tok=tok.trim();
+                                    /* Only keep tokens that look like ICAO codes (2-5 uppercase alphanum, optionally with hyphen) */
+                                    if(tok&&/^[A-Z0-9\-]{2,8}$/.test(tok)&&tok.length<=6) allFirs.push(tok);
+                                });
+                            }
+                            if(uid&&allFirs.length){uirToFirsMap[uid]=allFirs;firPrefixMap[uid]=uid;}
                         }
                     });
                 }).catch(function(e){firNameLoaded=true;staticAirportLoaded=true;console.warn('[VATSIM] VATSpy.dat nicht geladen:',e);});
@@ -2355,6 +2368,8 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                         var pos=staticAirportPos[prefix]||staticAirportPos['K'+prefix]||staticAirportPos['P'+prefix]||staticAirportPos['C'+prefix]||null;
                         if(!pos)(data.airports||[]).forEach(function(a){if(!pos&&(a.icao===prefix||a.icao==='K'+prefix)){var alat=parseFloat(a.latitude||a.lat),alon=parseFloat(a.longitude||a.lon);if(!isNaN(alat)&&!isNaN(alon))pos=[alat,alon];}});
                         if(!pos) pos=ctrlPosCache[c.callsign.toUpperCase()];
+                        /* CTR/FSS without position: keep for FIR sector matching (polygon doesn't need pos) */
+                        if(!pos&&(c.facility===6||c.facility===1)){centerList.push({ctrl:c,pos:null});return;}
                         if(!pos) return;
                         if(c.facility===6||c.facility===1){centerList.push({ctrl:c,pos:pos});}
                         else{

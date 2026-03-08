@@ -4,6 +4,52 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.5.0] — 2026-03-08
+
+### Bug Fixes — FIR Sector Rendering
+
+Three bugs in the `renderActiveSectors` function prevented FIR sector polygons from appearing for large parts of the world, most visibly in Russia, CIS, Central Asia, and the Caucasus region.
+
+#### Fix 1 — Sub-sector callsign matching too narrow
+
+Controllers using sub-sector callsigns (e.g. `UNKL_N_CTR`, `UUWV_E_CTR`) were processed through a narrow exact-match path (`isSubKey` branch) that only checked for an exact GeoJSON feature ID like `UNKL_N` or `UNKL-N`. When neither existed, the code fell back to a minimal root lookup — but never ran the broad search that already worked for simple callsigns like `UNKL_CTR`.
+
+The matching logic now uses a **4-phase cascade** that runs for all callsigns:
+
+| Phase | Method | Example |
+|-------|--------|---------|
+| 1 | Exact sub-key match | `UNKL_N` → GeoJSON `UNKL-N` |
+| 2 | Broad normalised search | `UNKL` → scans all GeoJSON features |
+| 3 | startsWith fallback | `UNKL` → matches `UNKL-1`, `UNKL-2` |
+| 4 | UIR expansion *(new)* | `RU-SC` → resolves to `URRV`, `UGGG`, `UDDD`, `UBBA` |
+
+A `_norm()` helper normalises hyphens to underscores on both sides of every comparison, preventing silent mismatches between `firPrefixMap` (hyphens) and GeoJSON keys (underscores).
+
+#### Fix 2 — CTR/FSS controllers without position silently dropped
+
+Controllers like `RU-SC_FSS` have no airport in VATSpy's static data and often no transceiver entry. The code's `if(!pos) return;` skipped them entirely — before they could even reach the FIR sector matching logic. CTR and FSS controllers are now kept in the processing pipeline with `pos: null`, since the FIR polygon itself does not require a controller position.
+
+#### Fix 3 — UIR (Upper Information Region) support
+
+Callsigns like `RU-SC_FSS`, `RU-EC_FSS`, `RU-NW_FSS` refer to **UIRs** — composite airspace regions that consist of multiple FIRs. The `[UIRs]` section of VATSpy.dat was not parsed at all.
+
+The code now:
+1. Parses the `[UIRs]` section during `loadFirNames()` into a `uirToFirsMap` lookup table
+2. In Phase 4 of the matching cascade, resolves a UIR callsign to its constituent FIR IDs
+3. Draws all constituent FIR polygons as a single sector group
+4. Automatically marks UIR sectors as Upper Airspace (dashed purple styling)
+
+### Affected Regions
+
+- **Russia** — UNKL, URWW, URMM, UUWV, ULLL, UWSG and all other U-prefix FIRs
+- **Russian UIRs** — RU-SC (Caucasus), RU-EC (East Central), RU-NW (Northwest), RU-WS (West Siberia), etc.
+- **Central Asia** — UACC, UAAA, UATT, UTAA, UTDD, UZTT
+- **Caucasus** — UBBB, UGTB, UGEE, UDDD
+- **Any FIR worldwide** using hyphenated sub-sector IDs in VATSpy GeoJSON
+- **Any UIR worldwide** defined in the `[UIRs]` section of VATSpy.dat
+
+---
+
 ## [4.0.0] — 2026-02-28
 
 ### New Features
