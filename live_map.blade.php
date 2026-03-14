@@ -1740,7 +1740,10 @@
 
                 var cloudsLayer = L.tileLayer(weatherTileUrl("clouds_new"), { opacity:1, pane:'weatherPane', className:'owm-clouds-layer', attribution:"Clouds © OpenWeatherMap" });
                 var precipLayer = L.tileLayer(weatherTileUrl("precipitation_new"), { opacity:1, pane:'weatherPane', className:'owm-precip-layer', attribution:"Precipitation © OpenWeatherMap" });
-                var stormsLayer = L.tileLayer(weatherTileUrl("thunder_new"), { opacity:1, pane:'weatherPane', className:'owm-thunder-layer owm-storms-layer', attribution:"Thunderstorms © OpenWeatherMap" });
+                var stormsLayerCandidates = ["thunder_new", "weather_new", "precipitation_new"];
+                var stormsLayerCandidateIndex = 0;
+                var stormsLayerName = stormsLayerCandidates[stormsLayerCandidateIndex];
+                var stormsLayer = L.tileLayer(weatherTileUrl(stormsLayerName), { opacity:1, pane:'weatherPane', className:'owm-thunder-layer owm-storms-layer', attribution:"Thunderstorms © OpenWeatherMap" });
                 var windLayer   = L.tileLayer(weatherTileUrl("wind_new"), { opacity:1, pane:'weatherPane', className:'owm-wind-layer', attribution:"Wind © OpenWeatherMap" });
                 var tempLayer   = L.tileLayer(weatherTileUrl("temp_new"), { opacity:1, pane:'weatherPane', className:'owm-temp-layer', attribution:"Temperature © OpenWeatherMap" });
 
@@ -1812,6 +1815,19 @@
                 allLayers.forEach(function(layer){
                     layer._lmOnError = function(ev) {
                         if (weatherDisabled || layer._lmDisabled) return;
+                        if (layer === stormsLayer && stormsLayerCandidateIndex < (stormsLayerCandidates.length - 1)) {
+                            var prevName = stormsLayerName;
+                            stormsLayerCandidateIndex++;
+                            stormsLayerName = stormsLayerCandidates[stormsLayerCandidateIndex];
+                            try {
+                                stormsLayer.setUrl(weatherTileUrl(stormsLayerName), false);
+                                stormsLayer._lmErrCount = 0;
+                                console.warn('[LiveMap] Storms layer fallback: ' + prevName + ' -> ' + stormsLayerName);
+                                return;
+                            } catch (e) {
+                                console.warn('[LiveMap] Storms fallback switch failed', e);
+                            }
+                        }
                         layer._lmErrCount = (layer._lmErrCount || 0) + 1;
                         if (layer._lmErrCount === 1) {
                             console.warn('[LiveMap] Weather tile request failed for ' + (layer._lmLabel || 'layer'), ev && ev.error ? ev.error : ev);
