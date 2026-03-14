@@ -1656,6 +1656,25 @@
                 var opacitySlider = document.getElementById("weatherOpacity");
                 var weatherDisabled = false;
 
+                function upsertWeatherNote(message, color) {
+                    var weatherContent = document.getElementById('weather-content');
+                    if (!weatherContent) return;
+                    var note = document.getElementById('weather-unavailable-note');
+                    if (!note) {
+                        note = document.createElement('div');
+                        note.id = 'weather-unavailable-note';
+                        note.style.cssText = 'margin-top:8px;font-size:11px;text-align:center';
+                        weatherContent.appendChild(note);
+                    }
+                    note.style.color = color || '#777';
+                    note.textContent = message;
+                }
+
+                function setWeatherWarning(message) {
+                    if (weatherDisabled) return;
+                    upsertWeatherNote(message, '#8a6d3b');
+                }
+
                 function setWeatherUnavailable(message) {
                     weatherDisabled = true;
                     var weatherBtns = [btnClouds, btnRadar, btnStorms, btnWind, btnTemp, btnCombined];
@@ -1674,14 +1693,7 @@
                     var sliderWrap = document.querySelector('.weather-slider-wrapper');
                     if (sliderWrap) sliderWrap.style.display = 'none';
 
-                    var weatherContent = document.getElementById('weather-content');
-                    if (weatherContent && !document.getElementById('weather-unavailable-note')) {
-                        var note = document.createElement('div');
-                        note.id = 'weather-unavailable-note';
-                        note.style.cssText = 'margin-top:8px;font-size:11px;color:#777;text-align:center';
-                        note.textContent = message;
-                        weatherContent.appendChild(note);
-                    }
+                    upsertWeatherNote(message, '#777');
                 }
 
                 if (btnDarkMap && mapDiv) {
@@ -1736,44 +1748,94 @@
 
                 var allLayers = [cloudsLayer, precipLayer, stormsLayer, windLayer, tempLayer];
                 btnClouds._on = btnRadar._on = btnStorms._on = btnWind._on = btnTemp._on = false;
-                var weatherTileErrors = 0;
+                [
+                    [btnClouds, cloudsLayer, 'Clouds', true],
+                    [btnRadar, precipLayer, 'Radar', true],
+                    [btnStorms, stormsLayer, 'Storms', true],
+                    [btnWind, windLayer, 'Wind', false],
+                    [btnTemp, tempLayer, 'Temperature', false]
+                ].forEach(function(meta){
+                    var btn = meta[0], layer = meta[1], label = meta[2], combo = meta[3];
+                    layer._lmBtn = btn;
+                    layer._lmLabel = label;
+                    layer._lmCombo = combo;
+                    layer._lmDisabled = false;
+                    layer._lmErrCount = 0;
+                });
 
                 function setAllWeatherOpacity(op) { allLayers.forEach(function(l){ if(l.setOpacity) l.setOpacity(op); }); }
-                function disableWeatherLayersFromErrors(tileErr) {
-                    if (weatherDisabled) return;
-                    allLayers.forEach(function(layer) {
-                        try { map.removeLayer(layer); } catch (e) {}
-                        layer.off('tileerror', onWeatherTileError);
-                    });
-                    btnClouds._on = btnRadar._on = btnStorms._on = btnWind._on = btnTemp._on = false;
+                function syncCombinedButtonState() {
+                    if (!btnCombined) return;
+                    var comboLayersAvailable = !cloudsLayer._lmDisabled && !precipLayer._lmDisabled && !stormsLayer._lmDisabled;
+                    if (weatherDisabled || !comboLayersAvailable) {
+                        btnCombined.disabled = true;
+                        btnCombined.classList.remove("active");
+                        btnCombined.style.opacity = "0.45";
+                        btnCombined.style.cursor = "not-allowed";
+                        btnCombined.title = "Combo unavailable (one or more combo layers failed)";
+                        return;
+                    }
+                    btnCombined.disabled = false;
+                    btnCombined.style.opacity = "";
+                    btnCombined.style.cursor = "";
+                    btnCombined.title = "Combined mode";
+                    btnCombined.classList.toggle("active", !!btnClouds._on && !!btnRadar._on && !!btnStorms._on);
+                }
+
+                function disableWeatherLayerFromErrors(layer, tileErr) {
+                    if (weatherDisabled || !layer || layer._lmDisabled) return;
+                    layer._lmDisabled = true;
+
+                    try { map.removeLayer(layer); } catch (e) {}
+                    if (layer._lmOnError) layer.off('tileerror', layer._lmOnError);
+
+                    if (layer._lmBtn) {
+                        layer._lmBtn._on = false;
+                        layer._lmBtn.disabled = true;
+                        layer._lmBtn.classList.remove("active");
+                        layer._lmBtn.style.opacity = "0.45";
+                        layer._lmBtn.style.cursor = "not-allowed";
+                        layer._lmBtn.title = (layer._lmLabel || 'Weather layer') + " unavailable (tile errors)";
+                    }
+
                     var status = tileErr && tileErr.error && tileErr.error.status
                         ? (' (HTTP ' + tileErr.error.status + ')')
                         : '';
-                    setWeatherUnavailable('Weather layers unavailable (tile errors)' + status);
-                }
-                function onWeatherTileError(ev) {
-                    if (weatherDisabled) return;
-                    weatherTileErrors++;
-                    if (weatherTileErrors === 1) {
-                        console.warn('[LiveMap] Weather tile request failed', ev && ev.error ? ev.error : ev);
-                    }
-                    if (weatherTileErrors >= 3) {
-                        disableWeatherLayersFromErrors(ev);
+                    setWeatherWarning((layer._lmLabel || 'A weather') + ' layer unavailable (tile errors)' + status + '. Other layers remain available.');
+                    syncCombinedButtonState();
+
+                    if (allLayers.every(function(l){ return !!l._lmDisabled; })) {
+                        setWeatherUnavailable('Weather layers unavailable (all tile layers failed)' + status);
                     }
                 }
-                allLayers.forEach(function(layer){ layer.on('tileerror', onWeatherTileError); });
+
+                allLayers.forEach(function(layer){
+                    layer._lmOnError = function(ev) {
+                        if (weatherDisabled || layer._lmDisabled) return;
+                        layer._lmErrCount = (layer._lmErrCount || 0) + 1;
+                        if (layer._lmErrCount === 1) {
+                            console.warn('[LiveMap] Weather tile request failed for ' + (layer._lmLabel || 'layer'), ev && ev.error ? ev.error : ev);
+                        }
+                        if (layer._lmErrCount >= 3) {
+                            disableWeatherLayerFromErrors(layer, ev);
+                        }
+                    };
+                    layer.on('tileerror', layer._lmOnError);
+                });
 
                 function activateLayer(btn, layer) {
-                    if (weatherDisabled || !btn || !layer || btn._on) return;
+                    if (weatherDisabled || !btn || !layer || btn._on || btn.disabled || layer._lmDisabled) return;
                     layer.addTo(map);
                     btn._on = true;
                     btn.classList.add("active");
+                    syncCombinedButtonState();
                 }
                 function toggleLayer(btn, layer) {
-                    if (weatherDisabled) return;
+                    if (weatherDisabled || !btn || !layer || btn.disabled || layer._lmDisabled) return;
                     if (btn._on) { map.removeLayer(layer); btn.classList.remove("active"); }
                     else { layer.addTo(map); btn.classList.add("active"); }
                     btn._on = !btn._on;
+                    syncCombinedButtonState();
                 }
 
                 btnClouds.addEventListener("click",   function(){ toggleLayer(btnClouds, cloudsLayer); });
@@ -1782,6 +1844,7 @@
                 btnWind.addEventListener("click",     function(){ toggleLayer(btnWind, windLayer); });
                 btnTemp.addEventListener("click",     function(){ toggleLayer(btnTemp, tempLayer); });
                 btnCombined.addEventListener("click", function(){
+                    if (weatherDisabled || btnCombined.disabled) return;
                     activateLayer(btnClouds, cloudsLayer);
                     activateLayer(btnRadar, precipLayer);
                     activateLayer(btnStorms, stormsLayer);
@@ -1800,7 +1863,6 @@
                     activateLayer(btnClouds, cloudsLayer);
                     activateLayer(btnRadar, precipLayer);
                     activateLayer(btnStorms, stormsLayer);
-                    if (btnCombined) btnCombined.classList.add("active");
                 } else if (defaultLayer === 'clouds') {
                     activateLayer(btnClouds, cloudsLayer);
                 } else if (defaultLayer === 'radar') {
@@ -1812,6 +1874,7 @@
                 } else if (defaultLayer === 'temp') {
                     activateLayer(btnTemp, tempLayer);
                 }
+                syncCombinedButtonState();
             }
 
             // ════════════════════════════════════════════════════════════
