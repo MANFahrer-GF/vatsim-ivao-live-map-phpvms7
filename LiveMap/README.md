@@ -11,7 +11,10 @@ This module provides:
 
 1. Copy folder `LiveMap` to your phpVMS installation:
    - `Modules/LiveMap`
-2. Deploy matching `live_map.blade.php` from this release.
+2. Deploy matching blade widget files from this release:
+   - `live_map.blade.php`
+   - `live_map_styles.blade.php`
+   - `live_map_scripts.blade.php`
 3. Open `/update` in your browser to refresh modules/routes.
 4. Open Admin -> Live Map and save once.
 5. Use Admin -> Clear Caches (no SSH required).

@@ -30,7 +30,11 @@ For convenience, `LiveMap-full-package.zip` contains both.
 
 1. Extract `LiveMap-full-package.zip`.
 2. Copy `LiveMap/` to your phpVMS root under `Modules/LiveMap`.
-3. Copy `live_map.blade.php` to your active theme widget path, for example:
+3. Copy these three files to your active theme widget path:
+   - `live_map.blade.php`
+   - `live_map_styles.blade.php`
+   - `live_map_scripts.blade.php`
+   For example:
    - `resources/views/layouts/SPTheme/widgets/live_map.blade.php`
    - `resources/views/layouts/Disposable_v3/widgets/live_map.blade.php`
 4. Open your phpVMS update endpoint in the browser:
@@ -40,7 +44,7 @@ For convenience, `LiveMap-full-package.zip` contains both.
 
 ### Option B: Module-only update
 
-If your blade is already current, install only `LiveMap-module.zip`.
+If your blade files are already current, install only `LiveMap-module.zip`.
 
 ## Upgrade Notes
 
