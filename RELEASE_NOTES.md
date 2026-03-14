@@ -1,45 +1,72 @@
-# v4.5.0 — FIR Sector Matching Fix + UIR Support
+# v4.6.0 - Admin UX Simplification, Mobile Cleanup, and Safe Config Defaults
 
-Fixes FIR sector polygon rendering for Russia, CIS, Central Asia, Caucasus and any region using sub-sector callsigns or UIR (Upper Information Region) identifiers.
+Release date: 2026-03-14
 
-## What was broken
+## Summary
 
-FIR sector polygons were missing for large parts of the world — most visibly in Russia and neighbouring countries. Three separate bugs in `renderActiveSectors` caused this:
+This release focuses on operational reliability and easier administration.
 
-1. **Sub-sector callsigns dropped** — `UNKL_N_CTR` never ran the broad GeoJSON search, only a narrow exact-match that usually failed
-2. **CTR/FSS without position skipped** — controllers like `RU-SC_FSS` with no airport entry were silently discarded before reaching the matching logic
-3. **UIRs not supported** — composite airspace regions (RU-SC, RU-EC, RU-NW, etc.) defined in VATSpy.dat `[UIRs]` section were never parsed
+- simplified admin color controls
+- cleaned up mobile controls
+- improved weather proxy diagnostics
+- clarified phpVMS ACARS `Live Time` recommendation (critical)
 
-## What's fixed
+## Key Changes
 
-### 4-Phase Matching Cascade
+### 1) Simplified Admin Colors (Reduced to 3)
 
-| Phase | Method | Example |
-|-------|--------|---------|
-| 1 | Exact sub-key match | `UNKL_N` → GeoJSON `UNKL-N` |
-| 2 | Broad normalised search | `UNKL` → scans all GeoJSON features |
-| 3 | startsWith fallback | `UNKL` → matches `UNKL-1`, `UNKL-2` |
-| 4 | **UIR expansion** | `RU-SC` → resolves to URRV, UGGG, UDDD, UBBA |
+Color settings are now intentionally minimal:
 
-### UIR Support
+1. Primary UI Color
+2. Accent UI Color
+3. Box Background Color
 
-The `[UIRs]` section from VATSpy.dat is now parsed. UIR callsigns are automatically resolved to their constituent FIR polygons and drawn as a combined sector group with Upper Airspace styling.
+Internal mapping preserves full UI coverage while reducing confusion.
 
-### Position-less Controllers
+### 2) Mobile UI Cleanup
 
-CTR and FSS controllers without a transceiver position are now kept in the pipeline — the FIR polygon doesn't need the controller's coordinates.
+- removed extra floating mobile Network button
+- retained one mobile floating button (`Flights`)
+- Network remains accessible through the Network panel/tab
+- stronger active/inactive visual feedback for the Flights button
 
-## Affected Regions
+### 3) Layout / Config Consistency
 
-Russia (all U-prefix FIRs), Russian UIRs (RU-SC, RU-EC, RU-NW, RU-WS, etc.), Central Asia (UACC, UAAA, UATT, UTAA, UTDD, UZTT), Caucasus (UBBB, UGTB, UGEE, UDDD), and any FIR/UIR worldwide with hyphenated sub-sector GeoJSON IDs.
+- layout mode remains single-choice (Modern vs Old Style) to avoid conflicts
+- stale legacy mobile-network-button option removed
 
-## Installation
+### 4) Weather Proxy Reliability
 
-Copy `live_map.blade.php` to your theme's widgets folder, replacing the previous version:
+- server-side OpenWeatherMap key handling remains default path
+- admin status panel surfaces upstream error context
+- fallback blank tiles avoid repeated 502 console spam when upstream fails
 
-| Theme | Path |
-|-------|------|
-| SPTheme | `resources/views/layouts/SPTheme/widgets/live_map.blade.php` |
-| Disposable_v3 | `resources/views/layouts/Disposable_v3/widgets/live_map.blade.php` |
+### 5) Follow-Mode Behavior
 
-Clear browser cache after updating.
+- improved multi-flight follow logic (fit all active flights)
+- avoids poor framing when two or more active aircraft are spread out
+
+## Important Operational Note (phpVMS Core)
+
+`ACARS -> Live Time` should be set to **1 or greater**.
+
+Do not use `0` in production. In phpVMS core, this value also affects stale/stuck PIREP cancellation/removal routines. A zero value can interfere with that housekeeping behavior.
+
+## Upgrade Instructions
+
+1. Update module folder: `Modules/LiveMap`
+2. Update widget file: `resources/views/layouts/<your_theme>/widgets/live_map.blade.php`
+3. Clear caches:
+   - `php artisan optimize:clear`
+   - `php artisan view:clear`
+4. Hard refresh browser cache (`Ctrl+F5`)
+
+## Download Artifacts
+
+- `LiveMap-module.zip`
+- `LiveMap-full-package.zip`
+
+## Compatibility
+
+- phpVMS 7
+- SPTheme and Disposable_v3 (plus compatible custom themes)

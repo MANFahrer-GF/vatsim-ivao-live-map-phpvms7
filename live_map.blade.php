@@ -2,13 +2,143 @@
     <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 mb-3">
         <div class="card border mb-0">
             <div class="card-body p-0 position-relative">
+                {{-- Admin settings keys (phpVMS settings table / admin):
+                     acars.livemap_old_style
+                     acars.livemap_show_top_flights_panel
+                     acars.livemap_default_basemap
+                     acars.livemap_show_basemap_switcher
+                     acars.livemap_enable_satellite
+                     acars.livemap_show_weather_box
+                     acars.livemap_weather_proxy_enabled
+                     acars.livemap_owm_api_key
+                     acars.livemap_weather_default_layer (none|clouds|radar|storms|wind|temp|combo)
+                     acars.livemap_weather_default_opacity (0.2 - 1.0)
+                     acars.livemap_show_network_box
+                     acars.livemap_default_network_vatsim
+                     acars.livemap_default_network_ivao
+                     acars.livemap_default_show_pilots
+                     acars.livemap_default_show_controllers
+                     acars.livemap_default_show_sectors
+                     acars.livemap_default_follow_flight
+                     acars.livemap_mobile_show_flights_button
+                     acars.livemap_mobile_flights_open
+                     acars.livemap_mobile_weather_open
+                     acars.livemap_mobile_network_open
+                     acars.livemap_color_flights_header_start
+                     acars.livemap_color_flights_header_end
+                     acars.livemap_color_weather_header
+                     acars.livemap_color_network_header
+                     acars.livemap_color_box_background
+                     acars.livemap_color_mobile_button
+                     acars.livemap_color_mobile_button_active
+                --}}
+                @php
+                    $lmBool = function ($value, $default = false) {
+                        if (is_bool($value)) return $value;
+                        if ($value === null) return $default;
+                        $v = strtolower(trim((string) $value));
+                        if ($v === '') return $default;
+                        return in_array($v, ['1', 'true', 'yes', 'on'], true);
+                    };
+
+                    $lmString = function ($value, $default = '') {
+                        if ($value === null) return $default;
+                        $v = trim((string) $value);
+                        return $v === '' ? $default : $v;
+                    };
+                    $lmHexColor = function ($value, $default = '#FFFFFF') {
+                        $raw = strtoupper(trim((string) ($value ?? '')));
+                        if (preg_match('/^#[0-9A-F]{6}$/', $raw) === 1) return $raw;
+                        return strtoupper($default);
+                    };
+                    $lmHexToRgba = function ($hex, $alpha = 1.0) {
+                        $hex = ltrim((string) $hex, '#');
+                        if (strlen($hex) !== 6) return 'rgba(255,255,255,'.(float) $alpha.')';
+                        $r = hexdec(substr($hex, 0, 2));
+                        $g = hexdec(substr($hex, 2, 2));
+                        $b = hexdec(substr($hex, 4, 2));
+                        return 'rgba('.$r.','.$g.','.$b.','.(float) $alpha.')';
+                    };
+
+                    $oldStyle = $lmBool(setting('acars.livemap_old_style', false), false);
+                    $showTopFlights = $oldStyle
+                        ? false
+                        : $lmBool(setting('acars.livemap_show_top_flights_panel', true), true);
+                    $defaultBasemap = strtolower($lmString(setting('acars.livemap_default_basemap', 'positron'), 'positron'));
+                    if (!in_array($defaultBasemap, ['positron', 'osm', 'dark', 'satellite'], true)) {
+                        $defaultBasemap = 'positron';
+                    }
+
+                    $weatherProxyEnabled = $lmBool(setting('acars.livemap_weather_proxy_enabled', true), true);
+                    $weatherDefault = strtolower($lmString(setting('acars.livemap_weather_default_layer', 'combo'), 'combo'));
+                    if (!in_array($weatherDefault, ['none', 'clouds', 'radar', 'storms', 'wind', 'temp', 'combo'], true)) {
+                        $weatherDefault = 'combo';
+                    }
+                    $weatherOpacity = (float) setting('acars.livemap_weather_default_opacity', 1);
+                    if (!is_finite($weatherOpacity) || $weatherOpacity < 0.2 || $weatherOpacity > 1) $weatherOpacity = 1;
+                    $owmApiKeyForClient = $weatherProxyEnabled
+                        ? ''
+                        : $lmString(setting('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')), '');
+                    $flightsHeaderStart = $lmHexColor(setting('acars.livemap_color_flights_header_start', '#1A2A4A'), '#1A2A4A');
+                    $flightsHeaderEnd = $lmHexColor(setting('acars.livemap_color_flights_header_end', '#243B6A'), '#243B6A');
+                    $weatherHeaderColor = $lmHexColor(setting('acars.livemap_color_weather_header', '#1A2E4A'), '#1A2E4A');
+                    $networkHeaderColor = $lmHexColor(setting('acars.livemap_color_network_header', '#1A2E4A'), '#1A2E4A');
+                    $boxBackgroundColor = $lmHexColor(setting('acars.livemap_color_box_background', '#FFFFFF'), '#FFFFFF');
+                    $mobileButtonColor = $lmHexColor(setting('acars.livemap_color_mobile_button', '#1A2A4A'), '#1A2A4A');
+                    $mobileButtonActiveColor = $lmHexColor(setting('acars.livemap_color_mobile_button_active', '#243B6A'), '#243B6A');
+                    $boxBackgroundRgba = $lmHexToRgba($boxBackgroundColor, 0.97);
+                    $mobileButtonRgba = $lmHexToRgba($mobileButtonColor, 0.92);
+                    $mobileButtonActiveRgba = $lmHexToRgba($mobileButtonActiveColor, 0.92);
+
+                    $liveMapUiConfig = [
+                        // Top flights panel ("old style" = hidden)
+                        'oldStyle'              => $oldStyle,
+                        'showTopFlightsPanel'   => $showTopFlights,
+                        'defaultBasemap'        => $defaultBasemap,
+                        'showBasemapSwitcher'   => $lmBool(setting('acars.livemap_show_basemap_switcher', true), true),
+                        'enableSatelliteBasemap'=> $lmBool(setting('acars.livemap_enable_satellite', true), true),
+                        // Weather box + defaults
+                        'showWeatherBox'        => $lmBool(setting('acars.livemap_show_weather_box', true), true),
+                        'weatherProxyEnabled'   => $weatherProxyEnabled,
+                        'weatherProxyBaseUrl'   => rtrim(url('/livemap/weather-tile'), '/'),
+                        'owmApiKey'             => $owmApiKeyForClient,
+                        'weatherDefaultLayer'   => $weatherDefault,
+                        'weatherDefaultOpacity' => round($weatherOpacity, 2),
+                        // Network box + defaults
+                        'showNetworkBox'        => $lmBool(setting('acars.livemap_show_network_box', true), true),
+                        'defaultVatsimEnabled'  => $lmBool(setting('acars.livemap_default_network_vatsim', true), true),
+                        'defaultIvaoEnabled'    => $lmBool(setting('acars.livemap_default_network_ivao', true), true),
+                        'defaultShowPilots'     => $lmBool(setting('acars.livemap_default_show_pilots', false), false),
+                        'defaultShowControllers'=> $lmBool(setting('acars.livemap_default_show_controllers', true), true),
+                        'defaultShowSectors'    => $lmBool(setting('acars.livemap_default_show_sectors', false), false),
+                        'defaultFollowFlight'   => $lmBool(setting('acars.livemap_default_follow_flight', true), true),
+                        // Mobile behavior
+                        'mobileShowFlightsButton' => $lmBool(setting('acars.livemap_mobile_show_flights_button', true), true),
+                        'mobileFlightsOpen'       => $lmBool(setting('acars.livemap_mobile_flights_open', false), false),
+                        'mobileWeatherOpen'       => $lmBool(setting('acars.livemap_mobile_weather_open', false), false),
+                        'mobileNetworkOpen'       => $lmBool(setting('acars.livemap_mobile_network_open', false), false),
+                        'mobileButtonInactive'    => $mobileButtonRgba,
+                        'mobileButtonActive'      => $mobileButtonActiveRgba,
+                    ];
+                @endphp
 
                 <style>
+                    .lm-hidden {
+                        display: none !important;
+                    }
+
                     .live-map-wrapper {
                         position: relative;
                         overflow: visible;
                         width: 100%;
                         height: {{ $config['height'] }};
+                        --lm-flights-header-start: {{ $flightsHeaderStart }};
+                        --lm-flights-header-end: {{ $flightsHeaderEnd }};
+                        --lm-weather-header-bg: {{ $weatherHeaderColor }};
+                        --lm-network-header-bg: {{ $networkHeaderColor }};
+                        --lm-box-bg: {{ $boxBackgroundRgba }};
+                        --lm-mobile-btn-inactive: {{ $mobileButtonRgba }};
+                        --lm-mobile-btn-active: {{ $mobileButtonActiveRgba }};
                     }
 
                     #map {
@@ -153,7 +283,7 @@
                         bottom: 20px;
                         left: 20px;
                         width: 280px;
-                        background: rgba(255,255,255,0.97);
+                        background: var(--lm-box-bg);
                         border-radius: 10px;
                         padding: 0;
                         z-index: 1100;
@@ -173,7 +303,7 @@
                         align-items: center;
                         justify-content: center;
                         gap: 6px;
-                        background: #1a2e4a !important;
+                        background: var(--lm-weather-header-bg) !important;
                         padding: 8px 12px !important;
                         margin: 0 !important;
                         cursor: pointer;
@@ -308,7 +438,7 @@
                             font-size: 10px !important;
                             letter-spacing: .8px !important;
                             white-space: nowrap !important;
-                            background: rgba(26,42,74,0.85) !important;
+                            background: var(--lm-weather-header-bg) !important;
                             color: #fff !important;
                             border-radius: 0 8px 0 0 !important;
                             cursor: pointer !important;
@@ -324,7 +454,7 @@
                             font-size: 10px !important;
                             letter-spacing: .8px !important;
                             white-space: nowrap !important;
-                            background: rgba(26,42,74,0.85) !important;
+                            background: var(--lm-network-header-bg) !important;
                             color: #fff !important;
                             border-radius: 8px 0 0 0 !important;
                             cursor: pointer !important;
@@ -344,7 +474,7 @@
                             left: 0 !important;
                             top: auto !important;
                             transform: none !important;
-                            background: rgba(255,255,255,0.97) !important;
+                            background: var(--lm-box-bg) !important;
                             border: 1px solid #ddd !important;
                             border-radius: 10px 10px 0 0 !important;
                             padding: 0 !important;
@@ -366,7 +496,7 @@
                             right: 0 !important;
                             top: auto !important;
                             transform: none !important;
-                            background: rgba(255,255,255,0.97) !important;
+                            background: var(--lm-box-bg) !important;
                             border: 1px solid #ddd !important;
                             border-radius: 10px 10px 0 0 !important;
                             padding: 0 !important;
@@ -466,9 +596,8 @@
                         .map-vatsim-box { display: block !important; }
                         #vatsim-content { max-height: 0 !important; opacity: 0 !important; }
                         #vatsim-content.mob-expanded { max-height: 500px !important; opacity: 1 !important; }
-                        /* Nur Flights Button mobil sichtbar */
+                        /* Mobile Buttons sichtbar (nur Flights-Button) */
                         #mob-toggle-panel { display: flex !important; }
-                        #mob-toggle-vatsim { display: none !important; }
                         /* Boarding Pass schmaler */
                         #va-boarding-pass {
                             width: auto !important;
@@ -517,28 +646,19 @@
                         #va-boarding-pass .bp-progress-bar-bg { height: 4px !important; margin-top: 2px !important; }
                     }
                     /* Mobile Buttons — desktop versteckt */
-                    #mob-toggle-panel, #mob-toggle-vatsim { display: none; }
+                    #mob-toggle-panel { display: none; }
                     #mob-toggle-panel {
                         position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1200;
-                        background: rgba(26,42,74,0.92); color: #fff;
-                        border: none; border-radius: 8px; padding: 8px 16px;
+                        background: var(--lm-mobile-btn-inactive); color: #fff;
+                        border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 8px 16px;
                         font-size: 13px; font-weight: 700; cursor: pointer;
                         box-shadow: 0 2px 8px rgba(0,0,0,0.35);
                         align-items: center; gap: 6px; white-space: nowrap;
                     }
-                    #mob-toggle-vatsim {
-                        position: absolute; bottom: 20px; right: 10px; z-index: 1200;
-                        background: rgba(26,42,74,0.92); color: #fff;
-                        border: none; border-radius: 8px; padding: 8px 12px;
-                        font-size: 13px; font-weight: 700; cursor: pointer;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-                        align-items: center; gap: 6px;
-                    }
-                    /* VATSIM Box erscheint über dem Button */
-                    @media (max-width: 768px) {
-                        .map-vatsim-box.mobile-visible {
-                            bottom: 60px !important;
-                        }
+                    #mob-toggle-panel.lm-mobile-active {
+                        background: var(--lm-mobile-btn-active) !important;
+                        border-color: rgba(255,255,255,0.85) !important;
+                        box-shadow: 0 0 0 2px rgba(255,255,255,0.45), 0 3px 10px rgba(0,0,0,0.38);
                     }
 
                     /* ── VATSIM CONTROL BOX (BOTTOM-RIGHT) ── */
@@ -547,7 +667,7 @@
                         bottom: 20px;
                         right: 20px;
                         width: 200px;
-                        background: rgba(255,255,255,0.97);
+                        background: var(--lm-box-bg);
                         border-radius: 10px;
                         padding: 0;
                         z-index: 1100;
@@ -567,7 +687,7 @@
                         align-items: center;
                         justify-content: center;
                         gap: 6px;
-                        background: #1a2e4a !important;
+                        background: var(--lm-network-header-bg) !important;
                         padding: 8px 12px !important;
                         margin: 0 !important;
                         cursor: pointer;
@@ -766,7 +886,7 @@
                         align-items: center;
                         justify-content: space-between;
                         padding: 10px 16px;
-                        background: linear-gradient(135deg, #1a2a4a 0%, #243b6a 100%);
+                        background: linear-gradient(135deg, var(--lm-flights-header-start) 0%, var(--lm-flights-header-end) 100%);
                         color: #fff;
                         cursor: pointer;
                         user-select: none;
@@ -776,13 +896,13 @@
                         white-space: nowrap;
                     }
                     #va-header-collapsed:hover {
-                        background: linear-gradient(135deg, #1e3258 0%, #2a4578 100%);
+                        background: linear-gradient(135deg, var(--lm-flights-header-start) 0%, var(--lm-flights-header-end) 100%);
                     }
 
                     /* ── Expanded Panel ── */
                     #va-flights-body {
                         margin-top: 0;
-                        background: rgba(255,255,255,0.97);
+                        background: var(--lm-box-bg);
                         border: 1px solid rgba(0,0,0,0.10);
                         border-radius: 10px;
                         box-shadow: 0 4px 20px rgba(0,0,0,0.18);
@@ -806,7 +926,7 @@
                         align-items: center;
                         justify-content: space-between;
                         padding: 10px 16px;
-                        background: linear-gradient(135deg, #1a2a4a 0%, #243b6a 100%);
+                        background: linear-gradient(135deg, var(--lm-flights-header-start) 0%, var(--lm-flights-header-end) 100%);
                         color: #fff;
                         cursor: pointer;
                         user-select: none;
@@ -1305,7 +1425,7 @@
                     {{-- NETWORK BOX (BOTTOM-RIGHT) --}}
                     {{-- Mobile Toggle Buttons --}}
                     <button id="mob-toggle-panel" onclick="window.mobTogglePanel()">
-                        ✈ Flights
+                        ✈ Flights ▼
                     </button>
                     <div class="map-vatsim-box" id="vatsim-box">
                         <div class="map-vatsim-title" id="vatsim-title" onclick="window.mobToggleVatsimContent()" style="cursor:pointer;user-select:none;margin-bottom:8px">
@@ -1418,6 +1538,41 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            var LIVE_MAP_UI = @json($liveMapUiConfig);
+            window.LIVE_MAP_UI = LIVE_MAP_UI || {};
+            var MOBILE_BTN_INACTIVE = String(window.LIVE_MAP_UI.mobileButtonInactive || 'rgba(26,42,74,0.92)');
+            var MOBILE_BTN_ACTIVE = String(window.LIVE_MAP_UI.mobileButtonActive || 'rgba(26,188,156,0.92)');
+
+            function setMobileBtnState(el, isActive) {
+                if (!el) return;
+                el.classList.toggle('lm-mobile-active', !!isActive);
+                el.style.background = isActive ? MOBILE_BTN_ACTIVE : MOBILE_BTN_INACTIVE;
+                el.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                el.textContent = isActive ? '✈ Flights ▲' : '✈ Flights ▼';
+            }
+
+            // UI-Setup from phpVMS settings (Admin side)
+            var _flightsPanel = document.getElementById('va-flights-panel');
+            var _mobFlightsBtn = document.getElementById('mob-toggle-panel');
+            var _weatherBox = document.getElementById('weather-box');
+            var _networkBox = document.getElementById('vatsim-box');
+
+            if (_flightsPanel && !window.LIVE_MAP_UI.showTopFlightsPanel) {
+                _flightsPanel.classList.add('lm-hidden');
+                if (_mobFlightsBtn) _mobFlightsBtn.classList.add('lm-hidden');
+            }
+            if (_weatherBox && !window.LIVE_MAP_UI.showWeatherBox) {
+                _weatherBox.classList.add('lm-hidden');
+            }
+            if (_networkBox && !window.LIVE_MAP_UI.showNetworkBox) {
+                _networkBox.classList.add('lm-hidden');
+            }
+
+            var _isMobile = window.innerWidth <= 768;
+            if (_mobFlightsBtn && !window.LIVE_MAP_UI.mobileShowFlightsButton) {
+                _mobFlightsBtn.classList.add('lm-hidden');
+            }
+            setMobileBtnState(_mobFlightsBtn, false);
 
             // ────────────────────────────────────────────────────────
             // Rivets formatters
@@ -1489,8 +1644,45 @@
             // Weather
             // ────────────────────────────────────────────────────────
             function attachWeatherToMap(map) {
+                var weatherCfg = window.LIVE_MAP_UI || {};
                 var mapDiv = document.getElementById("map");
                 var btnDarkMap = document.getElementById("btnDarkMap");
+                var btnClouds = document.getElementById("btnClouds");
+                var btnRadar  = document.getElementById("btnRadar");
+                var btnStorms = document.getElementById("btnStorms");
+                var btnWind   = document.getElementById("btnWind");
+                var btnTemp   = document.getElementById("btnTemp");
+                var btnCombined  = document.getElementById("btnCombined");
+                var opacitySlider = document.getElementById("weatherOpacity");
+                var weatherDisabled = false;
+
+                function setWeatherUnavailable(message) {
+                    weatherDisabled = true;
+                    var weatherBtns = [btnClouds, btnRadar, btnStorms, btnWind, btnTemp, btnCombined];
+                    weatherBtns.forEach(function(btn) {
+                        if (!btn) return;
+                        btn.disabled = true;
+                        btn.classList.remove("active");
+                        btn.style.opacity = "0.45";
+                        btn.style.cursor = "not-allowed";
+                        btn.title = message;
+                    });
+                    if (opacitySlider) {
+                        opacitySlider.disabled = true;
+                        opacitySlider.value = "1";
+                    }
+                    var sliderWrap = document.querySelector('.weather-slider-wrapper');
+                    if (sliderWrap) sliderWrap.style.display = 'none';
+
+                    var weatherContent = document.getElementById('weather-content');
+                    if (weatherContent && !document.getElementById('weather-unavailable-note')) {
+                        var note = document.createElement('div');
+                        note.id = 'weather-unavailable-note';
+                        note.style.cssText = 'margin-top:8px;font-size:11px;color:#777;text-align:center';
+                        note.textContent = message;
+                        weatherContent.appendChild(note);
+                    }
+                }
 
                 if (btnDarkMap && mapDiv) {
                     btnDarkMap.addEventListener("click", function () {
@@ -1504,10 +1696,22 @@
                     }
                 }
 
-                var OWM_API_KEY = "Enter your key here";
-                if (!OWM_API_KEY || OWM_API_KEY === "YOUR_OPENWEATHERMAP_API_KEY_HERE") {
-                    console.warn('[LiveMap] OWM API key not set; skipping overlays');
-                    return;
+                var weatherProxyEnabled = !!weatherCfg.weatherProxyEnabled;
+                var weatherProxyBaseUrl = String(weatherCfg.weatherProxyBaseUrl || '').replace(/\/+$/, '');
+                var OWM_API_KEY = String(weatherCfg.owmApiKey || '').trim();
+
+                if (weatherProxyEnabled) {
+                    if (!weatherProxyBaseUrl) {
+                        console.warn('[LiveMap] Weather proxy URL missing; skipping overlays');
+                        setWeatherUnavailable('Weather layers unavailable (proxy not configured)');
+                        return;
+                    }
+                } else {
+                    if (!OWM_API_KEY || OWM_API_KEY === "YOUR_OPENWEATHERMAP_API_KEY_HERE" || OWM_API_KEY === "Enter your key here") {
+                        console.warn('[LiveMap] OWM API key not set; skipping overlays');
+                        setWeatherUnavailable('Weather layers unavailable (missing API key)');
+                        return;
+                    }
                 }
 
                 var weatherPane = map.getPane('weatherPane');
@@ -1515,26 +1719,58 @@
                 weatherPane.style.zIndex = 650;
                 weatherPane.style.pointerEvents = 'none';
 
-                var cloudsLayer = L.tileLayer("https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=" + OWM_API_KEY, { opacity:1, pane:'weatherPane', className:'owm-clouds-layer', attribution:"Clouds © OpenWeatherMap" });
-                var precipLayer = L.tileLayer("https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=" + OWM_API_KEY, { opacity:1, pane:'weatherPane', className:'owm-precip-layer', attribution:"Precipitation © OpenWeatherMap" });
-                var stormsLayer = L.tileLayer("https://tile.openweathermap.org/map/thunder_new/{z}/{x}/{y}.png?appid=" + OWM_API_KEY, { opacity:1, pane:'weatherPane', className:'owm-thunder-layer owm-storms-layer', attribution:"Thunderstorms © OpenWeatherMap" });
-                var windLayer   = L.tileLayer("https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=" + OWM_API_KEY, { opacity:1, pane:'weatherPane', className:'owm-wind-layer', attribution:"Wind © OpenWeatherMap" });
-                var tempLayer   = L.tileLayer("https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=" + OWM_API_KEY, { opacity:1, pane:'weatherPane', className:'owm-temp-layer', attribution:"Temperature © OpenWeatherMap" });
+                function weatherTileUrl(layerName) {
+                    if (weatherProxyEnabled) {
+                        return weatherProxyBaseUrl + '/' + layerName + '/{z}/{x}/{y}.png';
+                    }
+                    return "https://tile.openweathermap.org/map/" + layerName + "/{z}/{x}/{y}.png?appid=" + encodeURIComponent(OWM_API_KEY);
+                }
 
-                var btnClouds = document.getElementById("btnClouds");
-                var btnRadar  = document.getElementById("btnRadar");
-                var btnStorms = document.getElementById("btnStorms");
-                var btnWind   = document.getElementById("btnWind");
-                var btnTemp   = document.getElementById("btnTemp");
-                var btnCombined  = document.getElementById("btnCombined");
-                var opacitySlider = document.getElementById("weatherOpacity");
+                var cloudsLayer = L.tileLayer(weatherTileUrl("clouds_new"), { opacity:1, pane:'weatherPane', className:'owm-clouds-layer', attribution:"Clouds © OpenWeatherMap" });
+                var precipLayer = L.tileLayer(weatherTileUrl("precipitation_new"), { opacity:1, pane:'weatherPane', className:'owm-precip-layer', attribution:"Precipitation © OpenWeatherMap" });
+                var stormsLayer = L.tileLayer(weatherTileUrl("thunder_new"), { opacity:1, pane:'weatherPane', className:'owm-thunder-layer owm-storms-layer', attribution:"Thunderstorms © OpenWeatherMap" });
+                var windLayer   = L.tileLayer(weatherTileUrl("wind_new"), { opacity:1, pane:'weatherPane', className:'owm-wind-layer', attribution:"Wind © OpenWeatherMap" });
+                var tempLayer   = L.tileLayer(weatherTileUrl("temp_new"), { opacity:1, pane:'weatherPane', className:'owm-temp-layer', attribution:"Temperature © OpenWeatherMap" });
+
                 if (!btnClouds || !btnRadar) return;
 
                 var allLayers = [cloudsLayer, precipLayer, stormsLayer, windLayer, tempLayer];
                 btnClouds._on = btnRadar._on = btnStorms._on = btnWind._on = btnTemp._on = false;
+                var weatherTileErrors = 0;
 
                 function setAllWeatherOpacity(op) { allLayers.forEach(function(l){ if(l.setOpacity) l.setOpacity(op); }); }
+                function disableWeatherLayersFromErrors(tileErr) {
+                    if (weatherDisabled) return;
+                    allLayers.forEach(function(layer) {
+                        try { map.removeLayer(layer); } catch (e) {}
+                        layer.off('tileerror', onWeatherTileError);
+                    });
+                    btnClouds._on = btnRadar._on = btnStorms._on = btnWind._on = btnTemp._on = false;
+                    var status = tileErr && tileErr.error && tileErr.error.status
+                        ? (' (HTTP ' + tileErr.error.status + ')')
+                        : '';
+                    setWeatherUnavailable('Weather layers unavailable (tile errors)' + status);
+                }
+                function onWeatherTileError(ev) {
+                    if (weatherDisabled) return;
+                    weatherTileErrors++;
+                    if (weatherTileErrors === 1) {
+                        console.warn('[LiveMap] Weather tile request failed', ev && ev.error ? ev.error : ev);
+                    }
+                    if (weatherTileErrors >= 3) {
+                        disableWeatherLayersFromErrors(ev);
+                    }
+                }
+                allLayers.forEach(function(layer){ layer.on('tileerror', onWeatherTileError); });
+
+                function activateLayer(btn, layer) {
+                    if (weatherDisabled || !btn || !layer || btn._on) return;
+                    layer.addTo(map);
+                    btn._on = true;
+                    btn.classList.add("active");
+                }
                 function toggleLayer(btn, layer) {
+                    if (weatherDisabled) return;
                     if (btn._on) { map.removeLayer(layer); btn.classList.remove("active"); }
                     else { layer.addTo(map); btn.classList.add("active"); }
                     btn._on = !btn._on;
@@ -1546,11 +1782,36 @@
                 btnWind.addEventListener("click",     function(){ toggleLayer(btnWind, windLayer); });
                 btnTemp.addEventListener("click",     function(){ toggleLayer(btnTemp, tempLayer); });
                 btnCombined.addEventListener("click", function(){
-                    if (!btnClouds._on) { cloudsLayer.addTo(map); btnClouds._on=true; btnClouds.classList.add("active"); }
-                    if (!btnRadar._on)  { precipLayer.addTo(map); btnRadar._on=true;  btnRadar.classList.add("active"); }
-                    if (!btnStorms._on) { stormsLayer.addTo(map); btnStorms._on=true; btnStorms.classList.add("active"); }
+                    activateLayer(btnClouds, cloudsLayer);
+                    activateLayer(btnRadar, precipLayer);
+                    activateLayer(btnStorms, stormsLayer);
                 });
-                opacitySlider.addEventListener("input", function(){ setAllWeatherOpacity(parseFloat(this.value)); });
+                if (opacitySlider) {
+                    opacitySlider.addEventListener("input", function(){ setAllWeatherOpacity(parseFloat(this.value)); });
+                }
+
+                var defaultOpacity = parseFloat(weatherCfg.weatherDefaultOpacity);
+                if (isNaN(defaultOpacity) || defaultOpacity < 0.2 || defaultOpacity > 1) defaultOpacity = 1;
+                if (opacitySlider) opacitySlider.value = String(defaultOpacity);
+                setAllWeatherOpacity(defaultOpacity);
+
+                var defaultLayer = String(weatherCfg.weatherDefaultLayer || 'none').toLowerCase();
+                if (defaultLayer === 'combo') {
+                    activateLayer(btnClouds, cloudsLayer);
+                    activateLayer(btnRadar, precipLayer);
+                    activateLayer(btnStorms, stormsLayer);
+                    if (btnCombined) btnCombined.classList.add("active");
+                } else if (defaultLayer === 'clouds') {
+                    activateLayer(btnClouds, cloudsLayer);
+                } else if (defaultLayer === 'radar') {
+                    activateLayer(btnRadar, precipLayer);
+                } else if (defaultLayer === 'storms') {
+                    activateLayer(btnStorms, stormsLayer);
+                } else if (defaultLayer === 'wind') {
+                    activateLayer(btnWind, windLayer);
+                } else if (defaultLayer === 'temp') {
+                    activateLayer(btnTemp, tempLayer);
+                }
             }
 
             // ════════════════════════════════════════════════════════════
@@ -1872,6 +2133,11 @@
                         plannedList.forEach(function(f){ rowsPlanned.appendChild(buildPlannedRow(f)); });
                     }
                     setTimeout(function(){ updateScrollFade(scrollWrapPlan, rowsPlanned); }, 50);
+
+                    // Keep all active aircraft in view when follow mode is enabled
+                    if (typeof window._liveMapFitToActiveFlights === 'function') {
+                        setTimeout(function(){ window._liveMapFitToActiveFlights({ animate: false }); }, 80);
+                    }
                 }
 
                 function loadVaFlights() {
@@ -1880,12 +2146,31 @@
                         .then(function(resp){
                             var acarsFlights = Array.isArray(resp) ? resp
                                             : (resp.data && Array.isArray(resp.data)) ? resp.data : [];
-                            var activeFlightIds = {};
+                            var activeFlightKeys = {};
+                            function normId(v) { return (v == null) ? '' : String(v).trim(); }
+                            function activeUserId(f) {
+                                if (!f) return '';
+                                if (f.user_id != null) return normId(f.user_id);
+                                if (f.user && f.user.id != null) return normId(f.user.id);
+                                if (f.pilot_id != null) return normId(f.pilot_id);
+                                if (f.pilot && f.pilot.id != null) return normId(f.pilot.id);
+                                return '';
+                            }
                             acarsFlights.forEach(function(f){
-                                if (f.flight_id) activeFlightIds[f.flight_id] = true;
+                                var flightId = normId(f && f.flight_id);
+                                if (!flightId) return;
+                                var userId = activeUserId(f);
+                                if (userId) activeFlightKeys[userId + ':' + flightId] = true;
+                                activeFlightKeys['*:' + flightId] = true;
                             });
                             var bids = (typeof VA_USER_BIDS !== 'undefined' ? VA_USER_BIDS : [])
-                                .filter(function(b){ return !activeFlightIds[b.flight_id]; });
+                                .filter(function(b){
+                                    var bidFlightId = normId(b && b.flight_id);
+                                    if (!bidFlightId) return true;
+                                    var bidUserId = normId(b && b._bidUserId);
+                                    if (bidUserId) return !activeFlightKeys[bidUserId + ':' + bidFlightId];
+                                    return !activeFlightKeys['*:' + bidFlightId];
+                                });
                             renderFlights(acarsFlights.concat(bids));
                         })
                         .catch(function(){
@@ -1934,12 +2219,12 @@
             var firNameCache        = {};
             var firNameLoaded       = false;
 
-            var showVatsim = false;
-            var showIvao   = false;
+            var showVatsim = !!(window.LIVE_MAP_UI && window.LIVE_MAP_UI.defaultVatsimEnabled);
+            var showIvao   = !!(window.LIVE_MAP_UI && window.LIVE_MAP_UI.defaultIvaoEnabled);
 
-            var vatsimShowPilots  = false;
-            var vatsimShowCtrl    = false;
-            var vatsimShowSectors = false;
+            var vatsimShowPilots  = !!(window.LIVE_MAP_UI && window.LIVE_MAP_UI.defaultShowPilots);
+            var vatsimShowCtrl    = !!(window.LIVE_MAP_UI && window.LIVE_MAP_UI.defaultShowControllers);
+            var vatsimShowSectors = !!(window.LIVE_MAP_UI && window.LIVE_MAP_UI.defaultShowSectors);
 
             var vatsimPilotsLayer = L.layerGroup();
             var vatsimCtrlLayer   = L.layerGroup();
@@ -1991,23 +2276,27 @@
             var AIRLINE_LOGOS = @json($airlineLogos);
             var logosReady = Promise.resolve();
 
-            @auth
             var VA_USER_BIDS = (function() {
                 try {
                     @php
-                    $userBidsJson = Auth::user()
-                        ->bids()
-                        ->with(['flight', 'flight.airline', 'flight.dpt_airport', 'flight.arr_airport'])
+                    $userBidsJson = \App\Models\Bid::query()
+                        ->with(['user', 'flight', 'flight.airline', 'flight.dpt_airport', 'flight.arr_airport'])
                         ->get()
                         ->map(function($bid) {
                             $f = $bid->flight;
                             if (!$f) return null;
+                            $bidUserName = optional($bid->user)->name;
+                            if (!$bidUserName) {
+                                $bidUserName = trim((optional($bid->user)->first_name ?? '') . ' ' . (optional($bid->user)->last_name ?? ''));
+                            }
+                            if (!$bidUserName) $bidUserName = '—';
                             $logo = optional($f->airline)->logo;
                             if ($logo && !str_starts_with($logo, 'http')) $logo = url($logo);
                             if ($logo && str_starts_with($logo, 'http://')) $logo = 'https://' . substr($logo, 7);
                             return [
                                 '_isBid'           => true,
                                 '_bidId'           => $bid->id,
+                                '_bidUserId'       => $bid->user_id ?? null,
                                 'status'           => 'planned',
                                 'status_text'      => 'Planned',
                                 'position'         => null,
@@ -2022,7 +2311,10 @@
                                 'planned_distance' => $f->distance ? ['nmi' => $f->distance] : null,
                                 'dep_time'         => optional($f)->dpt_time,
                                 'aircraft'         => null,
-                                'user'             => ['name' => Auth::user()->name],
+                                'user'             => [
+                                    'id'   => optional($bid->user)->id,
+                                    'name' => $bidUserName,
+                                ],
                             ];
                         })
                         ->filter()
@@ -2032,9 +2324,6 @@
                     return Array.isArray(raw) ? raw : [];
                 } catch(e) { return []; }
             })();
-            @else
-            var VA_USER_BIDS = [];
-            @endauth
 
             function buildLogoHtml(callsign) {
                 if (!callsign || callsign.length < 3) return '';
@@ -2485,6 +2774,83 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
 
                 L.Map.addInitHook(function () {
                     var map = this;
+                    window._liveMapInstance = map;
+
+                    (function setupBasemapControl() {
+                        var cfg = window.LIVE_MAP_UI || {};
+                        var allowSatellite = !!cfg.enableSatelliteBasemap;
+                        var showSwitcher = !!cfg.showBasemapSwitcher;
+
+                        var basemapDefs = {
+                            positron: {
+                                label: 'Carto Light',
+                                url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                                options: { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
+                            },
+                            osm: {
+                                label: 'OpenStreetMap',
+                                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                options: { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' },
+                            },
+                            dark: {
+                                label: 'Carto Dark',
+                                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                                options: { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
+                            },
+                            satellite: {
+                                label: 'Satellite',
+                                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                                options: { maxZoom: 18, attribution: 'Tiles &copy; Esri' },
+                            },
+                        };
+
+                        var enabledKeys = ['positron', 'osm', 'dark'];
+                        if (allowSatellite) enabledKeys.push('satellite');
+
+                        var mapLayers = {};
+                        enabledKeys.forEach(function(key) {
+                            var def = basemapDefs[key];
+                            if (!def) return;
+                            var layer = L.tileLayer(def.url, def.options || {});
+                            layer._lmBasemapKey = key;
+                            mapLayers[key] = layer;
+                        });
+
+                        function clearCurrentBaseLayers() {
+                            map.eachLayer(function(layer) {
+                                if (!(layer instanceof L.TileLayer)) return;
+                                var pane = (layer.options && layer.options.pane) || 'tilePane';
+                                if (pane !== 'weatherPane') map.removeLayer(layer);
+                            });
+                        }
+
+                        var preferred = String(cfg.defaultBasemap || 'positron').toLowerCase();
+                        var saved = '';
+                        try { saved = String(localStorage.getItem('livemap_basemap') || '').toLowerCase(); } catch (e) {}
+
+                        var selectedKey = saved && mapLayers[saved] ? saved : preferred;
+                        if (!mapLayers[selectedKey]) selectedKey = 'positron';
+                        if (!mapLayers[selectedKey]) selectedKey = Object.keys(mapLayers)[0];
+                        if (!selectedKey) return;
+
+                        clearCurrentBaseLayers();
+                        mapLayers[selectedKey].addTo(map);
+
+                        if (showSwitcher && Object.keys(mapLayers).length > 1) {
+                            var controlLayers = {};
+                            Object.keys(mapLayers).forEach(function(key) {
+                                controlLayers[basemapDefs[key].label] = mapLayers[key];
+                            });
+                            L.control.layers(controlLayers, null, { position: 'topleft', collapsed: true }).addTo(map);
+                            map.on('baselayerchange', function(evt) {
+                                var key = evt && evt.layer && evt.layer._lmBasemapKey ? evt.layer._lmBasemapKey : '';
+                                if (key) {
+                                    try { localStorage.setItem('livemap_basemap', key); } catch (e) {}
+                                }
+                            });
+                        }
+                    })();
+
                     routeLineLayer.addTo(map);
 
                     var timeout = new Promise(function(res){ setTimeout(res, 3000); });
@@ -2537,7 +2903,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                             var panel = document.getElementById('va-flights-panel');
                             if(panel) panel.classList.remove('mobile-visible');
                             var btn = document.getElementById('mob-toggle-panel');
-                            if(btn) btn.style.background = 'rgba(26,42,74,0.92)';
+                            setMobileBtnState(btn, false);
                         }
                         var dep     = (flight.dpt_airport&&(flight.dpt_airport.icao||flight.dpt_airport.id))||flight.dpt_airport_id||'—';
                         var arr     = (flight.arr_airport &&(flight.arr_airport.icao ||flight.arr_airport.id))||flight.arr_airport_id||'—';
@@ -2699,12 +3065,115 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                         }).observe(logoImg,{attributes:true,attributeFilter:['src']});
                     }
 
-                    var followEnabled=true;
+                    var followEnabled = !!(window.LIVE_MAP_UI && window.LIVE_MAP_UI.defaultFollowFlight);
                     var _origPanTo=map.panTo.bind(map), _origSetView=map.setView.bind(map);
                     var _origFlyTo=map.flyTo?map.flyTo.bind(map):null;
-                    map.panTo=function(latlng,options){if(!followEnabled)return map;return _origPanTo(latlng,options);};
-                    map.setView=function(center,zoom,options){if(!followEnabled&&map._loaded){var cz=map.getZoom();if(zoom!==undefined&&zoom!==cz)return _origSetView(map.getCenter(),zoom,options);return map;}return _origSetView(center,zoom,options);};
-                    if(_origFlyTo) map.flyTo=function(latlng,zoom,options){if(!followEnabled)return map;return _origFlyTo(latlng,zoom,options);};
+                    var _origFitBounds=map.fitBounds?map.fitBounds.bind(map):null;
+                    var isApplyingAutoFit = false;
+                    var lastAutoFitSignature = '';
+                    var lastAutoFitAt = 0;
+
+                    function withAutoFitGuard(fn) {
+                        isApplyingAutoFit = true;
+                        try { return fn(); }
+                        finally { isApplyingAutoFit = false; }
+                    }
+
+                    function collectActiveFlightPoints() {
+                        var flights = window._vaActiveFlights || [];
+                        var points = [];
+                        for (var i = 0; i < flights.length; i++) {
+                            var pos = flights[i] && flights[i].position;
+                            if (!pos) continue;
+                            var lat = parseFloat(pos.lat);
+                            var lng = (pos.lon != null) ? parseFloat(pos.lon) : parseFloat(pos.lng);
+                            if (!isFinite(lat) || !isFinite(lng)) continue;
+                            points.push([lat, lng]);
+                        }
+                        return points;
+                    }
+
+                    function pointsSignature(points) {
+                        return points
+                            .map(function(p){ return p[0].toFixed(2) + ',' + p[1].toFixed(2); })
+                            .sort()
+                            .join('|');
+                    }
+
+                    function hasSelectedFlightRow() {
+                        return !!document.querySelector('#va-rows-active .active-flight, #va-rows-planned .active-flight');
+                    }
+
+                    function shouldUseMultiFollow() {
+                        if (!followEnabled || isApplyingAutoFit) return false;
+                        if (hasSelectedFlightRow()) return false;
+                        return collectActiveFlightPoints().length > 1;
+                    }
+
+                    function fitToActiveFlights(options) {
+                        options = options || {};
+                        if (!map || !map._loaded) return false;
+                        if (!followEnabled && !options.force) return false;
+                        if (!options.force && hasSelectedFlightRow()) return false;
+
+                        var points = collectActiveFlightPoints();
+                        if (points.length === 0) return false;
+
+                        if (points.length === 1) {
+                            return withAutoFitGuard(function(){
+                                _origSetView(points[0], Math.max(map.getZoom(), 7), { animate: options.animate !== false });
+                                return true;
+                            });
+                        }
+
+                        if (!_origFitBounds) return false;
+
+                        var sig = pointsSignature(points);
+                        var now = Date.now();
+                        if (!options.force && sig === lastAutoFitSignature && (now - lastAutoFitAt) < 5000) return false;
+                        lastAutoFitSignature = sig;
+                        lastAutoFitAt = now;
+
+                        var bounds = L.latLngBounds(points);
+                        if (!bounds.isValid()) return false;
+
+                        var isMobile = window.innerWidth <= 768;
+                        return withAutoFitGuard(function(){
+                            _origFitBounds(bounds, {
+                                animate: options.animate !== false,
+                                paddingTopLeft: isMobile ? [20, 20] : [36, 36],
+                                paddingBottomRight: isMobile ? [20, 20] : [36, 36],
+                                maxZoom: isMobile ? 7 : 8
+                            });
+                            return true;
+                        });
+                    }
+
+                    window._liveMapFitToActiveFlights = fitToActiveFlights;
+                    window._liveMapFollowEnabled = function(){ return followEnabled; };
+
+                    map.panTo=function(latlng,options){
+                        if(isApplyingAutoFit) return _origPanTo(latlng,options);
+                        if(!followEnabled) return map;
+                        if(shouldUseMultiFollow()){ fitToActiveFlights({ animate:false }); return map; }
+                        return _origPanTo(latlng,options);
+                    };
+                    map.setView=function(center,zoom,options){
+                        if(isApplyingAutoFit) return _origSetView(center,zoom,options);
+                        if(!followEnabled&&map._loaded){
+                            var cz=map.getZoom();
+                            if(zoom!==undefined&&zoom!==cz)return _origSetView(map.getCenter(),zoom,options);
+                            return map;
+                        }
+                        if(shouldUseMultiFollow()){ fitToActiveFlights({ animate:false }); return map; }
+                        return _origSetView(center,zoom,options);
+                    };
+                    if(_origFlyTo) map.flyTo=function(latlng,zoom,options){
+                        if(isApplyingAutoFit) return _origFlyTo(latlng,zoom,options);
+                        if(!followEnabled)return map;
+                        if(shouldUseMultiFollow()){ fitToActiveFlights({ animate:false }); return map; }
+                        return _origFlyTo(latlng,zoom,options);
+                    };
 
                     function applyLayerVisibility() {
                         if(vatsimShowPilots&&showVatsim){if(!map.hasLayer(vatsimPilotsLayer))vatsimPilotsLayer.addTo(map);}else map.removeLayer(vatsimPilotsLayer);
@@ -2716,15 +3185,30 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     }
 
                     var btnNetVatsim=document.getElementById('btnNetVatsim'), btnNetIvao=document.getElementById('btnNetIvao');
-                    if(btnNetVatsim){btnNetVatsim.style.opacity='.45';btnNetVatsim.addEventListener('click',function(){showVatsim=!showVatsim;btnNetVatsim.style.opacity=showVatsim?'1':'.45';if(!showVatsim){map.removeLayer(vatsimPilotsLayer);map.removeLayer(vatsimCtrlLayer);map.removeLayer(vatsimSectorLayer);}else applyLayerVisibility();});}
-                    if(btnNetIvao){btnNetIvao.addEventListener('click',function(){showIvao=!showIvao;btnNetIvao.style.opacity=showIvao?'1':'.45';if(!showIvao){map.removeLayer(ivaoPilotsLayer);map.removeLayer(ivaoCtrlLayer);map.removeLayer(ivaoSectorLayer);}else{loadIvao(map);applyLayerVisibility();}});}
+                    if(btnNetVatsim){btnNetVatsim.style.opacity=showVatsim?'1':'.45';btnNetVatsim.addEventListener('click',function(){showVatsim=!showVatsim;btnNetVatsim.style.opacity=showVatsim?'1':'.45';if(!showVatsim){map.removeLayer(vatsimPilotsLayer);map.removeLayer(vatsimCtrlLayer);map.removeLayer(vatsimSectorLayer);}else applyLayerVisibility();});}
+                    if(btnNetIvao){btnNetIvao.style.opacity=showIvao?'1':'.45';btnNetIvao.addEventListener('click',function(){showIvao=!showIvao;btnNetIvao.style.opacity=showIvao?'1':'.45';if(!showIvao){map.removeLayer(ivaoPilotsLayer);map.removeLayer(ivaoCtrlLayer);map.removeLayer(ivaoSectorLayer);}else{loadIvao(map);applyLayerVisibility();}});}
 
                     var btnPilots=document.getElementById('btnVatsimPilots'), btnCtrl=document.getElementById('btnVatsimCtrl');
                     var btnSectors=document.getElementById('btnVatsimSectors'), btnFollow=document.getElementById('btnFollowFlight');
-                    if(btnPilots){btnPilots.addEventListener('click',function(){vatsimShowPilots=!vatsimShowPilots;btnPilots.classList.toggle('active',vatsimShowPilots);applyLayerVisibility();});}
-                    if(btnCtrl){btnCtrl.classList.remove('active');btnCtrl.addEventListener('click',function(){vatsimShowCtrl=!vatsimShowCtrl;btnCtrl.classList.toggle('active',vatsimShowCtrl);applyLayerVisibility();});}
-                    if(btnSectors){btnSectors.addEventListener('click',function(){vatsimShowSectors=!vatsimShowSectors;btnSectors.classList.toggle('active',vatsimShowSectors);applyLayerVisibility();});}
-                    if(btnFollow){btnFollow.addEventListener('click',function(){followEnabled=!followEnabled;btnFollow.classList.toggle('active',followEnabled);var span=btnFollow.querySelector('span'),icon=btnFollow.querySelector('i');if(span)span.textContent=followEnabled?'Follow Flight':'Free Scroll';if(icon)icon.className=followEnabled?'fas fa-crosshairs':'fas fa-lock-open';});}
+                    if(btnPilots){btnPilots.classList.toggle('active',vatsimShowPilots);btnPilots.addEventListener('click',function(){vatsimShowPilots=!vatsimShowPilots;btnPilots.classList.toggle('active',vatsimShowPilots);applyLayerVisibility();});}
+                    if(btnCtrl){btnCtrl.classList.toggle('active',vatsimShowCtrl);btnCtrl.addEventListener('click',function(){vatsimShowCtrl=!vatsimShowCtrl;btnCtrl.classList.toggle('active',vatsimShowCtrl);applyLayerVisibility();});}
+                    if(btnSectors){btnSectors.classList.toggle('active',vatsimShowSectors);btnSectors.addEventListener('click',function(){vatsimShowSectors=!vatsimShowSectors;btnSectors.classList.toggle('active',vatsimShowSectors);applyLayerVisibility();});}
+                    if(btnFollow){
+                        var syncFollowBtn = function() {
+                            btnFollow.classList.toggle('active',followEnabled);
+                            var span=btnFollow.querySelector('span'),icon=btnFollow.querySelector('i');
+                            if(span)span.textContent=followEnabled?'Follow Flight':'Free Scroll';
+                            if(icon)icon.className=followEnabled?'fas fa-crosshairs':'fas fa-lock-open';
+                        };
+                        syncFollowBtn();
+                        btnFollow.addEventListener('click',function(){
+                            followEnabled=!followEnabled;
+                            syncFollowBtn();
+                            if(followEnabled) setTimeout(function(){ fitToActiveFlights({ force:true, animate:true }); }, 50);
+                        });
+                    }
+                    setTimeout(function(){ fitToActiveFlights({ animate:false }); }, 250);
+                    applyLayerVisibility();
                 });
 
             } else {
@@ -2750,7 +3234,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     setTimeout(adjustPanelHeight, 60);
                 }
                 var btn = document.getElementById('mob-toggle-panel');
-                if (btn) btn.style.background = !isVisible ? 'rgba(26,188,156,0.92)' : 'rgba(26,42,74,0.92)';
+                setMobileBtnState(btn, !isVisible);
             };
 
             window.mobToggleWeather = function() {
@@ -2782,19 +3266,30 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                 }
             };
 
-            window.mobToggleVatsim = function() {
-                var box = document.querySelector('.map-vatsim-box');
-                if (!box) return;
-                box.classList.toggle('mobile-visible');
-                var btn = document.getElementById('mob-toggle-vatsim');
-                if (btn) btn.style.background = box.classList.contains('mobile-visible')
-                    ? 'rgba(26,188,156,0.92)' : 'rgba(26,42,74,0.92)';
-            };
-
-            // Mobil: Panel beim Laden geschlossen halten
+            // Mobile default states from admin settings
             if (window.innerWidth <= 768) {
+                var mobileCfg = window.LIVE_MAP_UI || {};
+
+                var panel = document.getElementById('va-flights-panel');
                 var panelBodyMob = document.getElementById('va-flights-body');
-                if (panelBodyMob) panelBodyMob.classList.remove('open');
+                var panelBtn = document.getElementById('mob-toggle-panel');
+                var flightsShouldOpen = !!mobileCfg.mobileFlightsOpen && !!mobileCfg.showTopFlightsPanel;
+
+                if (panelBodyMob) panelBodyMob.classList.toggle('open', flightsShouldOpen);
+                if (panel) panel.classList.toggle('mobile-visible', flightsShouldOpen);
+                setMobileBtnState(panelBtn, flightsShouldOpen);
+
+                var weatherContent = document.getElementById('weather-content');
+                var weatherChevron = document.getElementById('weather-chevron');
+                var weatherShouldOpen = !!mobileCfg.mobileWeatherOpen;
+                if (weatherContent) weatherContent.classList.toggle('mob-expanded', weatherShouldOpen);
+                if (weatherChevron) weatherChevron.textContent = weatherShouldOpen ? '▼' : '▶';
+
+                var networkContent = document.getElementById('vatsim-content');
+                var networkChevron = document.getElementById('vatsim-chevron');
+                var networkShouldOpen = !!mobileCfg.mobileNetworkOpen;
+                if (networkContent) networkContent.classList.toggle('mob-expanded', networkShouldOpen);
+                if (networkChevron) networkChevron.textContent = networkShouldOpen ? '▼' : '▶';
             }
 
             phpvms.map.render_live_map({
@@ -2802,7 +3297,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                 zoom: parseInt('{{ $zoom }}') || 6,
                 aircraft_icon: '{!! public_asset('/assets/img/acars/aircraft.png') !!}',
                 refresh_interval: {{ setting('acars.update_interval', 60) }},
-                units: '{{ setting('units.distance ') }}',
+                units: '{{ setting('units.distance') }}',
                 flown_route_color: '#db2433',
                 leafletOptions: {
                     scrollWheelZoom: true,

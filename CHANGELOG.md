@@ -4,6 +4,42 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.0] — 2026-03-14
+
+### Admin UX Simplification
+
+- Reduced admin color controls to 3 essential fields:
+  - `Primary UI Color`
+  - `Accent UI Color`
+  - `Box Background Color`
+- Kept full visual coverage by mapping these 3 values internally to all required UI elements.
+- Updated admin wording/tooltips in English for clearer behavior expectations.
+
+### Mobile UI Cleanup
+
+- Removed legacy extra floating **mobile Network button**.
+- Kept one floating **Flights** mobile button and Network access via the panel/tab.
+- Improved active/inactive state visibility of the Flights button.
+- Removed obsolete `mobile_show_network_button` setting from admin flow.
+
+### Reliability and Behavior
+
+- Preserved weather proxy diagnostics with clearer status usage in release docs.
+- Maintained blank tile fallback behavior to avoid repeated 502 console spam when OWM upstream fails.
+- Kept improved multi-flight follow/fit behavior for better framing when multiple aircraft are active.
+
+### Documentation and Release Assets
+
+- Rewrote `README.md` for current architecture (module + blade + admin-driven setup).
+- Updated `RELEASE_NOTES.md` for v4.6.0.
+- Added explicit operational warning:
+  - **Do not set phpVMS ACARS Live Time to `0`** in production.
+  - Recommended minimum: `1`, because the same core setting impacts stale/stuck PIREP cleanup/cancellation.
+- Added module metadata version:
+  - `LiveMap/module.json` -> `"version": "4.6.0"`
+
+---
+
 ## [4.5.0] — 2026-03-08
 
 ### Bug Fixes — FIR Sector Rendering

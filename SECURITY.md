@@ -4,11 +4,12 @@
 
 | Version | Supported |
 |---------|-----------|
+| 4.6.x   | ✅ Yes     |
 | 4.5.x   | ✅ Yes     |
 | 4.0.x   | ✅ Yes     |
-| 1.0.x   | ❌ No (upgrade to 4.5.0) |
-| 2.0.x   | ❌ No (upgrade to 4.5.0) |
-| 3.0.x   | ❌ No (upgrade to 4.5.0) |
+| 1.0.x   | ❌ No (upgrade to 4.6.0) |
+| 2.0.x   | ❌ No (upgrade to 4.6.0) |
+| 3.0.x   | ❌ No (upgrade to 4.6.0) |
 
 ---
 

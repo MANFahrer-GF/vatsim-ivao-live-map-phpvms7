@@ -1,0 +1,20 @@
+{
+    "name": "phpvms/livemap-module",
+    "type": "phpvms-module",
+    "description": "Live Map settings and weather proxy module for phpVMS",
+    "require": {
+        "composer/installers": "~1.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Modules\\LiveMap\\Providers\\LiveMapServiceProvider"
+            ]
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\LiveMap\\": "."
+        }
+    }
+}

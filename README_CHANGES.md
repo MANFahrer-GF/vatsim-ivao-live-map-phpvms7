@@ -1,38 +1,13 @@
-# README.md — Changes for v4.5.0
+# README Change Log Notes
 
-## Section: Features → Live Network Data
+## v4.6.0
 
-Replace the existing FIR Sectors bullet with:
+`README.md` was fully refreshed to match the current project state:
 
-```markdown
-- **FIR Sectors** — active airspace boundaries as clickable coloured polygons with controller info (both networks)
-- **UIR Support** *(new in v4.5.0)* — composite Upper Information Regions (e.g. RU-SC Caucasus Radar) automatically resolved to their constituent FIR polygons from VATSpy data
-- **4-phase sector matching** *(new in v4.5.0)* — sub-sector callsigns (UNKL_N_CTR, UUWV_E_CTR) now correctly matched to GeoJSON boundaries worldwide
-```
+- module + blade dual-deployment model
+- admin-driven weather key/proxy flow (no manual inline key editing required)
+- mobile behavior after cleanup (single Flights floating button)
+- simplified 3-color admin model
+- explicit phpVMS warning: `ACARS -> Live Time` should be `>= 1` (do not use `0` on production)
 
-## Section: Understanding Map Markers → FIR Sectors
-
-Replace with:
-
-```markdown
-### FIR Sectors
-
-Active FIR/UIR sectors appear as semi-transparent coloured polygons. A label in the centre shows the controller callsign and frequency.
-
-- Teal tones → Center controllers (CTR)
-- Purple tones → Upper Airspace / UIR
-
-**UIR sectors** (e.g. `RU-SC_FSS` Caucasus Radar) are composite regions covering multiple FIRs. The map automatically resolves them to the individual FIR polygons using VATSpy's `[UIRs]` data and draws them as a single group.
-```
-
-## Section: The Interface → 🗺️ FIR Sectors
-
-Replace with:
-
-```markdown
-#### 🗺️ FIR Sectors
-
-Toggles active airspace boundaries as coloured dashed polygons. Only sectors with an active controller are shown. Clicking a sector opens a popup with controller details.
-
-UIR (Upper Information Region) callsigns like `RU-SC_FSS` or `RU-NW_FSS` are automatically expanded to their constituent FIR boundaries and displayed as a combined sector group.
-```
+Use `README.md` as the canonical documentation.
