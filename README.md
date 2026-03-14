@@ -126,3 +126,15 @@ Mapping:
 - phpVMS
 
 Maintained by German Sky Group / Thomas Kant.
+
+## Support
+
+Crafted with ♥ in Germany by Thomas Kant - Support via PayPal:
+
+[https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2](https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2)
+
+Why donations matter for small projects:
+
+- They help cover hosting, testing, and maintenance costs.
+- They make it possible to spend time on bug fixes and compatibility updates.
+- They keep community tools active and sustainable over the long term.

@@ -69,3 +69,15 @@ Do not use `0` in production. In phpVMS core, this value also affects stale/stuc
 
 - phpVMS 7
 - SPTheme and Disposable_v3 (plus compatible custom themes)
+
+## Support
+
+Crafted with ♥ in Germany by Thomas Kant - Support via PayPal:
+
+[https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2](https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2)
+
+Why donations are useful for small projects:
+
+- They fund hosting and ongoing development effort.
+- They accelerate fixes, polishing, and release quality.
+- They help keep niche community projects alive and maintained.
