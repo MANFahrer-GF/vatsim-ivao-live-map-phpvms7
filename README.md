@@ -1,6 +1,6 @@
 # VATSIM + IVAO Live Map for phpVMS 7
 
-Version: **4.6.0** (2026-03-14)
+Version: **4.6.1** (2026-03-15)
 
 Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR sectors, VA flight panels, weather overlays, and an admin-driven configuration module.
 
@@ -22,13 +22,15 @@ This repository ships two deployable parts:
 1. `LiveMap/` (phpVMS module)
 2. `live_map.blade.php` (theme widget template)
 
-For convenience, `LiveMap-full-package.zip` contains both.
+For convenience, versioned full packages contain both, for example:
 
-## Installation
+- `LiveMap-full-package-20260315-xxxxxx-v4.6.1.zip`
 
-### Option A (recommended): Full package
+## Installation (No SSH)
 
-1. Extract `LiveMap-full-package.zip`.
+This release should be installed as a **full package** because module logic and blade/widget files were updated together.
+
+1. Extract the latest versioned full package (example: `LiveMap-full-package-20260315-xxxxxx-v4.6.1.zip`).
 2. Copy `LiveMap/` to your phpVMS root under `Modules/LiveMap`.
 3. Copy these three files to your active theme widget path:
    - `live_map.blade.php`
@@ -40,11 +42,9 @@ For convenience, `LiveMap-full-package.zip` contains both.
 4. Open your phpVMS update endpoint in the browser:
    - `/update`
 5. Open **Admin -> Live Map** and save settings once.
-6. In the phpVMS Admin area, run **Clear Caches** (no SSH needed).
+6. In phpVMS Admin, run **Clear Caches**.
 
-### Option B: Module-only update
-
-If your blade files are already current, install only `LiveMap-module.zip`.
+No SSH/CLI commands are required.
 
 ## Upgrade Notes
 
@@ -119,6 +119,8 @@ Mapping:
 
 - `CHANGELOG.md` -> full change history
 - `RELEASE_NOTES.md` -> current release summary for GitHub release text
+
+Use versioned ZIP file names to avoid browser/CDN cache confusion with generic names.
 
 ## Credits
 

@@ -39,6 +39,10 @@
             }
             setMobileBtnState(_mobFlightsBtn, false);
 
+            // Flight focus lock: prevents global multi-flight auto-fit from overriding a selected flight
+            window._liveMapFlightFocusLock = !!window._liveMapFlightFocusLock;
+            window._liveMapSelectedCallsign = window._liveMapSelectedCallsign || null;
+
             // ────────────────────────────────────────────────────────
             // Rivets formatters
             // ────────────────────────────────────────────────────────
@@ -369,6 +373,8 @@
                 var panelOpen     = false;
                 var activeCallsign = null;
                 var currentTab    = 'active'; // 'active' | 'planned'
+                var vaFetchInFlight = false;
+                var vaPollTimer = null;
 
                 // DOM-Refs
                 var headerCollapsed  = document.getElementById('va-header-collapsed');
@@ -398,6 +404,8 @@
                     // Pass schließen wenn Panel getoggelt
                     var card = document.getElementById('va-boarding-pass');
                     if(card) card.classList.remove('bp-visible');
+                    window._liveMapFlightFocusLock = false;
+                    window._liveMapSelectedCallsign = null;
                     setTimeout(adjustPanelHeight, 360); // nach Transition
                     panelOpen = !panelOpen;
                     if (panelOpen) {
@@ -425,11 +433,13 @@
                     switchTab('active');
                     var card = document.getElementById('va-boarding-pass');
                     if(card) card.classList.remove('bp-visible');
+                    window._liveMapFlightFocusLock = false;
                 });
                 if (tabBtnPlanned) tabBtnPlanned.addEventListener('click', function(){
                     switchTab('planned');
                     var card = document.getElementById('va-boarding-pass');
                     if(card) card.classList.remove('bp-visible');
+                    window._liveMapFlightFocusLock = false;
                 });
 
                 // Scroll-Fade: nur anzeigen wenn Inhalt wirklich überläuft
@@ -500,10 +510,10 @@
 
                 // Logo-HTML für Zeilen
                 function rowLogoHtml(airline) {
-                    var url = getLogoUrl(airline);
+                    var url = safeAssetUrl(getLogoUrl(airline));
                     if (!url) return '<span class="va-logo-box"></span>';
                     return '<span class="va-logo-box"><img src="' +
-                        url.replace(/^http:\/\//i, 'https://') +
+                        h(url) +
                         '" onerror="this.parentElement.innerHTML=\'\'"></span>';
                 }
 
@@ -515,6 +525,18 @@
                     }
                     if (f.pilot) return f.pilot.name || f.pilot.first_name || '—';
                     return '—';
+                }
+
+                // "Thomas Kant" -> "Thomas K."
+                function shortPilotName(name) {
+                    var raw = (name == null ? '' : String(name)).trim().replace(/\s+/g, ' ');
+                    if (!raw) return '—';
+                    var parts = raw.split(' ');
+                    if (parts.length < 2) return parts[0];
+                    var first = parts[0];
+                    var last = parts[parts.length - 1];
+                    var initial = last ? last.charAt(0).toUpperCase() : '';
+                    return initial ? (first + ' ' + initial + '.') : first;
                 }
 
                 // Pilot-Rank (aus phpVMS-Daten wenn vorhanden)
@@ -553,6 +575,14 @@
 
                     var pName = pilotName(f);
                     var pRank = pilotRank(f);
+                    var callsignHtml = h(callsign || '—');
+                    var depHtml = h(dep);
+                    var arrHtml = h(arr);
+                    var altHtml = h(alt);
+                    var spdHtml = h(spd);
+                    var distHtml = h(dist);
+                    var statHtml = h(stat);
+                    var pRankHtml = h(pRank);
                     var lat   = f.position && f.position.lat ? parseFloat(f.position.lat) : null;
                     var lng   = f.position && f.position.lon ? parseFloat(f.position.lon)
                               : f.position && f.position.lng ? parseFloat(f.position.lng) : null;
@@ -561,20 +591,22 @@
                     row.className = 'va-row va-g-act va-row-live' + (callsign === activeCallsign ? ' active-flight' : '');
                     row.setAttribute('data-callsign', callsign);
                     row.innerHTML =
-                        '<div class="va-c-flight">' + rowLogoHtml(f.airline) + '<span>' + (callsign || '—') + '</span></div>' +
-                        '<div class="va-c-route"><span class="va-icao">' + dep + '</span><span class="va-arr">›</span><span class="va-icao">' + arr + '</span></div>' +
-                        '<div class="va-c-alt">' + alt + '</div>' +
-                        '<div class="va-c-spd">' + spd + '</div>' +
-                        '<div class="va-c-dist">' + dist + '</div>' +
-                        '<div style="text-align:center"><span class="va-st ' + sCls + '">' + stat + '</span></div>' +
+                        '<div class="va-c-flight">' + rowLogoHtml(f.airline) + '<span>' + callsignHtml + '</span></div>' +
+                        '<div class="va-c-route"><span class="va-icao">' + depHtml + '</span><span class="va-arr">›</span><span class="va-icao">' + arrHtml + '</span></div>' +
+                        '<div class="va-c-alt">' + altHtml + '</div>' +
+                        '<div class="va-c-spd">' + spdHtml + '</div>' +
+                        '<div class="va-c-dist">' + distHtml + '</div>' +
+                        '<div style="text-align:center"><span class="va-st ' + sCls + '">' + statHtml + '</span></div>' +
                         '<div><div class="va-c-pilot-name" title="' + h(pName) + '">' + h(pName) + '</div>' +
-                        (pRank ? '<div class="va-c-pilot-rank">' + pRank + '</div>' : '') + '</div>';
+                        (pRank ? '<div class="va-c-pilot-rank">' + pRankHtml + '</div>' : '') + '</div>';
 
                     row.addEventListener('click', function () {
                         document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
                             .forEach(function(r){ r.classList.remove('active-flight'); });
                         row.classList.add('active-flight');
                         activeCallsign = callsign;
+                        window._liveMapSelectedCallsign = callsign || null;
+                        window._liveMapFlightFocusLock = true;
                         if (typeof window.vaInfoCardOpen === 'function') window.vaInfoCardOpen(f, lat, lng);
                     });
                     return row;
@@ -594,8 +626,14 @@
                         ? '<span style="display:inline-block;font-size:9px;font-weight:700;background:#e3f2fd;color:#1565c0;padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle">BOOKED</span>'
                         : '';
 
-                    var pName = pilotName(f);
+                    var pName = f._isBid ? shortPilotName(pilotName(f)) : pilotName(f);
                     var pRank = pilotRank(f);
+                    var callsignHtml = h(callsign || '—');
+                    var depHtml = h(dep);
+                    var arrHtml = h(arr);
+                    var depShortHtml = h(depShort);
+                    var arrShortHtml = h(arrShort);
+                    var pRankHtml = h(pRank);
 
                     var row = document.createElement('div');
                     row.className = 'va-row va-g-plan' + (callsign === activeCallsign ? ' active-flight' : '');
@@ -604,32 +642,37 @@
                         // Spalte 1: Logo + Callsign + Badge + Route darunter
                         '<div>' +
                             '<div class="va-c-flight">' + rowLogoHtml(f.airline) +
-                                '<span>' + (callsign||'—') + '</span>' + bidBadge +
+                                '<span>' + callsignHtml + '</span>' + bidBadge +
                             '</div>' +
                             '<div style="margin-top:3px;font-size:11px;font-weight:500;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
-                                '<span style="font-weight:800;color:#1a3a6b;letter-spacing:.3px">' + dep + '</span>' +
-                                (depShort ? '<span class="va-route-airport-name" style="color:#999"> ' + depShort + '</span>' : '') +
+                                '<span style="font-weight:800;color:#1a3a6b;letter-spacing:.3px">' + depHtml + '</span>' +
+                                (depShort ? '<span class="va-route-airport-name" style="color:#999"> ' + depShortHtml + '</span>' : '') +
                                 '<span style="color:#3498db;font-weight:700;margin:0 6px">›</span>' +
-                                '<span style="font-weight:800;color:#1a3a6b;letter-spacing:.3px">' + arr + '</span>' +
-                                (arrShort ? '<span class="va-route-airport-name" style="color:#999"> ' + arrShort + '</span>' : '') +
+                                '<span style="font-weight:800;color:#1a3a6b;letter-spacing:.3px">' + arrHtml + '</span>' +
+                                (arrShort ? '<span class="va-route-airport-name" style="color:#999"> ' + arrShortHtml + '</span>' : '') +
                             '</div>' +
                         '</div>' +
                         // Spalte 2: Pilot
                         '<div style="text-align:right"><div class="va-c-pilot-name" title="' + h(pName) + '">' + h(pName) + '</div>' +
-                        (pRank ? '<div class="va-c-pilot-rank">' + pRank + '</div>' : '') + '</div>';
+                        (pRank ? '<div class="va-c-pilot-rank">' + pRankHtml + '</div>' : '') + '</div>';
 
                     row.addEventListener('click', function () {
                         document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
                             .forEach(function(r){ r.classList.remove('active-flight'); });
                         row.classList.add('active-flight');
                         activeCallsign = callsign;
+                        window._liveMapSelectedCallsign = callsign || null;
+                        window._liveMapFlightFocusLock = false;
                         // Keine Info-Kachel bei Planned — nur Karte zentrieren
                         var depIcao = dep !== '—' ? dep : null;
                         if (depIcao && typeof staticAirportPos !== 'undefined' && staticAirportPos[depIcao] && typeof map !== 'undefined' && map._loaded) {
-                            map.setView(staticAirportPos[depIcao], Math.max(map.getZoom(), 6), {animate: true});
+                            map.setView(staticAirportPos[depIcao], Math.max(map.getZoom(), 6), { animate: true, _lmUserFocus: true });
                         }
                         var card = document.getElementById('va-boarding-pass');
-                        if (card) card.style.display = 'none';
+                        if (card) {
+                            card.classList.remove('bp-visible');
+                            card.style.removeProperty('display');
+                        }
                     });
                     return row;
                 }
@@ -642,6 +685,7 @@
                     var h = body.scrollHeight;
                     body.style.maxHeight = Math.min(h, window.innerHeight * 0.7) + 'px';
                 }
+                window._liveMapAdjustPanelHeight = adjustPanelHeight;
 
                 function renderFlights(flights) {
                     if (!rowsActive || !rowsPlanned) return;
@@ -656,6 +700,21 @@
 
                     // Cache für Marker-Klick
                     window._vaActiveFlights = activeList;
+
+                    // Keep selection coherent: if selected callsign is gone, release focus lock
+                    if (window._liveMapSelectedCallsign) {
+                        var selectedStillActive = activeList.some(function(f) {
+                            var cs = (f.airline && f.airline.icao ? f.airline.icao : '') + (f.flight_number || f.callsign || '');
+                            return cs === window._liveMapSelectedCallsign;
+                        });
+                        if (!selectedStillActive) {
+                            window._liveMapSelectedCallsign = null;
+                            window._liveMapFlightFocusLock = false;
+                            activeCallsign = null;
+                        } else if (!activeCallsign) {
+                            activeCallsign = window._liveMapSelectedCallsign;
+                        }
+                    }
 
                     setCount(activeList.length, plannedList.length);
                     setTimeout(adjustPanelHeight, 50);
@@ -685,7 +744,9 @@
                 }
 
                 function loadVaFlights() {
-                    fetch(VA_API)
+                    if (vaFetchInFlight) return Promise.resolve(false);
+                    vaFetchInFlight = true;
+                    return fetch(VA_API)
                         .then(function(r){ return r.json(); })
                         .then(function(resp){
                             var acarsFlights = Array.isArray(resp) ? resp
@@ -716,16 +777,38 @@
                                     return !activeFlightKeys['*:' + bidFlightId];
                                 });
                             renderFlights(acarsFlights.concat(bids));
+                            return true;
                         })
                         .catch(function(){
                             setCount('!', '!');
                             if (rowsActive)  rowsActive.innerHTML  = '<div class="va-table-info">⚠ Unavailable</div>';
                             if (rowsPlanned) rowsPlanned.innerHTML = '<div class="va-table-info">⚠ Unavailable</div>';
+                            return false;
+                        })
+                        .finally(function() {
+                            vaFetchInFlight = false;
                         });
                 }
 
-                loadVaFlights();
-                setInterval(loadVaFlights, VA_REFRESH_MS);
+                function getVaPollDelay() {
+                    return document.hidden ? Math.max(VA_REFRESH_MS * 3, 120000) : VA_REFRESH_MS;
+                }
+                function scheduleVaPoll(delayMs) {
+                    if (vaPollTimer) clearTimeout(vaPollTimer);
+                    vaPollTimer = setTimeout(function() {
+                        loadVaFlights().finally(function() {
+                            scheduleVaPoll(getVaPollDelay());
+                        });
+                    }, typeof delayMs === 'number' ? delayMs : getVaPollDelay());
+                }
+                loadVaFlights().finally(function() {
+                    scheduleVaPoll(getVaPollDelay());
+                });
+                document.addEventListener('visibilitychange', function() {
+                    if (!document.hidden) {
+                        scheduleVaPoll(500);
+                    }
+                });
 
                 // Dark-Map → Panel abdunkeln
                 var wrapper = document.querySelector('.live-map-wrapper');
@@ -754,6 +837,8 @@
             var IVAO_DATA_API     = 'https://api.ivao.aero/v2/tracker/whazzup';
             var VATSIM_REFRESH_MS = 30000;
             var IVAO_REFRESH_MS   = 15000;
+            var vatsimFetchInFlight = false;
+            var ivaoFetchInFlight = false;
 
             var UPPER_FIR = { 'EDUU':1,'EDYY':1,'ESAA':1,'EISN':1,'BIRD':1,'GMMM':1 };
 
@@ -781,11 +866,13 @@
 
             function showRouteLine(map, fromLatLng, toIcao) {
                 routeLineLayer.clearLayers();
-                var toPos = staticAirportPos[toIcao] || staticAirportPos['K'+toIcao] || staticAirportPos['C'+toIcao] || staticAirportPos['P'+toIcao];
+                var rawIcao = String(toIcao || '').toUpperCase();
+                var toPos = staticAirportPos[rawIcao] || staticAirportPos['K'+rawIcao] || staticAirportPos['C'+rawIcao] || staticAirportPos['P'+rawIcao];
                 if (!toPos) return;
+                var toIcaoSafe = h(safeCallsign(rawIcao) || rawIcao || '—');
                 L.polyline([fromLatLng, toPos], { color:'#e74c3c', weight:2, opacity:0.8, dashArray:'8 6' }).addTo(routeLineLayer);
                 L.marker(toPos, {
-                    icon: L.divIcon({ html:'<div style="background:#e74c3c;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4)">' + toIcao + '</div>', className:'', iconSize:[null,null], iconAnchor:[20,-4] }),
+                    icon: L.divIcon({ html:'<div style="background:#e74c3c;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4)">' + toIcaoSafe + '</div>', className:'', iconSize:[null,null], iconAnchor:[20,-4] }),
                     interactive: false,
                 }).addTo(routeLineLayer);
             }
@@ -873,21 +960,23 @@
                 if (!callsign || callsign.length < 3) return '';
                 var icao = callsign.substring(0,3).toUpperCase();
                 if (!/^[A-Z]{3}$/.test(icao)) return '';
-                var logoUrl = AIRLINE_LOGOS[icao];
+                var logoUrl = safeAssetUrl(AIRLINE_LOGOS[icao]);
                 if (!logoUrl) return '';
                 return '<div style="text-align:center;padding:6px 0 10px;border-bottom:1px solid #eee;margin-bottom:8px">' +
-                    '<img src="' + logoUrl + '" style="max-height:38px;max-width:140px;object-fit:contain;vertical-align:middle" onerror="this.closest(\'div\').remove();" alt="' + icao + '"></div>';
+                    '<img src="' + h(logoUrl) + '" style="max-height:38px;max-width:140px;object-fit:contain;vertical-align:middle" onerror="this.closest(\'div\').remove();" alt="' + h(icao) + '"></div>';
             }
 
             function buildAircraftIcon(heading) {
-                var h = heading != null ? heading : 0;
-                var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="22" height="22"><g transform="rotate(' + h + ',16,16)"><ellipse cx="16" cy="16" rx="2.5" ry="10" fill="#1a6fc4"/><polygon points="16,14 3,20 3,22 16,18 29,22 29,20" fill="#1a6fc4"/><polygon points="16,24 10,29 10,30 16,27 22,30 22,29" fill="#1a6fc4"/><ellipse cx="16" cy="10" rx="1.5" ry="3" fill="rgba(255,255,255,0.35)"/></g></svg>';
+                var hdg = parseFloat(heading);
+                if (!isFinite(hdg)) hdg = 0;
+                var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="22" height="22"><g transform="rotate(' + hdg + ',16,16)"><ellipse cx="16" cy="16" rx="2.5" ry="10" fill="#1a6fc4"/><polygon points="16,14 3,20 3,22 16,18 29,22 29,20" fill="#1a6fc4"/><polygon points="16,24 10,29 10,30 16,27 22,30 22,29" fill="#1a6fc4"/><ellipse cx="16" cy="10" rx="1.5" ry="3" fill="rgba(255,255,255,0.35)"/></g></svg>';
                 return L.divIcon({ html:'<img src="data:image/svg+xml;base64,' + btoa(svg) + '" width="22" height="22" style="display:block">', className:'', iconSize:[22,22], iconAnchor:[11,11] });
             }
 
             function buildIvaoAircraftIcon(heading) {
-                var h = heading != null ? heading : 0;
-                var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="22" height="22"><g transform="rotate(' + h + ',16,16)"><ellipse cx="16" cy="16" rx="2.5" ry="10" fill="#e67e22"/><polygon points="16,14 3,20 3,22 16,18 29,22 29,20" fill="#e67e22"/><polygon points="16,24 10,29 10,30 16,27 22,30 22,29" fill="#e67e22"/><ellipse cx="16" cy="10" rx="1.5" ry="3" fill="rgba(255,255,255,0.35)"/></g></svg>';
+                var hdg = parseFloat(heading);
+                if (!isFinite(hdg)) hdg = 0;
+                var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="22" height="22"><g transform="rotate(' + hdg + ',16,16)"><ellipse cx="16" cy="16" rx="2.5" ry="10" fill="#e67e22"/><polygon points="16,14 3,20 3,22 16,18 29,22 29,20" fill="#e67e22"/><polygon points="16,24 10,29 10,30 16,27 22,30 22,29" fill="#e67e22"/><ellipse cx="16" cy="10" rx="1.5" ry="3" fill="rgba(255,255,255,0.35)"/></g></svg>';
                 return L.divIcon({ html:'<img src="data:image/svg+xml;base64,' + btoa(svg) + '" width="22" height="22" style="display:block">', className:'', iconSize:[22,22], iconAnchor:[11,11] });
             }
 
@@ -910,17 +999,17 @@
                     var acb=(appCount>1)?'<span style="position:absolute;top:-4px;right:-4px;background:#c0392b;color:#fff;border-radius:50%;width:9px;height:9px;font-size:6px;display:flex;align-items:center;justify-content:center;border:1px solid #fff;line-height:1;font-weight:900">'+appCount+'</span>':'';
                     dots+='<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:'+badgeW2+'px;height:'+badgeH2+'px;border-radius:'+badgeRadius+';background:'+badgeBg+';color:#fff;font-size:9px;font-weight:900;box-shadow:0 1px 4px rgba(0,0,0,0.5);border:1.5px solid rgba(255,255,255,0.6)">'+badgeText+acb+'</span>';
                 }
-                var w=Math.max((Object.keys(counts).length+1)*18,icao.length*7+8,30)+16, h=36;
-                return L.divIcon({ html:'<div style="width:'+w+'px;height:'+h+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer"><span style="font-size:9px;font-weight:700;color:#1a1a1a;text-shadow:0 0 3px #fff,0 0 3px #fff;letter-spacing:.3px;line-height:1">'+icao+'</span><div style="display:flex;gap:2px;align-items:center">'+dots+'</div></div>', className:'vatsim-airport-marker', iconSize:[w,h], iconAnchor:[w/2,h/2] });
+                var w=Math.max((Object.keys(counts).length+1)*18,icao.length*7+8,30)+16, hgt=36;
+                return L.divIcon({ html:'<div style="width:'+w+'px;height:'+hgt+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer"><span style="font-size:9px;font-weight:700;color:#1a1a1a;text-shadow:0 0 3px #fff,0 0 3px #fff;letter-spacing:.3px;line-height:1">'+h(icao)+'</span><div style="display:flex;gap:2px;align-items:center">'+dots+'</div></div>', className:'vatsim-airport-marker', iconSize:[w,hgt], iconAnchor:[w/2,hgt/2] });
             }
 
             function vRow(label, value) {
-                return '<div class="vatsim-popup-row"><span class="label">'+label+'</span><span class="value">'+value+'</span></div>';
+                return '<div class="vatsim-popup-row"><span class="label">'+h(label)+'</span><span class="value">'+h(value)+'</span></div>';
             }
 
             function buildPilotPopup(p) {
                 var fp=p.flight_plan||{}, dep=fp.departure||'—', arr=fp.arrival||'—';
-                return '<div class="vatsim-popup"><div class="vatsim-popup-header">'+buildLogoHtml(p.callsign)+'<div class="vatsim-popup-callsign">'+h(p.callsign)+'</div><div class="vatsim-popup-route">'+h(dep)+' &rsaquo; '+h(arr)+'</div></div><div class="vatsim-popup-body">'+vRow('Aircraft',h(fp.aircraft_short||fp.aircraft_faa||'—'))+vRow('Altitude',p.altitude?p.altitude.toLocaleString()+' ft':'—')+vRow('Speed',p.groundspeed?p.groundspeed+' kts':'—')+vRow('Heading',p.heading!=null?p.heading+'°':'—')+vRow('Pilot',h(p.name||'—'))+'</div></div>';
+                return '<div class="vatsim-popup"><div class="vatsim-popup-header">'+buildLogoHtml(p.callsign)+'<div class="vatsim-popup-callsign">'+h(p.callsign)+'</div><div class="vatsim-popup-route">'+h(dep)+' &rsaquo; '+h(arr)+'</div></div><div class="vatsim-popup-body">'+vRow('Aircraft',fp.aircraft_short||fp.aircraft_faa||'—')+vRow('Altitude',p.altitude?p.altitude.toLocaleString()+' ft':'—')+vRow('Speed',p.groundspeed?p.groundspeed+' kts':'—')+vRow('Heading',p.heading!=null?p.heading+'°':'—')+vRow('Pilot',p.name||'—')+'</div></div>';
             }
 
             var CTRL_RATINGS = {1:'OBS',2:'S1',3:'S2',4:'S3',5:'C1',6:'C2',7:'C3',8:'I1',9:'I2',10:'I3',11:'SUP',12:'ADM'};
@@ -930,6 +1019,15 @@
             function h(s) {
                 if (s == null) return '';
                 return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+            }
+            function safeAssetUrl(u) {
+                if (!u) return '';
+                var s = String(u).trim();
+                if (!s || /[<>"'`]/.test(s)) return '';
+                if (s.indexOf('//') === 0) s = 'https:' + s;
+                if (/^https?:\/\//i.test(s)) return s.replace(/^http:\/\//i, 'https://');
+                if (s.charAt(0) === '/') return s;
+                return '';
             }
             function safeUrl(u) { return (u && /^https:\/\/[a-zA-Z0-9._\-\/]+$/.test(u)) ? u : ''; }
             function safeCallsign(s) { return s ? String(s).replace(/[^A-Z0-9_\-]/gi,'').substring(0,20) : ''; }
@@ -952,7 +1050,7 @@
                 var rNum   = parseInt(c.rating)||0;
                 var rating = rNum ? (rMap[rNum]||('R'+rNum)) : '';
                 var online = ctrlOnlineTime(c.logon_time);
-                var rColor = rNum>=11?'#8e44ad':c.rating>=8?'#c0392b':c.rating>=5?'#27ae60':c.rating>=2?'#2980b9':'#95a5a6';
+                var rColor = rNum>=11?'#8e44ad':rNum>=8?'#c0392b':rNum>=5?'#27ae60':rNum>=2?'#2980b9':'#95a5a6';
                 var parts = [];
                 if(name) parts.push('<span style="font-weight:600;color:#333">'+name+'</span>');
                 if(cid)  { var cidHtml = safeUrl(c.cid_link||'') ? '<a href="'+safeUrl(c.cid_link||'')+'" target="_blank" rel="noopener noreferrer" style="color:#3498db;font-size:10px;text-decoration:none" title="IVAO Tracker">'+cid+' ↗</a>' : '<span style="color:#aaa;font-size:10px">'+cid+'</span>'; parts.push(cidHtml); }
@@ -967,13 +1065,13 @@
                 ctrlList=ctrlList.slice().sort(function(a,b){return(order[a.facility]||9)-(order[b.facility]||9);});
                 var BADGE={2:{label:'DEL',color:'#2980b9'},3:{label:'GND',color:'#d35400'},4:{label:'TWR',color:'#c0392b'},5:{label:'APP',color:'#27ae60'}};
                 var ctrlRows=ctrlList.map(function(c){
-var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="padding:7px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="background:'+t.color+';color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;flex-shrink:0">'+t.label+'</span><span style="font-size:13px;font-weight:700;color:#1a1a1a">'+c.callsign+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+(c.frequency||'')+'</span></div>'+ctrlInfoLine(c)+'</div>';}).join('');
+ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="padding:7px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="background:'+t.color+';color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;flex-shrink:0">'+h(t.label)+'</span><span style="font-size:13px;font-weight:700;color:#1a1a1a">'+h(c.callsign||'—')+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+h(safeFreq(c.frequency||''))+'</span></div>'+ctrlInfoLine(c)+'</div>';}).join('');
                 var atisRows='';
                 var atisId='atis_'+icao.replace(/\W/g,'')+'_'+Date.now();
                 if(atisList&&atisList.length){var atisBlocks=atisList.map(function(a){var lines=Array.isArray(a.text_atis)?a.text_atis:[];var fullText=h(lines.join(' '));var preview=fullText.length>60?fullText.substring(0,60)+'…':fullText;var hasMore=fullText.length>60;return '<div style="padding:6px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="background:#5dade2;color:#fff;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;flex-shrink:0">ATIS</span><span style="font-size:12px;font-weight:700;color:#1a1a1a">'+h(a.callsign)+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+safeFreq(a.frequency||'—')+'</span></div>'+(fullText?('<div style="font-size:10px;color:#555;line-height:1.5;background:#f8faff;padding:5px 8px;border-radius:4px;word-break:break-word"><span class="atis-preview-'+atisId+'">'+preview+'</span><span class="atis-full-'+atisId+'" style="display:none">'+fullText+'</span>'+(hasMore?'<br><span onclick="var p=this.parentElement;var prev=p.querySelector(\'.atis-preview-'+atisId+'\');var full=p.querySelector(\'.atis-full-'+atisId+'\');if(full.style.display===\'none\'){prev.style.display=\'none\';full.style.display=\'\';this.textContent=\'▲ Hide ATIS\';}else{prev.style.display=\'\';full.style.display=\'none\';this.textContent=\'▼ Show full ATIS\';}" style="color:#3498db;cursor:pointer;font-size:10px;font-weight:600">▼ Show full ATIS</span>':'')+'</div>'):'')+'</div>';}).join('');atisRows='<div style="margin-top:4px;padding-top:8px;border-top:2px dashed #d6eaf8">'+atisBlocks+'</div>';}
                 var total=ctrlList.length+(atisList?atisList.length:0);
                 var airportFullName=airportNameCache[icao]||airportNameCache['K'+icao]||'';
-                return '<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+icao+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px">'+(airportFullName?'<span class="vatsim-popup-route" style="margin:0">'+h(airportFullName)+'</span>':'')+'<span style="background:#27ae60;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">VATSIM</span></div><div style="font-size:11px;color:#aaa;margin-top:3px">'+total+' station'+(total!==1?'s':'')+' active</div></div><div class="vatsim-popup-body">'+ctrlRows+atisRows+'</div></div>';
+                return '<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+h(icao)+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px">'+(airportFullName?'<span class="vatsim-popup-route" style="margin:0">'+h(airportFullName)+'</span>':'')+'<span style="background:#27ae60;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">VATSIM</span></div><div style="font-size:11px;color:#aaa;margin-top:3px">'+total+' station'+(total!==1?'s':'')+' active</div></div><div class="vatsim-popup-body">'+ctrlRows+atisRows+'</div></div>';
             }
 
             function polyCenter(feature) {
@@ -1039,7 +1137,11 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     var firName=firNameCache[short]||info.callsign;
                     var isUpper=!!info.isUpper;
                     var fillOpacity=isUpper?0:0.08, hoverFill=isUpper?0.06:0.22, borderWeight=isUpper?2:1.5, dashArray=isUpper?'10 6':'5 4';
-                    var netBadge=info.network==='IVAO'?'<span style="background:#e67e22;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">IVAO</span>':'<span style="background:#27ae60;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">VATSIM</span>'; var popupContent='<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+info.callsign+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px"><span class="vatsim-popup-route" style="margin:0">'+h(firName)+'</span>'+netBadge+'</div>'+(isUpper?'<div style="font-size:10px;color:#8e44ad;font-weight:700;margin-top:2px">▲ Upper Airspace</div>':'')+'</div><div class="vatsim-popup-body">'+vRow('Frequency',info.frequency||'—')+ctrlInfoLine(info)+'</div></div>';
+                    var shortSafe = h(short);
+                    var callsignSafe = h(info.callsign || '—');
+                    var freqSafe = safeFreq(info.frequency || '') || '—';
+                    var firLabelSafe = h((freqSafe && freqSafe !== '—') ? freqSafe : ((firName || '').split(' ')[0] || '—'));
+                    var netBadge=info.network==='IVAO'?'<span style="background:#e67e22;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">IVAO</span>':'<span style="background:#27ae60;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">VATSIM</span>'; var popupContent='<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+callsignSafe+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px"><span class="vatsim-popup-route" style="margin:0">'+h(firName)+'</span>'+netBadge+'</div>'+(isUpper?'<div style="font-size:10px;color:#8e44ad;font-weight:700;margin-top:2px">▲ Upper Airspace</div>':'')+'</div><div class="vatsim-popup-body">'+vRow('Frequency',safeFreq(info.frequency || '') || '—')+ctrlInfoLine(info)+'</div></div>';
                     features.forEach(function(feature){
                         try {
                             var layer=L.geoJSON(feature,{style:{color:color,weight:borderWeight,opacity:0.75,fillColor:color,fillOpacity:fillOpacity,dashArray:dashArray}});
@@ -1052,8 +1154,14 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     var biggest=features.reduce(function(best,f){return polyArea(f)>polyArea(best)?f:best;},features[0]);
                     var center=polyCenter(biggest);
                     if(!center) return;
-                    var freqStr=info.frequency||'', labelW=Math.max(short.length*8+16,64), labelH=36;
-                    L.marker(center,{icon:L.divIcon({html:'<div style="background:'+color+';color:#fff;padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 2px 5px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);white-space:nowrap;text-align:center">'+short+'<br><span style="font-size:9px;font-weight:400;opacity:0.85">'+(freqStr||firName.split(' ')[0])+'</span></div>',className:'',iconSize:[labelW,labelH],iconAnchor:[labelW/2,labelH/2]}),zIndexOffset:200,title:info.callsign}).bindPopup(popupContent,{maxWidth:260}).addTo(sectorLayer);
+                    var labelW=Math.max(short.length*8+16,64), labelH=36;
+                    L.marker(center,{
+                        icon:L.divIcon({html:'<div style="background:'+color+';color:#fff;padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 2px 5px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);white-space:nowrap;text-align:center">'+shortSafe+'<br><span style="font-size:9px;font-weight:400;opacity:0.85">'+firLabelSafe+'</span></div>',className:'',iconSize:[labelW,labelH],iconAnchor:[labelW/2,labelH/2]}),
+                        zIndexOffset: -200,
+                        interactive: false,
+                        keyboard: false,
+                        title: info.callsign
+                    }).addTo(sectorLayer);
                 });
             }
 
@@ -1061,8 +1169,10 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                 var z=map.getZoom();
                 document.querySelectorAll('.vatsim-airport-marker, .ivao-airport-marker').forEach(function(el){
                     var label=el.querySelector('div:first-child');
-                    if(z<3){el.parentElement.style.display='none';}
-                    else{el.parentElement.style.display='';if(label) label.style.display=z>=5?'':'none';}
+                    var parent = el.parentElement;
+                    if (!parent) return;
+                    if(z<3){parent.style.display='none';}
+                    else{parent.style.display='';if(label) label.style.display=z>=5?'':'none';}
                 });
             }
 
@@ -1073,8 +1183,8 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                 var ac=atisList?atisList.length:0,hasApp=!!(counts[5]),appCount=counts[5]||0;
                 var dots=order.filter(function(f){return f!==5&&counts[f];}).map(function(f){var t=TYPES[f],n=counts[f];return '<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:3px;background:'+t.color+';color:#fff;font-size:8px;font-weight:800;box-shadow:0 1px 2px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5)">'+t.short+(n>1?'<span style="position:absolute;top:-4px;right:-4px;background:#c0392b;color:#fff;border-radius:50%;width:9px;height:9px;font-size:6px;display:flex;align-items:center;justify-content:center;border:1px solid #fff;line-height:1;font-weight:900">'+n+'</span>':'')+'</span>';}).join('');
                 if(hasApp||ac>0){var hasAtis=ac>0,badgeText,badgeBg,badgeW2=18,badgeH2=18,badgeRadius='4px';if(hasApp&&hasAtis){badgeText='A<span style="font-style:italic;font-size:9px;opacity:0.9">i</span>';badgeBg='#27ae60';badgeW2=22;}else if(hasApp){badgeText='A';badgeBg='#27ae60';}else{badgeText='<span style="font-style:italic">i</span>';badgeBg='#5dade2';badgeRadius='50%';}dots+='<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:'+badgeW2+'px;height:'+badgeH2+'px;border-radius:'+badgeRadius+';background:'+badgeBg+';color:#fff;font-size:9px;font-weight:900;box-shadow:0 1px 4px rgba(0,0,0,0.5);border:1.5px solid rgba(255,255,255,0.6)">'+badgeText+'</span>';}
-                var w=Math.max((Object.keys(counts).length+1)*18,icao.length*7+8,30)+16,h=36;
-                return L.divIcon({html:'<div style="width:'+w+'px;height:'+h+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;outline:2px solid #e67e22;border-radius:3px;outline-offset:1px"><span style="font-size:9px;font-weight:700;color:#1a1a1a;text-shadow:0 0 3px #fff,0 0 3px #fff;letter-spacing:.3px;line-height:1">'+icao+'</span><div style="display:flex;gap:2px;align-items:center">'+dots+'</div></div>',className:'ivao-airport-marker',iconSize:[w,h],iconAnchor:[w/2,h/2]});
+                var w=Math.max((Object.keys(counts).length+1)*18,icao.length*7+8,30)+16,hgt=36;
+                return L.divIcon({html:'<div style="width:'+w+'px;height:'+hgt+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;outline:2px solid #e67e22;border-radius:3px;outline-offset:1px"><span style="font-size:9px;font-weight:700;color:#1a1a1a;text-shadow:0 0 3px #fff,0 0 3px #fff;letter-spacing:.3px;line-height:1">'+h(icao)+'</span><div style="display:flex;gap:2px;align-items:center">'+dots+'</div></div>',className:'ivao-airport-marker',iconSize:[w,hgt],iconAnchor:[w/2,hgt/2]});
             }
 
             function buildAirportCtrlPopupIvao(icao, ctrlList, atisList) {
@@ -1083,14 +1193,14 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                 var BADGE={2:{label:'DEL',color:'#2980b9'},3:{label:'GND',color:'#d35400'},4:{label:'TWR',color:'#c0392b'},5:{label:'APP',color:'#27ae60'}};
                 var ctrlRows=ctrlList.map(function(c){
                     var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};
-                    return '<div style="padding:7px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="background:'+t.color+';color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;flex-shrink:0">'+t.label+'</span><span style="font-size:13px;font-weight:700;color:#1a1a1a">'+c.callsign+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+(c.frequency||'')+'</span></div>'+ctrlInfoLine(c)+'</div>';
+                    return '<div style="padding:7px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="background:'+t.color+';color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;flex-shrink:0">'+h(t.label)+'</span><span style="font-size:13px;font-weight:700;color:#1a1a1a">'+h(c.callsign||'—')+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+h(safeFreq(c.frequency||''))+'</span></div>'+ctrlInfoLine(c)+'</div>';
                 }).join('');
                 var atisRows='';
                 var atisId='atis_ivao_'+icao.replace(/\W/g,'')+'_'+Date.now();
                 if(atisList&&atisList.length){
                     var atisBlocks=atisList.map(function(a){
                         var lines=Array.isArray(a.text_atis)?a.text_atis:[];
-                        var fullText=lines.join(' ');
+                        var fullText=h(lines.join(' '));
                         var preview=fullText.length>60?fullText.substring(0,60)+'…':fullText;
                         var hasMore=fullText.length>60;
                         return '<div style="padding:6px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span style="background:#5dade2;color:#fff;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;flex-shrink:0">ATIS</span><span style="font-size:12px;font-weight:700;color:#1a1a1a">'+h(a.callsign)+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+safeFreq(a.frequency||'—')+'</span></div>'+(fullText?('<div style="font-size:10px;color:#555;line-height:1.5;background:#f8faff;padding:5px 8px;border-radius:4px;word-break:break-word"><span class="atis-preview-'+atisId+'">'+preview+'</span><span class="atis-full-'+atisId+'" style="display:none">'+fullText+'</span>'+(hasMore?'<br><span onclick="var p=this.parentElement;var prev=p.querySelector(\'.atis-preview-'+atisId+'\');var full=p.querySelector(\'.atis-full-'+atisId+'\');if(full.style.display===\'none\'){prev.style.display=\'none\';full.style.display=\'\';this.textContent=\'▲ Hide ATIS\';}else{prev.style.display=\'\';full.style.display=\'none\';this.textContent=\'▼ Show full ATIS\';}" style="color:#3498db;cursor:pointer;font-size:10px;font-weight:600">▼ Show full ATIS</span>':'')+'</div>'):'')+'</div>';
@@ -1099,7 +1209,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                 }
                 var total=ctrlList.length+(atisList?atisList.length:0);
                 var airportFullName=airportNameCache[icao]||airportNameCache['K'+icao]||'';
-                return '<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+icao+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px">'+(airportFullName?'<span class="vatsim-popup-route" style="margin:0">'+h(airportFullName)+'</span>':'')+'<span style="background:#e67e22;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">IVAO</span></div><div style="font-size:11px;color:#aaa;margin-top:3px">'+total+' station'+(total!==1?'s':'')+' active</div></div><div class="vatsim-popup-body">'+ctrlRows+atisRows+'</div></div>';
+                return '<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+h(icao)+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px">'+(airportFullName?'<span class="vatsim-popup-route" style="margin:0">'+h(airportFullName)+'</span>':'')+'<span style="background:#e67e22;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">IVAO</span></div><div style="font-size:11px;color:#aaa;margin-top:3px">'+total+' station'+(total!==1?'s':'')+' active</div></div><div class="vatsim-popup-body">'+ctrlRows+atisRows+'</div></div>';
             }
 
             function loadFirNames() {
@@ -1164,7 +1274,9 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
             }
 
             function loadVatsim(map) {
-                Promise.all([
+                if (vatsimFetchInFlight) return Promise.resolve(false);
+                vatsimFetchInFlight = true;
+                return Promise.all([
                     fetch(VATSIM_DATA_API).then(function(r){return r.json();}),
                     loadTransceivers(),
                     loadFirNames()
@@ -1240,8 +1352,8 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                         var color=entry.isTracon?'#27ae60':isUpper?'#8e44ad':c.facility===6?'#1abc9c':'#8e44ad';
                         ctrlDone++;
                         if(entry.isTracon){
-                            var traconIcon=L.divIcon({html:'<div style="display:flex;flex-direction:column;align-items:center;white-space:nowrap;pointer-events:auto"><div style="background:'+color+';color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);line-height:1.4">'+root+'</div><div style="width:4px;height:4px;border-radius:50%;background:'+color+';margin-top:2px"></div></div>',className:'',iconSize:[root.length*8+16,26],iconAnchor:[(root.length*8+16)/2,13]});
-                            L.marker(entry.pos,{icon:traconIcon,title:c.callsign,zIndexOffset:400}).bindPopup('<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+c.callsign+'</div><div class="vatsim-popup-route">TRACON / Approach Control</div></div><div class="vatsim-popup-body">'+vRow('Frequency',c.frequency||'—')+ctrlInfoLine(c)+'</div></div>',{maxWidth:260}).addTo(vatsimCtrlLayer);
+                            var traconIcon=L.divIcon({html:'<div style="display:flex;flex-direction:column;align-items:center;white-space:nowrap;pointer-events:auto"><div style="background:'+color+';color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);line-height:1.4">'+h(root)+'</div><div style="width:4px;height:4px;border-radius:50%;background:'+color+';margin-top:2px"></div></div>',className:'',iconSize:[root.length*8+16,26],iconAnchor:[(root.length*8+16)/2,13]});
+                            L.marker(entry.pos,{icon:traconIcon,title:c.callsign,zIndexOffset:400}).bindPopup('<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+h(c.callsign||'—')+'</div><div class="vatsim-popup-route">TRACON / Approach Control</div></div><div class="vatsim-popup-body">'+vRow('Frequency',safeFreq(c.frequency||'') || '—')+ctrlInfoLine(c)+'</div></div>',{maxWidth:260}).addTo(vatsimCtrlLayer);
                         } else {
                             var mapKey=parts.length>=3?root+'_'+parts[1].toUpperCase():root;
                             if(!activeFirMap[mapKey])activeFirMap[mapKey]={callsign:c.callsign,frequency:c.frequency,name:c.name,cid:c.cid,rating:c.rating,logon_time:c.logon_time,visual_range:c.visual_range,color:color,isUpper:isUpper,root:root,network:'VATSIM'};
@@ -1256,16 +1368,24 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     var statsEl=document.getElementById('vatsimStats'), dotEl=document.getElementById('vatsimNetDot');
                     if(statsEl) statsEl.textContent='\u2708'+pilots.length+'  \uD83C\uDFA7'+ctrlDone;
                     if(dotEl)   dotEl.classList.add('live');
-                }).catch(function(err){console.error('[VATSIM] Fehler:',err);});
+                    return true;
+                }).catch(function(err){
+                    console.error('[VATSIM] Fehler:',err);
+                    return false;
+                }).finally(function() {
+                    vatsimFetchInFlight = false;
+                });
             }
 
             function loadIvao(map) {
-                fetch(IVAO_DATA_API).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(data){
+                if (ivaoFetchInFlight) return Promise.resolve(false);
+                ivaoFetchInFlight = true;
+                return fetch(IVAO_DATA_API).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(data){
                     var clients=data.clients||{}, pilots=clients.pilots||[], atcs=clients.atcs||[];
                     var statsEl=document.getElementById('ivaoStats'), dotEl=document.getElementById('ivaoNetDot');
                     if(statsEl) statsEl.textContent='\u2708'+pilots.length+'  \uD83C\uDFA7'+atcs.length;
                     if(dotEl)   dotEl.style.background='#fff';
-                    if(!showIvao) return;
+                    if(!showIvao) return true;
 
                     ivaoPilotsLayer.clearLayers(); ivaoCtrlLayer.clearLayers(); ivaoSectorLayer.clearLayers();
                     var IVAO_FAC={'DEL':2,'GND':3,'TWR':4,'APP':5,'DEP':5,'CTR':6,'FSS':1};
@@ -1274,7 +1394,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                         var trk=p.lastTrack||{},lat=parseFloat(trk.latitude),lon=parseFloat(trk.longitude);
                         if(isNaN(lat)||isNaN(lon)) return;
                         var fp=p.flightPlan||{},dep=fp.departureId||'—',arr=fp.arrivalId||'—',ac=(fp.aircraft&&fp.aircraft.icaoCode)||'—',hdg=trk.heading||0;
-                        var popupHtml='<div class="vatsim-popup"><div class="vatsim-popup-header">'+buildLogoHtml(p.callsign)+'<div class="vatsim-popup-callsign">'+h(p.callsign)+'</div><div class="vatsim-popup-route">'+h(dep)+' &rsaquo; '+h(arr)+'</div><div style="font-size:9px;font-weight:700;color:#e67e22;margin-top:2px">IVAO</div></div><div class="vatsim-popup-body">'+vRow('Aircraft',h(ac))+vRow('Altitude',trk.altitude?trk.altitude.toLocaleString()+' ft':'—')+vRow('Speed',trk.groundSpeed?trk.groundSpeed+' kts':'—')+vRow('Heading',hdg+'°')+vRow('Pilot',h(String(p.userId||'—')))+'</div></div>';
+                        var popupHtml='<div class="vatsim-popup"><div class="vatsim-popup-header">'+buildLogoHtml(p.callsign)+'<div class="vatsim-popup-callsign">'+h(p.callsign)+'</div><div class="vatsim-popup-route">'+h(dep)+' &rsaquo; '+h(arr)+'</div><div style="font-size:9px;font-weight:700;color:#e67e22;margin-top:2px">IVAO</div></div><div class="vatsim-popup-body">'+vRow('Aircraft',ac)+vRow('Altitude',trk.altitude?trk.altitude.toLocaleString()+' ft':'—')+vRow('Speed',trk.groundSpeed?trk.groundSpeed+' kts':'—')+vRow('Heading',hdg+'°')+vRow('Pilot',String(p.userId||'—'))+'</div></div>';
                         var marker=L.marker([lat,lon],{icon:buildIvaoAircraftIcon(hdg),title:p.callsign}).bindPopup(popupHtml,{maxWidth:280});
                         if(arr&&arr!=='—'){marker.on('click',function(){routeLineLayer.clearLayers();showRouteLine(map,[lat,lon],arr);});}
                         marker.addTo(ivaoPilotsLayer);
@@ -1306,7 +1426,13 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
 
                     if(vatsimShowSectors) renderActiveSectors(ivaoFirMap, ivaoSectorLayer);
                     if(typeof applyLayerVisibility==='function') applyLayerVisibility();
-                }).catch(function(err){console.error('[IVAO] Error:',err);});
+                    return true;
+                }).catch(function(err){
+                    console.error('[IVAO] Error:',err);
+                    return false;
+                }).finally(function() {
+                    ivaoFetchInFlight = false;
+                });
             }
 
             // ── Leaflet-Hooks (registrieren VOR render_live_map) ──
@@ -1397,12 +1523,41 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
 
                     routeLineLayer.addTo(map);
 
+                    var vatsimPollTimer = null;
+                    var ivaoPollTimer = null;
+                    function getVatsimPollDelay() {
+                        return document.hidden ? Math.max(VATSIM_REFRESH_MS * 3, 120000) : VATSIM_REFRESH_MS;
+                    }
+                    function getIvaoPollDelay() {
+                        return document.hidden ? Math.max(IVAO_REFRESH_MS * 4, 90000) : IVAO_REFRESH_MS;
+                    }
+                    function scheduleVatsimPoll(delayMs) {
+                        if (vatsimPollTimer) clearTimeout(vatsimPollTimer);
+                        vatsimPollTimer = setTimeout(function() {
+                            loadVatsim(map).finally(function() {
+                                scheduleVatsimPoll(getVatsimPollDelay());
+                            });
+                        }, typeof delayMs === 'number' ? delayMs : getVatsimPollDelay());
+                    }
+                    function scheduleIvaoPoll(delayMs) {
+                        if (ivaoPollTimer) clearTimeout(ivaoPollTimer);
+                        ivaoPollTimer = setTimeout(function() {
+                            loadIvao(map).finally(function() {
+                                scheduleIvaoPoll(getIvaoPollDelay());
+                            });
+                        }, typeof delayMs === 'number' ? delayMs : getIvaoPollDelay());
+                    }
+
                     var timeout = new Promise(function(res){ setTimeout(res, 3000); });
                     Promise.race([logosReady, timeout]).then(function(){
-                        loadVatsim(map);
-                        setInterval(function(){ loadVatsim(map); }, VATSIM_REFRESH_MS);
-                        loadIvao(map);
-                        setInterval(function(){ loadIvao(map); }, IVAO_REFRESH_MS);
+                        loadVatsim(map).finally(function() { scheduleVatsimPoll(getVatsimPollDelay()); });
+                        loadIvao(map).finally(function() { scheduleIvaoPoll(getIvaoPollDelay()); });
+                        document.addEventListener('visibilitychange', function() {
+                            if (!document.hidden) {
+                                scheduleVatsimPoll(500);
+                                scheduleIvaoPoll(500);
+                            }
+                        });
                     });
 
                     map.on('zoomend', function(){ updateCtrlZoom(map); });
@@ -1417,6 +1572,8 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                             document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
                                 .forEach(function(r){ r.classList.remove('active-flight'); });
                         }
+                        window._liveMapFlightFocusLock = false;
+                        window._liveMapSelectedCallsign = null;
                     });
 
                     function makeVaIcon() {
@@ -1436,6 +1593,8 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                         lastDrawnArr = null;
                         document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
                             .forEach(function(r){ r.classList.remove('active-flight'); });
+                        window._liveMapFlightFocusLock = false;
+                        window._liveMapSelectedCallsign = null;
                     };
 
                     window.vaInfoCardOpen = function(flight, lat, lng) {
@@ -1476,6 +1635,8 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                         else if(flight.pilot){pilot=flight.pilot.name||flight.pilot.first_name||'—';}
 
                         var set=function(id,val){var el=document.getElementById(id);if(el)el.textContent=val;};
+                        window._liveMapFlightFocusLock = true;
+                        if (cs) window._liveMapSelectedCallsign = cs;
                         set('bp-dep',      dep);
                         set('bp-dep-name', depName);
                         set('bp-arr',      arr);
@@ -1509,7 +1670,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                             if(logoWrap){logoWrap.classList.add('no-logo');logoWrap.textContent=(flight.airline&&flight.airline.icao)||cs.substring(0,3)||'';}
                         }
 
-                        if(lat!==null&&lng!==null)map.setView([lat,lng],Math.max(map.getZoom(),7),{animate:true});
+                        if(lat!==null&&lng!==null)map.setView([lat,lng],Math.max(map.getZoom(),7),{ animate:true, _lmUserFocus:true });
                         if(lat!==null&&lng!==null&&arr&&arr!=='—'){
                             drawSeq++;routeLineLayer.clearLayers();lastDrawnArr=null;
                             showRouteLine(map,L.latLng(lat,lng),arr);
@@ -1580,12 +1741,13 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                                     }
 
                                     if(!flight) return false;
-
-                                    window.vaInfoCardOpen(flight, lat, lng);
                                     document.querySelectorAll('#va-rows-active .active-flight')
                                         .forEach(function(r){ r.classList.remove('active-flight'); });
                                     var safeCs = safeCallsign(callsign); var row = safeCs ? document.querySelector('#va-rows-active [data-callsign="'+safeCs+'"]') : null;
                                     if(row) row.classList.add('active-flight');
+                                    if (callsign) window._liveMapSelectedCallsign = callsign;
+                                    window._liveMapFlightFocusLock = true;
+                                    window.vaInfoCardOpen(flight, lat, lng);
                                     return true;
                                 }
 
@@ -1645,6 +1807,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     }
 
                     function hasSelectedFlightRow() {
+                        if (window._liveMapFlightFocusLock) return true;
                         return !!document.querySelector('#va-rows-active .active-flight, #va-rows-planned .active-flight');
                     }
 
@@ -1696,27 +1859,15 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     window._liveMapFitToActiveFlights = fitToActiveFlights;
                     window._liveMapFollowEnabled = function(){ return followEnabled; };
 
+                    // Keep manual map interactions responsive; auto-follow runs via periodic fit only.
                     map.panTo=function(latlng,options){
-                        if(isApplyingAutoFit) return _origPanTo(latlng,options);
-                        if(!followEnabled) return map;
-                        if(shouldUseMultiFollow()){ fitToActiveFlights({ animate:false }); return map; }
-                        return _origPanTo(latlng,options);
+                        return _origPanTo(latlng, options || {});
                     };
                     map.setView=function(center,zoom,options){
-                        if(isApplyingAutoFit) return _origSetView(center,zoom,options);
-                        if(!followEnabled&&map._loaded){
-                            var cz=map.getZoom();
-                            if(zoom!==undefined&&zoom!==cz)return _origSetView(map.getCenter(),zoom,options);
-                            return map;
-                        }
-                        if(shouldUseMultiFollow()){ fitToActiveFlights({ animate:false }); return map; }
-                        return _origSetView(center,zoom,options);
+                        return _origSetView(center, zoom, options || {});
                     };
                     if(_origFlyTo) map.flyTo=function(latlng,zoom,options){
-                        if(isApplyingAutoFit) return _origFlyTo(latlng,zoom,options);
-                        if(!followEnabled)return map;
-                        if(shouldUseMultiFollow()){ fitToActiveFlights({ animate:false }); return map; }
-                        return _origFlyTo(latlng,zoom,options);
+                        return _origFlyTo(latlng, zoom, options || {});
                     };
 
                     function applyLayerVisibility() {
@@ -1729,7 +1880,7 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     }
 
                     var btnNetVatsim=document.getElementById('btnNetVatsim'), btnNetIvao=document.getElementById('btnNetIvao');
-                    if(btnNetVatsim){btnNetVatsim.style.opacity=showVatsim?'1':'.45';btnNetVatsim.addEventListener('click',function(){showVatsim=!showVatsim;btnNetVatsim.style.opacity=showVatsim?'1':'.45';if(!showVatsim){map.removeLayer(vatsimPilotsLayer);map.removeLayer(vatsimCtrlLayer);map.removeLayer(vatsimSectorLayer);}else applyLayerVisibility();});}
+                    if(btnNetVatsim){btnNetVatsim.style.opacity=showVatsim?'1':'.45';btnNetVatsim.addEventListener('click',function(){showVatsim=!showVatsim;btnNetVatsim.style.opacity=showVatsim?'1':'.45';if(!showVatsim){map.removeLayer(vatsimPilotsLayer);map.removeLayer(vatsimCtrlLayer);map.removeLayer(vatsimSectorLayer);}else{loadVatsim(map);applyLayerVisibility();}});}
                     if(btnNetIvao){btnNetIvao.style.opacity=showIvao?'1':'.45';btnNetIvao.addEventListener('click',function(){showIvao=!showIvao;btnNetIvao.style.opacity=showIvao?'1':'.45';if(!showIvao){map.removeLayer(ivaoPilotsLayer);map.removeLayer(ivaoCtrlLayer);map.removeLayer(ivaoSectorLayer);}else{loadIvao(map);applyLayerVisibility();}});}
 
                     var btnPilots=document.getElementById('btnVatsimPilots'), btnCtrl=document.getElementById('btnVatsimCtrl');
@@ -1775,7 +1926,11 @@ var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="paddi
                     // Panel öffnen + Tabelle aufklappen
                     var body = document.getElementById('va-flights-body');
                     if (body && !body.classList.contains('open')) body.classList.add('open');
-                    setTimeout(adjustPanelHeight, 60);
+                    setTimeout(function(){
+                        if (typeof window._liveMapAdjustPanelHeight === 'function') {
+                            window._liveMapAdjustPanelHeight();
+                        }
+                    }, 60);
                 }
                 var btn = document.getElementById('mob-toggle-panel');
                 setMobileBtnState(btn, !isVisible);

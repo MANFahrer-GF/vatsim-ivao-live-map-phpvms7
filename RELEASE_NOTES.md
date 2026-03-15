@@ -1,3 +1,82 @@
+## v4.6.1 - Stability Hotfix Rollup
+
+Release date: 2026-03-15
+
+## Summary
+
+This hotfix release stabilizes template compatibility, admin setting scope, map interactions, and click behavior after v4.6.0.
+
+## Key Fixes
+
+### 1) Blade Compatibility Fix
+
+- removed deprecated/invalid `View::getName()` usage from `live_map.blade.php`
+- added robust include resolution with `View::exists(...)` fallbacks for split files:
+  - `live_map_styles.blade.php`
+  - `live_map_scripts.blade.php`
+
+### 2) Live Map Settings Scope Cleanup
+
+- moved Live Map setting storage to module-internal keys (`kvp` with `livemap.*`)
+- added automatic migration from legacy `acars.livemap_*` values
+- added cleanup logic to remove old Live Map entries from global `Admin -> Settings`
+
+### 3) Flights Panel and Boarding Pass UI Recovery
+
+- restored missing desktop CSS for top flights panel
+- restored missing desktop CSS for top-right boarding pass card
+- fixed panel visibility regressions for modern mode
+
+### 4) Marker Click Reliability
+
+- made FIR/UIR label markers non-interactive to prevent click interception over aircraft markers
+- improved aircraft marker click-through consistency for opening the boarding pass
+
+### 5) Map Zoom/Scroll Interaction Fix
+
+- removed follow-mode map method overrides that could block manual zoom/pan
+- manual user interactions now remain responsive when network layers are enabled
+
+### 6) Admin Note UX Improvement
+
+- `ACARS Live Time` note now reads real value dynamically
+- warning is shown only for unsafe value (`<= 0`)
+- safe values show a minimal, non-intrusive info line
+
+### 7) Packaging Policy
+
+- release process now uses versioned ZIP names as primary artifacts
+- avoids confusion with stale browser/OS cache on generic zip names
+
+## Upgrade Instructions (No SSH)
+
+Install this release as a **full package** (module + all three widget files).
+
+1. Deploy module folder: `Modules/LiveMap`
+2. Deploy widget files to your active theme:
+   - `live_map.blade.php`
+   - `live_map_styles.blade.php`
+   - `live_map_scripts.blade.php`
+3. Open `/update` in browser.
+4. Open **Admin -> Live Map** once (this triggers legacy setting migration/cleanup).
+5. In Admin, run **Clear Caches**.
+6. Hard refresh browser cache (`Ctrl+F5`).
+
+No SSH/CLI commands are required.
+
+## Compatibility
+
+- phpVMS 7
+- SPTheme and Disposable_v3 (plus compatible custom themes)
+
+## Support
+
+Crafted with ♥ in Germany by Thomas Kant - Support via PayPal:
+
+[https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2](https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2)
+
+---
+
 # v4.6.0 - Admin UX Simplification, Mobile Cleanup, and Safe Config Defaults
 
 Release date: 2026-03-14

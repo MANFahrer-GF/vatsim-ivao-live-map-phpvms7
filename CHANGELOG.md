@@ -4,6 +4,42 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.1] — 2026-03-15
+
+### Compatibility and Stability Hotfixes
+
+- Fixed Blade compatibility issue causing:
+  - `Method Illuminate\View\Factory::getName does not exist`
+- Replaced view-name introspection with safe include resolution (`View::exists` fallback candidates).
+
+### Settings Scope and Admin Cleanup
+
+- Live Map settings now persist in module-internal `kvp` keys (`livemap.*`).
+- Added migration from legacy `acars.livemap_*` values.
+- Added cleanup of legacy Live Map rows from global `Admin -> Settings` to avoid duplicated configuration surfaces.
+
+### UI/Interaction Fixes
+
+- Restored missing desktop flights panel styles.
+- Restored missing desktop boarding-pass styles.
+- Made FIR/UIR label markers non-interactive to prevent click interception on aircraft.
+- Fixed follow-mode interaction side effect where manual zoom/pan could become unresponsive.
+
+### Admin UX Improvements
+
+- ACARS `Live Time` note in Live Map admin now reads the current core value dynamically.
+- Warning now appears only for unsafe value (`<= 0`).
+- Safe values display a minimal informational line.
+
+### Packaging
+
+- Moved release workflow to versioned ZIP naming to reduce stale-cache confusion with generic package names.
+- Release/install path documented as browser/admin flow only (`/update` + Admin Clear Caches), no SSH required.
+- Updated module metadata version:
+  - `LiveMap/module.json` -> `"version": "4.6.1"`
+
+---
+
 ## [4.6.0] — 2026-03-14
 
 ### Admin UX Simplification

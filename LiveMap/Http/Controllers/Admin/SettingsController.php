@@ -11,15 +11,18 @@ use Illuminate\Support\Facades\Http;
 
 class SettingsController extends Controller
 {
-    private const GROUP = 'acars';
+    private const KVP_PREFIX = 'livemap.';
 
     public function index()
     {
+        $this->migrateLegacySettingsToKvpAndCleanup();
+
         return view('livemap::admin.index', [
             'settings'      => $this->currentSettings(),
             'layerOptions'  => $this->layerOptions(),
             'basemapOptions' => $this->basemapOptions(),
             'weatherProxyStatus' => $this->weatherProxyStatus(),
+            'acarsLiveTimeStatus' => $this->acarsLiveTimeStatus(),
         ]);
     }
 
@@ -90,14 +93,14 @@ class SettingsController extends Controller
         ];
 
         foreach ($this->definitions() as $key => $definition) {
-            $this->persistSetting(
+            $this->persistLiveMapSetting(
                 $key,
                 $payload[$key] ?? ($definition['default'] ?? ''),
                 $definition['type'] ?? 'string',
-                $definition['name'] ?? $key,
-                $definition['description'] ?? ''
             );
         }
+
+        $this->deleteLegacySettingsRows();
 
         return redirect('/admin/livemap')->with('status', 'Live Map settings saved.');
     }
@@ -106,7 +109,7 @@ class SettingsController extends Controller
     {
         $values = [];
         foreach ($this->definitions() as $key => $definition) {
-            $values[$key] = setting($key, $definition['default'] ?? null);
+            $values[$key] = $this->lmGet($key, $definition['default'] ?? null);
         }
 
         return $values;
@@ -137,8 +140,8 @@ class SettingsController extends Controller
 
     private function weatherProxyStatus(): array
     {
-        $proxyEnabled = (bool) setting('acars.livemap_weather_proxy_enabled', true);
-        $apiKey = trim((string) setting('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')));
+        $proxyEnabled = (bool) $this->lmGet('acars.livemap_weather_proxy_enabled', true);
+        $apiKey = trim((string) $this->lmGet('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')));
         $hasApiKey = $apiKey !== '';
         $fallbackActive = (bool) Cache::get('livemap:owm:upstream-failed');
         $lastErrorCode = Cache::get('livemap:owm:last_error_code');
@@ -182,6 +185,17 @@ class SettingsController extends Controller
             'lastErrorAt' => $lastErrorAt,
             'lastSuccessAt' => $lastSuccessAt,
             'errorInfo' => $errorInfo,
+        ];
+    }
+
+    private function acarsLiveTimeStatus(): array
+    {
+        $raw = setting('acars.live_time', 0);
+        $value = is_numeric($raw) ? (int) $raw : 0;
+
+        return [
+            'value' => $value,
+            'isSafe' => $value >= 1,
         ];
     }
 
@@ -465,26 +479,9 @@ class SettingsController extends Controller
         return strtoupper($default);
     }
 
-    private function persistSetting(
-        string $key,
-        $value,
-        string $type,
-        string $name,
-        string $description = ''
-    ): void {
-        $id = Setting::formatKey($key);
-        $setting = Setting::query()->where('id', $id)->first();
-        if (!$setting) {
-            $setting = new Setting();
-            $setting->id = $id;
-            $setting->key = $key;
-            $setting->group = self::GROUP;
-            $setting->order = 0;
-            $setting->options = '';
-        }
-
+    private function persistLiveMapSetting(string $legacyKey, $value, string $type): void
+    {
         if ($type === 'bool' || $type === 'boolean') {
-            $type = 'bool';
             $value = $value ? '1' : '0';
         } elseif ($type === 'float') {
             $value = number_format((float) $value, 2, '.', '');
@@ -492,13 +489,76 @@ class SettingsController extends Controller
             $value = (string) $value;
         }
 
-        $setting->name = $name;
-        $setting->description = $description;
-        $setting->type = $type;
-        $setting->value = $value;
-        $setting->save();
+        kvp_save($this->toKvpKey($legacyKey), (string) $value);
+    }
 
-        $this->forgetSettingCache($key);
+    private function lmGet(string $legacyKey, $default = null)
+    {
+        $sentinel = '__LIVEMAP_MISSING__';
+        $kvpValue = kvp($this->toKvpKey($legacyKey), $sentinel);
+        if ($kvpValue !== $sentinel) {
+            return $kvpValue;
+        }
+
+        return setting($legacyKey, $default);
+    }
+
+    private function toKvpKey(string $legacyKey): string
+    {
+        $suffix = preg_replace('/^acars\.livemap_/', '', $legacyKey);
+        if (!is_string($suffix) || trim($suffix) === '') {
+            $suffix = str_replace('.', '_', $legacyKey);
+        }
+
+        return self::KVP_PREFIX.$suffix;
+    }
+
+    private function migrateLegacySettingsToKvpAndCleanup(): void
+    {
+        foreach ($this->definitions() as $legacyKey => $definition) {
+            $kvpKey = $this->toKvpKey($legacyKey);
+            $sentinel = '__LIVEMAP_MISSING__';
+            $existing = kvp($kvpKey, $sentinel);
+            if ($existing !== $sentinel) {
+                continue;
+            }
+
+            $legacyValue = setting($legacyKey, '__LIVEMAP_LEGACY_MISSING__');
+            if ($legacyValue === '__LIVEMAP_LEGACY_MISSING__') {
+                continue;
+            }
+
+            kvp_save($kvpKey, (string) $legacyValue);
+        }
+
+        $this->deleteLegacySettingsRows();
+    }
+
+    private function deleteLegacySettingsRows(): void
+    {
+        $keys = array_keys($this->definitions());
+        $ids = array_map(static fn ($k) => Setting::formatKey($k), $keys);
+
+        Setting::query()
+            ->where(function ($q) use ($keys, $ids) {
+                if (!empty($keys)) {
+                    $q->whereIn('key', $keys);
+                }
+                if (!empty($ids)) {
+                    $q->orWhereIn('id', $ids);
+                }
+                $q->orWhere('key', 'like', 'acars.livemap_%')
+                  ->orWhere('id', 'like', 'acars_livemap_%')
+                  ->orWhere(function ($q2) {
+                      $q2->where('group', 'acars')
+                         ->where('name', 'like', 'Live Map:%');
+                  });
+            })
+            ->delete();
+
+        foreach ($keys as $key) {
+            $this->forgetSettingCache($key);
+        }
     }
 
     private function forgetSettingCache(string $key): void

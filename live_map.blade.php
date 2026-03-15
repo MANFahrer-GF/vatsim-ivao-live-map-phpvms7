@@ -59,33 +59,47 @@
                         $b = hexdec(substr($hex, 4, 2));
                         return 'rgba('.$r.','.$g.','.$b.','.(float) $alpha.')';
                     };
+                    $lmSetting = function (string $legacyKey, $default = null) {
+                        $suffix = preg_replace('/^acars\.livemap_/', '', $legacyKey);
+                        if (!is_string($suffix) || trim($suffix) === '') {
+                            $suffix = str_replace('.', '_', $legacyKey);
+                        }
 
-                    $oldStyle = $lmBool(setting('acars.livemap_old_style', false), false);
+                        $sentinel = '__LIVEMAP_MISSING__';
+                        $kvpValue = kvp('livemap.'.$suffix, $sentinel);
+                        if ($kvpValue !== $sentinel) {
+                            return $kvpValue;
+                        }
+
+                        return setting($legacyKey, $default);
+                    };
+
+                    $oldStyle = $lmBool($lmSetting('acars.livemap_old_style', false), false);
                     $showTopFlights = $oldStyle
                         ? false
-                        : $lmBool(setting('acars.livemap_show_top_flights_panel', true), true);
-                    $defaultBasemap = strtolower($lmString(setting('acars.livemap_default_basemap', 'positron'), 'positron'));
+                        : $lmBool($lmSetting('acars.livemap_show_top_flights_panel', true), true);
+                    $defaultBasemap = strtolower($lmString($lmSetting('acars.livemap_default_basemap', 'positron'), 'positron'));
                     if (!in_array($defaultBasemap, ['positron', 'osm', 'dark', 'satellite'], true)) {
                         $defaultBasemap = 'positron';
                     }
 
-                    $weatherProxyEnabled = $lmBool(setting('acars.livemap_weather_proxy_enabled', true), true);
-                    $weatherDefault = strtolower($lmString(setting('acars.livemap_weather_default_layer', 'combo'), 'combo'));
+                    $weatherProxyEnabled = $lmBool($lmSetting('acars.livemap_weather_proxy_enabled', true), true);
+                    $weatherDefault = strtolower($lmString($lmSetting('acars.livemap_weather_default_layer', 'combo'), 'combo'));
                     if (!in_array($weatherDefault, ['none', 'clouds', 'radar', 'storms', 'wind', 'temp', 'combo'], true)) {
                         $weatherDefault = 'combo';
                     }
-                    $weatherOpacity = (float) setting('acars.livemap_weather_default_opacity', 1);
+                    $weatherOpacity = (float) $lmSetting('acars.livemap_weather_default_opacity', 1);
                     if (!is_finite($weatherOpacity) || $weatherOpacity < 0.2 || $weatherOpacity > 1) $weatherOpacity = 1;
                     $owmApiKeyForClient = $weatherProxyEnabled
                         ? ''
-                        : $lmString(setting('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')), '');
-                    $flightsHeaderStart = $lmHexColor(setting('acars.livemap_color_flights_header_start', '#1A2A4A'), '#1A2A4A');
-                    $flightsHeaderEnd = $lmHexColor(setting('acars.livemap_color_flights_header_end', '#243B6A'), '#243B6A');
-                    $weatherHeaderColor = $lmHexColor(setting('acars.livemap_color_weather_header', '#1A2E4A'), '#1A2E4A');
-                    $networkHeaderColor = $lmHexColor(setting('acars.livemap_color_network_header', '#1A2E4A'), '#1A2E4A');
-                    $boxBackgroundColor = $lmHexColor(setting('acars.livemap_color_box_background', '#FFFFFF'), '#FFFFFF');
-                    $mobileButtonColor = $lmHexColor(setting('acars.livemap_color_mobile_button', '#1A2A4A'), '#1A2A4A');
-                    $mobileButtonActiveColor = $lmHexColor(setting('acars.livemap_color_mobile_button_active', '#243B6A'), '#243B6A');
+                        : $lmString($lmSetting('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')), '');
+                    $flightsHeaderStart = $lmHexColor($lmSetting('acars.livemap_color_flights_header_start', '#1A2A4A'), '#1A2A4A');
+                    $flightsHeaderEnd = $lmHexColor($lmSetting('acars.livemap_color_flights_header_end', '#243B6A'), '#243B6A');
+                    $weatherHeaderColor = $lmHexColor($lmSetting('acars.livemap_color_weather_header', '#1A2E4A'), '#1A2E4A');
+                    $networkHeaderColor = $lmHexColor($lmSetting('acars.livemap_color_network_header', '#1A2E4A'), '#1A2E4A');
+                    $boxBackgroundColor = $lmHexColor($lmSetting('acars.livemap_color_box_background', '#FFFFFF'), '#FFFFFF');
+                    $mobileButtonColor = $lmHexColor($lmSetting('acars.livemap_color_mobile_button', '#1A2A4A'), '#1A2A4A');
+                    $mobileButtonActiveColor = $lmHexColor($lmSetting('acars.livemap_color_mobile_button_active', '#243B6A'), '#243B6A');
                     $boxBackgroundRgba = $lmHexToRgba($boxBackgroundColor, 0.97);
                     $mobileButtonRgba = $lmHexToRgba($mobileButtonColor, 0.92);
                     $mobileButtonActiveRgba = $lmHexToRgba($mobileButtonActiveColor, 0.92);
@@ -95,41 +109,70 @@
                         'oldStyle'              => $oldStyle,
                         'showTopFlightsPanel'   => $showTopFlights,
                         'defaultBasemap'        => $defaultBasemap,
-                        'showBasemapSwitcher'   => $lmBool(setting('acars.livemap_show_basemap_switcher', true), true),
-                        'enableSatelliteBasemap'=> $lmBool(setting('acars.livemap_enable_satellite', true), true),
+                        'showBasemapSwitcher'   => $lmBool($lmSetting('acars.livemap_show_basemap_switcher', true), true),
+                        'enableSatelliteBasemap'=> $lmBool($lmSetting('acars.livemap_enable_satellite', true), true),
                         // Weather box + defaults
-                        'showWeatherBox'        => $lmBool(setting('acars.livemap_show_weather_box', true), true),
+                        'showWeatherBox'        => $lmBool($lmSetting('acars.livemap_show_weather_box', true), true),
                         'weatherProxyEnabled'   => $weatherProxyEnabled,
                         'weatherProxyBaseUrl'   => rtrim(url('/livemap/weather-tile'), '/'),
                         'owmApiKey'             => $owmApiKeyForClient,
                         'weatherDefaultLayer'   => $weatherDefault,
                         'weatherDefaultOpacity' => round($weatherOpacity, 2),
                         // Network box + defaults
-                        'showNetworkBox'        => $lmBool(setting('acars.livemap_show_network_box', true), true),
-                        'defaultVatsimEnabled'  => $lmBool(setting('acars.livemap_default_network_vatsim', true), true),
-                        'defaultIvaoEnabled'    => $lmBool(setting('acars.livemap_default_network_ivao', true), true),
-                        'defaultShowPilots'     => $lmBool(setting('acars.livemap_default_show_pilots', false), false),
-                        'defaultShowControllers'=> $lmBool(setting('acars.livemap_default_show_controllers', true), true),
-                        'defaultShowSectors'    => $lmBool(setting('acars.livemap_default_show_sectors', false), false),
-                        'defaultFollowFlight'   => $lmBool(setting('acars.livemap_default_follow_flight', true), true),
+                        'showNetworkBox'        => $lmBool($lmSetting('acars.livemap_show_network_box', true), true),
+                        'defaultVatsimEnabled'  => $lmBool($lmSetting('acars.livemap_default_network_vatsim', true), true),
+                        'defaultIvaoEnabled'    => $lmBool($lmSetting('acars.livemap_default_network_ivao', true), true),
+                        'defaultShowPilots'     => $lmBool($lmSetting('acars.livemap_default_show_pilots', false), false),
+                        'defaultShowControllers'=> $lmBool($lmSetting('acars.livemap_default_show_controllers', true), true),
+                        'defaultShowSectors'    => $lmBool($lmSetting('acars.livemap_default_show_sectors', false), false),
+                        'defaultFollowFlight'   => $lmBool($lmSetting('acars.livemap_default_follow_flight', true), true),
                         // Mobile behavior
-                        'mobileShowFlightsButton' => $lmBool(setting('acars.livemap_mobile_show_flights_button', true), true),
-                        'mobileFlightsOpen'       => $lmBool(setting('acars.livemap_mobile_flights_open', false), false),
-                        'mobileWeatherOpen'       => $lmBool(setting('acars.livemap_mobile_weather_open', false), false),
-                        'mobileNetworkOpen'       => $lmBool(setting('acars.livemap_mobile_network_open', false), false),
+                        'mobileShowFlightsButton' => $lmBool($lmSetting('acars.livemap_mobile_show_flights_button', true), true),
+                        'mobileFlightsOpen'       => $lmBool($lmSetting('acars.livemap_mobile_flights_open', false), false),
+                        'mobileWeatherOpen'       => $lmBool($lmSetting('acars.livemap_mobile_weather_open', false), false),
+                        'mobileNetworkOpen'       => $lmBool($lmSetting('acars.livemap_mobile_network_open', false), false),
                         'mobileButtonInactive'    => $mobileButtonRgba,
                         'mobileButtonActive'      => $mobileButtonActiveRgba,
                     ];
                 @endphp
 
-                                @php
-                    $lmCurrentViewName = \Illuminate\Support\Facades\View::getName();
-                    $lmViewPrefix = \Illuminate\Support\Str::beforeLast($lmCurrentViewName, '.live_map');
-                    $lmStylesView = $lmViewPrefix . '.live_map_styles';
-                    $lmScriptsView = $lmViewPrefix . '.live_map_scripts';
+                @php
+                    $lmTheme = trim((string) setting('general.theme', 'SPTheme'));
+                    if ($lmTheme === '') {
+                        $lmTheme = 'SPTheme';
+                    }
+
+                    $lmStylesCandidates = [
+                        'layouts.'.$lmTheme.'.widgets.live_map_styles',
+                        'layouts.SPTheme.widgets.live_map_styles',
+                        'layouts.Disposable_v3.widgets.live_map_styles',
+                    ];
+                    $lmScriptsCandidates = [
+                        'layouts.'.$lmTheme.'.widgets.live_map_scripts',
+                        'layouts.SPTheme.widgets.live_map_scripts',
+                        'layouts.Disposable_v3.widgets.live_map_scripts',
+                    ];
+
+                    $lmStylesView = null;
+                    foreach ($lmStylesCandidates as $lmCandidate) {
+                        if (\Illuminate\Support\Facades\View::exists($lmCandidate)) {
+                            $lmStylesView = $lmCandidate;
+                            break;
+                        }
+                    }
+
+                    $lmScriptsView = null;
+                    foreach ($lmScriptsCandidates as $lmCandidate) {
+                        if (\Illuminate\Support\Facades\View::exists($lmCandidate)) {
+                            $lmScriptsView = $lmCandidate;
+                            break;
+                        }
+                    }
                 @endphp
 
-                @include($lmStylesView)
+                @if($lmStylesView)
+                    @include($lmStylesView)
+                @endif
 
                 {{-- ══════════════════════════════════════════════════════════
                      VA ACTIVE FLIGHTS PANEL (TOP-CENTER) — neues Design
@@ -180,7 +223,7 @@
                                         <span class="va-hdr-num" id="va-count-planned-exp">—</span>
                                     </div>
                                 </div>
-                                <div class="va-header-chevron" style="transform:rotate(180deg)">▼</div>
+                                <div class="va-header-chevron is-open">▼</div>
                             </div>
 
                             {{-- Tabs --}}
@@ -201,7 +244,7 @@
                                     <div>Alt</div>
                                     <div>Spd</div>
                                     <div>Distance</div>
-                                    <div style="text-align:center">Status</div>
+                                    <div class="va-status-center">Status</div>
                                     <div>Pilot</div>
                                 </div>
                                 <div class="va-scroll-wrap" id="va-scroll-active">
@@ -233,9 +276,9 @@
                     <div id="map-info-box" class="map-info-card-big" rv-show="pirep.id">
                         <div class="map-info-card-header">
                             <img id="map-airline-logo"
+                                 class="map-airline-logo"
                                  rv-src="pirep.airline.logo"
                                  alt=""
-                                 style="max-width:130px;max-height:40px;height:auto;object-fit:contain;margin-bottom:4px;display:none"
                                  onerror="this.style.display='none'"
                                  onload="this.style.display='block'">
                             <div class="map-info-route-big">
@@ -295,7 +338,7 @@
                             <div class="bp-cell"><div class="bp-cell-label">Progress</div>
                                 <div class="bp-cell-value" id="bp-progress">—</div>
                                 <div class="bp-progress-wrap">
-                                    <div class="bp-progress-bar-bg"><div class="bp-progress-bar-fill" id="bp-progress-bar" style="width:0%"></div></div>
+                                    <div class="bp-progress-bar-bg"><div class="bp-progress-bar-fill" id="bp-progress-bar"></div></div>
                                 </div>
                             </div>
                         </div>
@@ -307,7 +350,7 @@
 
                     {{-- WEATHER BOX (BOTTOM-LEFT) --}}
                     <div class="map-weather-box-left" id="weather-box">
-                        <div class="map-weather-title" id="weather-title" onclick="window.mobToggleWeather()" style="cursor:pointer;user-select:none">Weather Layers <span id="weather-chevron" style="font-size:10px;margin-left:4px">▼</span></div>
+                        <div class="map-weather-title" id="weather-title" onclick="window.mobToggleWeather()">Weather Layers <span id="weather-chevron" class="weather-chevron">▼</span></div>
                         <div id="weather-content">
                         <div class="map-weather-buttons">
                             <button id="btnClouds" type="button" class="weather-btn" title="Clouds">
@@ -328,8 +371,7 @@
                             <button id="btnCombined" type="button" class="weather-btn" title="Combined mode">
                                 <i class="fas fa-layer-group"></i><span>Combo</span>
                             </button>
-                            <button id="btnDarkMap" type="button" class="weather-btn" title="Dark map"
-                                    style="flex: 0 0 100%; max-width: 100%;">
+                            <button id="btnDarkMap" type="button" class="weather-btn weather-btn-full" title="Dark map">
                                 <i class="fas fa-moon"></i><span>Dark map</span>
                             </button>
                         </div>
@@ -346,32 +388,22 @@
                         ✈ Flights ▼
                     </button>
                     <div class="map-vatsim-box" id="vatsim-box">
-                        <div class="map-vatsim-title" id="vatsim-title" onclick="window.mobToggleVatsimContent()" style="cursor:pointer;user-select:none;margin-bottom:8px">
+                        <div class="map-vatsim-title" id="vatsim-title" onclick="window.mobToggleVatsimContent()">
                             <span class="vatsim-dot" id="vatsimDot"></span>
-                            Network <span id="vatsim-chevron" style="font-size:10px;margin-left:4px">▼</span>
+                            Network <span id="vatsim-chevron" class="vatsim-chevron">▼</span>
                         </div>
                         <div id="vatsim-content">
-                        <div style="display:flex;gap:5px;margin-bottom:8px">
+                        <div class="map-network-toggle-row">
                             <button id="btnNetVatsim" type="button"
-                                    style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
-                                           padding:4px 0;border-radius:5px;border:none;cursor:pointer;
-                                           font-size:10px;font-weight:700;letter-spacing:.4px;
-                                           background:#1abc9c;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.25);
-                                           transition:opacity .2s"
+                                    class="map-network-toggle-btn map-network-toggle-btn-vatsim"
                                     title="VATSIM an/aus">
-                                <span id="vatsimNetDot" style="width:6px;height:6px;border-radius:50%;
-                                      background:#fff;display:inline-block;flex-shrink:0"></span>
+                                <span id="vatsimNetDot" class="map-network-dot"></span>
                                 VATSIM
                             </button>
                             <button id="btnNetIvao" type="button"
-                                    style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
-                                           padding:4px 0;border-radius:5px;border:none;cursor:pointer;
-                                           font-size:10px;font-weight:700;letter-spacing:.4px;
-                                           background:#e67e22;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.25);
-                                           opacity:.45;transition:opacity .2s"
+                                    class="map-network-toggle-btn map-network-toggle-btn-ivao"
                                     title="IVAO an/aus">
-                                <span id="ivaoNetDot" style="width:6px;height:6px;border-radius:50%;
-                                      background:#fff;display:inline-block;flex-shrink:0"></span>
+                                <span id="ivaoNetDot" class="map-network-dot"></span>
                                 IVAO
                             </button>
                         </div>
@@ -383,62 +415,43 @@
                             <button id="btnVatsimCtrl" type="button" class="vatsim-btn active" title="Controller anzeigen">
                                 <i class="fas fa-headset"></i><span>Controllers</span>
                             </button>
-                            <button id="btnVatsimSectors" type="button" class="vatsim-btn"
-                                    style="flex:0 0 100%;max-width:100%">
+                            <button id="btnVatsimSectors" type="button" class="vatsim-btn vatsim-btn-full">
                                 <i class="fas fa-draw-polygon"></i><span>FIR Sectors</span>
                             </button>
-                            <button id="btnFollowFlight" type="button" class="vatsim-btn active"
-                                    style="flex:0 0 100%;max-width:100%;margin-top:4px">
+                            <button id="btnFollowFlight" type="button" class="vatsim-btn active vatsim-btn-full vatsim-btn-follow">
                                 <i class="fas fa-crosshairs"></i><span>Follow Flight</span>
                             </button>
                         </div>
 
-                        <div style="display:flex;gap:6px;margin-top:6px;font-size:10px;color:#555">
-                            <div id="vatsimStats" style="flex:1;min-width:0;text-align:center;padding:3px 4px;
-                                 background:rgba(26,188,156,0.15);border-radius:3px;border:1px solid rgba(26,188,156,0.3);color:#555;
-                                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
-                            <div id="ivaoStats"   style="flex:1;min-width:0;text-align:center;padding:3px 4px;
-                                 background:rgba(230,126,34,0.15);border-radius:3px;border:1px solid rgba(230,126,34,0.3);color:#555;
-                                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis">...</div>
+                        <div class="map-network-stats-row">
+                            <div id="vatsimStats" class="map-network-stat map-network-stat-vatsim">—</div>
+                            <div id="ivaoStats" class="map-network-stat map-network-stat-ivao">...</div>
                         </div>
 
-                        <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0e0e0;
-                                    display:grid;grid-template-columns:1fr 1fr;gap:3px 8px">
-                            <div style="display:flex;align-items:center;gap:5px">
-                                <span style="display:inline-flex;align-items:center;justify-content:center;
-                                    width:14px;height:14px;border-radius:3px;background:#3498db;
-                                    color:#fff;font-size:8px;font-weight:800;flex-shrink:0">D</span>
-                                <span style="font-size:10px;color:#666">Delivery</span>
+                        <div class="map-network-legend">
+                            <div class="map-network-legend-item">
+                                <span class="map-network-legend-badge map-network-legend-badge-delivery">D</span>
+                                <span class="map-network-legend-label">Delivery</span>
                             </div>
-                            <div style="display:flex;align-items:center;gap:5px">
-                                <span style="display:inline-flex;align-items:center;justify-content:center;
-                                    width:14px;height:14px;border-radius:3px;background:#e67e22;
-                                    color:#fff;font-size:8px;font-weight:800;flex-shrink:0">G</span>
-                                <span style="font-size:10px;color:#666">Ground</span>
+                            <div class="map-network-legend-item">
+                                <span class="map-network-legend-badge map-network-legend-badge-ground">G</span>
+                                <span class="map-network-legend-label">Ground</span>
                             </div>
-                            <div style="display:flex;align-items:center;gap:5px">
-                                <span style="display:inline-flex;align-items:center;justify-content:center;
-                                    width:14px;height:14px;border-radius:3px;background:#e74c3c;
-                                    color:#fff;font-size:8px;font-weight:800;flex-shrink:0">T</span>
-                                <span style="font-size:10px;color:#666">Tower</span>
+                            <div class="map-network-legend-item">
+                                <span class="map-network-legend-badge map-network-legend-badge-tower">T</span>
+                                <span class="map-network-legend-label">Tower</span>
                             </div>
-                            <div style="display:flex;align-items:center;gap:5px">
-                                <span style="display:inline-flex;align-items:center;justify-content:center;
-                                    width:20px;height:14px;border-radius:3px;background:#27ae60;
-                                    color:#fff;font-size:8px;font-weight:900;flex-shrink:0">A<span style="font-style:italic;font-size:9px">i</span></span>
-                                <span style="font-size:10px;color:#666">App / ATIS</span>
+                            <div class="map-network-legend-item">
+                                <span class="map-network-legend-badge map-network-legend-badge-appatis">A<span class="map-network-legend-ai-suffix">i</span></span>
+                                <span class="map-network-legend-label">App / ATIS</span>
                             </div>
-                            <div style="display:flex;align-items:center;gap:5px">
-                                <span style="display:inline-flex;align-items:center;justify-content:center;
-                                    width:14px;height:14px;border-radius:3px;background:#1abc9c;
-                                    color:#fff;font-size:8px;font-weight:800;flex-shrink:0">C</span>
-                                <span style="font-size:10px;color:#666">Center</span>
+                            <div class="map-network-legend-item">
+                                <span class="map-network-legend-badge map-network-legend-badge-center">C</span>
+                                <span class="map-network-legend-label">Center</span>
                             </div>
-                            <div style="display:flex;align-items:center;gap:5px">
-                                <span style="display:inline-flex;align-items:center;justify-content:center;
-                                    width:14px;height:14px;border-radius:50%;background:#5dade2;
-                                    color:#fff;font-size:8px;font-weight:900;font-style:italic;flex-shrink:0">i</span>
-                                <span style="font-size:10px;color:#666">ATIS only</span>
+                            <div class="map-network-legend-item">
+                                <span class="map-network-legend-badge map-network-legend-badge-atis">i</span>
+                                <span class="map-network-legend-label">ATIS only</span>
                             </div>
                         </div>
                     </div><!-- end vatsim-content -->
@@ -452,6 +465,9 @@
 
 
 
-@include($lmScriptsView)
+@if($lmScriptsView)
+    @include($lmScriptsView)
+@endif
+
 
 

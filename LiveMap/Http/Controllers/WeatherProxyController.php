@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\RateLimiter;
 
 class WeatherProxyController extends Controller
 {
+    private const KVP_PREFIX = 'livemap.';
     private const ALLOWED_LAYERS = [
         'clouds_new',
         'precipitation_new',
@@ -33,7 +34,7 @@ class WeatherProxyController extends Controller
             return $this->blankTileResponse('invalid-layer');
         }
 
-        if (!setting('acars.livemap_weather_proxy_enabled', true)) {
+        if (!$this->lmBool('acars.livemap_weather_proxy_enabled', true)) {
             return $this->blankTileResponse('proxy-disabled');
         }
 
@@ -52,7 +53,7 @@ class WeatherProxyController extends Controller
         }
         RateLimiter::hit($rateKey, 60);
 
-        $apiKey = trim((string) setting('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')));
+        $apiKey = trim((string) $this->lmGet('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')));
         if ($apiKey === '') {
             return $this->blankTileResponse('api-key-missing');
         }
@@ -132,5 +133,36 @@ class WeatherProxyController extends Controller
         Cache::put(self::CACHE_LAST_ERROR_CODE, strtoupper(trim($code)), now()->addDay());
         Cache::put(self::CACHE_LAST_ERROR_REASON, trim($reason), now()->addDay());
         Cache::put(self::CACHE_LAST_ERROR_AT, now()->toDateTimeString(), now()->addDay());
+    }
+
+    private function lmGet(string $legacyKey, $default = null)
+    {
+        $sentinel = '__LIVEMAP_MISSING__';
+        $suffix = preg_replace('/^acars\.livemap_/', '', $legacyKey);
+        if (!is_string($suffix) || trim($suffix) === '') {
+            $suffix = str_replace('.', '_', $legacyKey);
+        }
+
+        $kvpValue = kvp(self::KVP_PREFIX.$suffix, $sentinel);
+        if ($kvpValue !== $sentinel) {
+            return $kvpValue;
+        }
+
+        return setting($legacyKey, $default);
+    }
+
+    private function lmBool(string $legacyKey, bool $default = false): bool
+    {
+        $value = $this->lmGet($legacyKey, $default);
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $normalized = strtolower(trim((string) $value));
+        if ($normalized === '') {
+            return $default;
+        }
+
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
     }
 }

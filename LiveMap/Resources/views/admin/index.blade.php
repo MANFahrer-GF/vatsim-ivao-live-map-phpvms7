@@ -4,7 +4,10 @@
 
 @section('content')
   @php
-    $oldStyleChecked = (bool) setting('acars.livemap_old_style', false);
+    $lmS = function (string $key, $default = null) use ($settings) {
+      return array_key_exists($key, $settings) ? $settings[$key] : $default;
+    };
+    $oldStyleChecked = (bool) $lmS('acars.livemap_old_style', false);
     $layoutMode = $oldStyleChecked ? 'old_style' : 'modern';
   @endphp
   <div class="card border-blue-bottom">
@@ -68,11 +71,18 @@
         </div>
       </div>
 
-      <div class="alert alert-warning" style="margin-bottom:14px;">
-        <strong>phpVMS Core Note:</strong>
-        In <em>Admin - ACARS</em>, keep <strong>Live Time</strong> at <strong>1 or higher</strong>.
-        Do not use <code>0</code> on production systems, because this value is also used by core stale/stuck PIREP cleanup routines.
-      </div>
+      @if(!$acarsLiveTimeStatus['isSafe'])
+        <div class="alert alert-warning" style="margin-bottom:14px;">
+          <strong>phpVMS Core Note:</strong>
+          ACARS <strong>Live Time</strong> is currently <strong>{{ $acarsLiveTimeStatus['value'] }}</strong>.
+          Keep it at <strong>1 or higher</strong> in <em>Admin - ACARS</em>.
+          Do not use <code>0</code> on production systems, because this value is also used by core stale/stuck PIREP cleanup routines.
+        </div>
+      @else
+        <p class="help-block" style="margin-top:-4px; margin-bottom:14px;">
+          phpVMS Core: ACARS <strong>Live Time</strong> detected as <strong>{{ $acarsLiveTimeStatus['value'] }}</strong> (safe).
+        </p>
+      @endif
 
       <form method="POST" action="{{ url('/admin/livemap/settings') }}">
         @csrf
@@ -95,7 +105,7 @@
         <div class="form-group">
           <label for="default_basemap">Default basemap</label>
           <select id="default_basemap" name="default_basemap" class="form-control">
-            @php($currentBasemap = setting('acars.livemap_default_basemap', 'positron'))
+            @php($currentBasemap = $lmS('acars.livemap_default_basemap', 'positron'))
             @foreach($basemapOptions as $value => $label)
               <option value="{{ $value }}" {{ $currentBasemap === $value ? 'selected' : '' }}>{{ $label }}</option>
             @endforeach
@@ -106,13 +116,13 @@
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="show_basemap_switcher" value="1" {{ setting('acars.livemap_show_basemap_switcher', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="show_basemap_switcher" value="1" {{ $lmS('acars.livemap_show_basemap_switcher', true) ? 'checked' : '' }}>
             Show basemap switcher on map
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="enable_satellite" value="1" {{ setting('acars.livemap_enable_satellite', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="enable_satellite" value="1" {{ $lmS('acars.livemap_enable_satellite', true) ? 'checked' : '' }}>
             Enable satellite map option
           </label>
           <p class="help-block" style="margin-top:6px">
@@ -124,13 +134,13 @@
         <h5>Weather</h5>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="show_weather_box" value="1" {{ setting('acars.livemap_show_weather_box', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="show_weather_box" value="1" {{ $lmS('acars.livemap_show_weather_box', true) ? 'checked' : '' }}>
             Show weather box
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="weather_proxy_enabled" value="1" {{ setting('acars.livemap_weather_proxy_enabled', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="weather_proxy_enabled" value="1" {{ $lmS('acars.livemap_weather_proxy_enabled', true) ? 'checked' : '' }}>
             Enable server-side weather proxy (recommended)
           </label>
           <p class="help-block" style="margin-top:6px">
@@ -144,7 +154,7 @@
             name="owm_api_key"
             type="password"
             class="form-control"
-            value="{{ setting('acars.livemap_owm_api_key', '') }}"
+            value="{{ $lmS('acars.livemap_owm_api_key', '') }}"
             autocomplete="off"
             placeholder="Paste OWM key">
           <p class="help-block" style="margin-top:6px">
@@ -154,7 +164,7 @@
         <div class="form-group">
           <label for="weather_default_layer">Default weather layer</label>
           <select id="weather_default_layer" name="weather_default_layer" class="form-control">
-            @php($currentLayer = setting('acars.livemap_weather_default_layer', 'combo'))
+            @php($currentLayer = $lmS('acars.livemap_weather_default_layer', 'combo'))
             @foreach($layerOptions as $value => $label)
               <option value="{{ $value }}" {{ $currentLayer === $value ? 'selected' : '' }}>{{ $label }}</option>
             @endforeach
@@ -170,50 +180,50 @@
             max="1"
             step="0.05"
             class="form-control"
-            value="{{ setting('acars.livemap_weather_default_opacity', 1) }}">
+            value="{{ $lmS('acars.livemap_weather_default_opacity', 1) }}">
         </div>
 
         <hr>
         <h5>Network</h5>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="show_network_box" value="1" {{ setting('acars.livemap_show_network_box', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="show_network_box" value="1" {{ $lmS('acars.livemap_show_network_box', true) ? 'checked' : '' }}>
             Show network box
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="default_network_vatsim" value="1" {{ setting('acars.livemap_default_network_vatsim', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="default_network_vatsim" value="1" {{ $lmS('acars.livemap_default_network_vatsim', true) ? 'checked' : '' }}>
             VATSIM enabled by default
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="default_network_ivao" value="1" {{ setting('acars.livemap_default_network_ivao', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="default_network_ivao" value="1" {{ $lmS('acars.livemap_default_network_ivao', true) ? 'checked' : '' }}>
             IVAO enabled by default
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="default_show_pilots" value="1" {{ setting('acars.livemap_default_show_pilots', false) ? 'checked' : '' }}>
+            <input type="checkbox" name="default_show_pilots" value="1" {{ $lmS('acars.livemap_default_show_pilots', false) ? 'checked' : '' }}>
             Show pilots by default
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="default_show_controllers" value="1" {{ setting('acars.livemap_default_show_controllers', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="default_show_controllers" value="1" {{ $lmS('acars.livemap_default_show_controllers', true) ? 'checked' : '' }}>
             Show controllers by default
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="default_show_sectors" value="1" {{ setting('acars.livemap_default_show_sectors', false) ? 'checked' : '' }}>
+            <input type="checkbox" name="default_show_sectors" value="1" {{ $lmS('acars.livemap_default_show_sectors', false) ? 'checked' : '' }}>
             Show FIR/UIR sectors by default
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="default_follow_flight" value="1" {{ setting('acars.livemap_default_follow_flight', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="default_follow_flight" value="1" {{ $lmS('acars.livemap_default_follow_flight', true) ? 'checked' : '' }}>
             Follow flight by default
           </label>
         </div>
@@ -222,25 +232,25 @@
         <h5>Mobile</h5>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="mobile_show_flights_button" value="1" {{ setting('acars.livemap_mobile_show_flights_button', true) ? 'checked' : '' }}>
+            <input type="checkbox" name="mobile_show_flights_button" value="1" {{ $lmS('acars.livemap_mobile_show_flights_button', true) ? 'checked' : '' }}>
             Show mobile Flights button
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="mobile_flights_open" value="1" {{ setting('acars.livemap_mobile_flights_open', false) ? 'checked' : '' }}>
+            <input type="checkbox" name="mobile_flights_open" value="1" {{ $lmS('acars.livemap_mobile_flights_open', false) ? 'checked' : '' }}>
             Open Flights panel by default on mobile
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="mobile_weather_open" value="1" {{ setting('acars.livemap_mobile_weather_open', false) ? 'checked' : '' }}>
+            <input type="checkbox" name="mobile_weather_open" value="1" {{ $lmS('acars.livemap_mobile_weather_open', false) ? 'checked' : '' }}>
             Open Weather panel by default on mobile
           </label>
         </div>
         <div class="form-group">
           <label>
-            <input type="checkbox" name="mobile_network_open" value="1" {{ setting('acars.livemap_mobile_network_open', false) ? 'checked' : '' }}>
+            <input type="checkbox" name="mobile_network_open" value="1" {{ $lmS('acars.livemap_mobile_network_open', false) ? 'checked' : '' }}>
             Open Network panel by default on mobile
           </label>
         </div>
@@ -260,7 +270,7 @@
             name="ui_primary_color"
             type="color"
             class="form-control"
-            value="{{ setting('acars.livemap_color_flights_header_start', '#1A2A4A') }}">
+            value="{{ $lmS('acars.livemap_color_flights_header_start', '#1A2A4A') }}">
           <p class="help-block" style="margin-top:6px">
             Used for weather/network headers, flights header start, and mobile flights button (inactive).
           </p>
@@ -272,7 +282,7 @@
             name="ui_accent_color"
             type="color"
             class="form-control"
-            value="{{ setting('acars.livemap_color_flights_header_end', '#243B6A') }}">
+            value="{{ $lmS('acars.livemap_color_flights_header_end', '#243B6A') }}">
           <p class="help-block" style="margin-top:6px">
             Used for flights header end and mobile flights button (active/open).
           </p>
@@ -284,7 +294,7 @@
             name="color_box_background"
             type="color"
             class="form-control"
-            value="{{ setting('acars.livemap_color_box_background', '#FFFFFF') }}">
+            value="{{ $lmS('acars.livemap_color_box_background', '#FFFFFF') }}">
           <p class="help-block" style="margin-top:6px">
             Body background color of flights/weather/network boxes.
           </p>
