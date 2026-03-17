@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.2] — 2026-03-17
+
+### Weather Layer Compatibility Hotfix
+
+- Replaced the old storms primary layer (`thunder_new`) with `pressure_new` for current OWM tile compatibility.
+- Added storms fallback chain in frontend:
+  - `pressure_new` -> `precipitation_new` -> `clouds_new`
+- Added weather proxy backward-compatibility aliases so older clients still work:
+  - `thunder_new` -> `pressure_new`
+  - `weather_new` -> `precipitation_new`
+- Updated Live Map weather UI/admin wording from storm/thunder-specific labels to pressure-based proxy wording.
+
+### Packaging
+
+- Updated module metadata version:
+  - `LiveMap/module.json` -> `"version": "4.6.2"`
+
+---
+
 ## [4.6.1] — 2026-03-15
 
 ### Compatibility and Stability Hotfixes

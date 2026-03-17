@@ -1,3 +1,49 @@
+## v4.6.2 - Weather Layer Compatibility Hotfix
+
+Release date: 2026-03-17
+
+## Summary
+
+This hotfix aligns Live Map weather overlays with currently supported OpenWeatherMap tile behavior and keeps legacy client requests compatible.
+
+## Key Fixes
+
+### 1) Storm Layer Compatibility
+
+- changed storms primary tile from `thunder_new` to `pressure_new`
+- updated storms fallback chain to:
+  - `pressure_new`
+  - `precipitation_new`
+  - `clouds_new`
+
+### 2) Proxy Backward Compatibility
+
+- weather proxy now accepts legacy layer requests and resolves them safely:
+  - `thunder_new` -> `pressure_new`
+  - `weather_new` -> `precipitation_new`
+
+### 3) UI/Admin Wording Cleanup
+
+- weather button and admin labels now describe this layer as pressure-based storm proxy behavior.
+
+## Upgrade Instructions (No SSH)
+
+Install this release as a **full package** (module + all three widget files).
+
+1. Deploy module folder: `Modules/LiveMap`
+2. Deploy widget files to your active theme:
+   - `live_map.blade.php`
+   - `live_map_styles.blade.php`
+   - `live_map_scripts.blade.php`
+3. Open `/update` in browser.
+4. Open **Admin -> Live Map** once.
+5. In Admin, run **Clear Caches**.
+6. Hard refresh browser cache (`Ctrl+F5`).
+
+No SSH/CLI commands are required.
+
+---
+
 ## v4.6.1 - Stability Hotfix Rollup
 
 Release date: 2026-03-15
