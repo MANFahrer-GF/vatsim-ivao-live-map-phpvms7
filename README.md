@@ -1,6 +1,6 @@
 # VATSIM + IVAO Live Map for phpVMS 7
 
-Version: **4.6.3** (2026-04-04)
+Version: **4.6.5** (2026-04-22)
 
 Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR sectors, VA flight panels, weather overlays, and an admin-driven configuration module.
 
@@ -24,32 +24,78 @@ This repository ships two deployable parts:
 
 For convenience, versioned full packages contain both, for example:
 
-- `LiveMap-full-package-20260404-xxxxxx-v4.6.3.zip`
+- `LiveMap-full-package-20260422-xxxxxx-v4.6.5.zip`
 
 ## Installation (No SSH)
 
-This release should be installed as a **full package** because module logic and blade/widget files were updated together.
+Install this release as a **full package** — the module code and the three widget blade files must always be on the same version. Mixing a new module with old widget files is the #1 cause of "loads and loads", mixed-content warnings, and stale settings.
 
-1. Extract the latest versioned full package (example: `LiveMap-full-package-20260404-xxxxxx-v4.6.3.zip`).
-2. Copy `LiveMap/` to your phpVMS root under `Modules/LiveMap`.
-3. Copy these three files to your active theme widget path:
-   - `live_map.blade.php`
-   - `live_map_styles.blade.php`
-   - `live_map_scripts.blade.php`
-   For example:
-   - `resources/views/layouts/SPTheme/widgets/live_map.blade.php`
-   - `resources/views/layouts/Disposable_v3/widgets/live_map.blade.php`
-4. Open your phpVMS update endpoint in the browser:
-   - `/update`
-5. Open **Admin -> Live Map** and save settings once.
-6. In phpVMS Admin, run **Clear Caches**.
+### 1. Deploy the module
 
-No SSH/CLI commands are required.
+Copy the `LiveMap/` directory to your phpVMS installation:
 
-## Upgrade Notes
+```
+<phpvms-root>/modules/LiveMap/
+```
 
-- If you update from older releases, deploy `LiveMap/` and all three widget files (`live_map.blade.php`, `live_map_styles.blade.php`, `live_map_scripts.blade.php`) to avoid UI/config mismatches.
-- Hard refresh browser cache after deploy (`Ctrl+F5`).
+### 2. Deploy the three widget files
+
+Copy all **three** blade files into your active phpVMS theme's widgets directory. Example paths:
+
+```
+resources/views/layouts/SPTheme/widgets/live_map.blade.php
+resources/views/layouts/SPTheme/widgets/live_map_styles.blade.php
+resources/views/layouts/SPTheme/widgets/live_map_scripts.blade.php
+```
+
+or for Disposable v3:
+
+```
+resources/views/layouts/Disposable_v3/widgets/live_map.blade.php
+resources/views/layouts/Disposable_v3/widgets/live_map_styles.blade.php
+resources/views/layouts/Disposable_v3/widgets/live_map_scripts.blade.php
+```
+
+All three files are required. If you only replace one, the frontend and the backend will disagree about which settings store / which tile URLs are in use.
+
+### 3. Run phpVMS update + cache clear
+
+In the browser, open:
+
+```
+https://<your-site>/update
+```
+
+Then in **Admin → Maintenance** click **Clear Caches**.
+
+### 4. Configure Live Map
+
+Open **Admin → Live Map**:
+
+1. Paste your OpenWeatherMap API key (or leave empty and disable the weather box).
+2. Keep **Enable server-side weather proxy** ON (recommended — your key never reaches the browser).
+3. Pick your default basemap, weather layer, network toggles, and UI colors.
+4. Click **Save Settings**.
+
+Settings are now stored in the phpVMS database (`settings` table, group `livemap_module`). They will survive `/update`, cache clears, deploys, and hoster storage resets.
+
+No SSH/CLI commands are required for any of the above.
+
+## Upgrading from an Older Version
+
+- If you were on v4.6.1 – v4.6.4, your existing settings live in `storage/app/kvp.json`. On the **first** visit to Admin → Live Map after upgrading, the module promotes those values into the DB automatically. Nothing to do.
+- If you were on v4.6.0 or earlier, your settings live in the legacy phpVMS settings rows. They are picked up by the same read path — no action required.
+- Always deploy `LiveMap/` **and** all three widget files together. Hard-refresh the browser (`Ctrl+F5`) after deploy.
+
+## Troubleshooting
+
+**"Settings reset to defaults every day"** — You are on v4.6.1 – v4.6.4. Upgrade to v4.6.5.
+
+**"Map loads and loads and loads"** — Either (a) no OWM key is configured *and* you are running pre-v4.6.5 widget files, so the frontend keeps requesting blank tiles, or (b) your theme still has a pre-v4.6.0 `live_map_scripts.blade.php` with HTTP tile URLs. Redeploy **all three** widget files from v4.6.5.
+
+**"Mixed content warnings in browser console"** — Same cause as above. v4.6.5 uses HTTPS for all tile sources.
+
+**"Weather Proxy Status: API Key Missing"** — Paste the key in Admin → Live Map and click Save Settings. It will persist from now on.
 
 ## Critical phpVMS Setting Note (Important)
 
