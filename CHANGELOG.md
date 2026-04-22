@@ -4,6 +4,36 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.5] — 2026-04-22
+
+### Settings Storage Moved Fully to Database
+
+- Admin settings are now written **only** to the phpVMS `settings` table (group `livemap_module`), with no dependency on `storage/app/kvp.json`.
+- All three read paths (`SettingsController`, `WeatherProxyController`, `live_map.blade.php`) read from the DB first and only fall through to legacy `kvp.json` values for one-time migration of pre-v4.6.4 installs.
+- `ensureDurableBackup()` is now a one-way legacy migration that promotes any remaining `kvp.json` values into the DB on admin page load — idempotent and non-destructive.
+
+### Performance: Skip Weather Tiles When No Key Is Configured
+
+- Frontend now reads a new `weatherAvailable` config flag.
+- When no OWM API key is stored, the widget no longer requests a single weather tile. Previously the map fired hundreds of proxy requests that round-tripped for blank SVG tiles, making the page feel like it "loads and loads and loads".
+- Default weather layer is forced to `none` server-side when no key is configured, so the control is visibly disabled as well.
+
+### Security Hardening
+
+- Upstream OWM exception messages are now sanitised before being stored in the error cache or written to logs:
+  - `appid=…` substrings are redacted
+  - Full URLs are stripped
+  - Control characters are removed
+  - Length is capped
+- Prevents accidental leakage of API key substrings or log-injection payloads into admin UI / application logs.
+
+### Packaging
+
+- Updated module metadata version:
+  - `LiveMap/module.json` -> `"version": "4.6.5"`
+
+---
+
 ## [4.6.4] — 2026-04-22
 
 ### Settings Persistence Hotfix

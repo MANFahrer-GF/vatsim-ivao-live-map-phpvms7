@@ -180,6 +180,16 @@
                 var weatherProxyEnabled = !!weatherCfg.weatherProxyEnabled;
                 var weatherProxyBaseUrl = String(weatherCfg.weatherProxyBaseUrl || '').replace(/\/+$/, '');
                 var OWM_API_KEY = String(weatherCfg.owmApiKey || '').trim();
+                var weatherAvailable = weatherCfg.weatherAvailable !== false;
+
+                // Server already knows whether any OWM key is configured. If not,
+                // don't even wire up the layers — every tile request would just
+                // round-trip to the proxy for a blank SVG and stall the page.
+                if (!weatherAvailable) {
+                    console.info('[LiveMap] Weather disabled (no OWM key configured); skipping overlays');
+                    setWeatherUnavailable('Weather layers unavailable (no API key configured)');
+                    return;
+                }
 
                 if (weatherProxyEnabled) {
                     if (!weatherProxyBaseUrl) {

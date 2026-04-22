@@ -102,7 +102,7 @@ class WeatherProxyController extends Controller
                     ->accept('image/png')
                     ->get($url, ['appid' => $apiKey]);
             } catch (\Throwable $e) {
-                $lastExceptionMessage = $e->getMessage();
+                $lastExceptionMessage = $this->sanitizeExceptionMessage($e);
                 continue;
             }
 
@@ -182,10 +182,24 @@ class WeatherProxyController extends Controller
             ->header('X-LiveMap-Reason', $reason);
     }
 
+    private function sanitizeExceptionMessage(\Throwable $e): string
+    {
+        // Keep upstream error fingerprints readable but strip anything that
+        // could leak the API key, server paths, URLs, query strings, or
+        // control characters into cached error reasons / admin UI / logs.
+        $message = (string) $e->getMessage();
+        $message = preg_replace('/\bappid=[^&\s\'"]+/i', 'appid=REDACTED', $message);
+        $message = preg_replace('/https?:\/\/\S+/i', '[url]', $message);
+        $message = preg_replace('/[[:cntrl:]]/', ' ', $message);
+        $message = mb_substr(trim((string) $message), 0, 200);
+
+        return $message === '' ? 'unknown upstream error' : $message;
+    }
+
     private function rememberUpstreamError(string $code, string $reason): void
     {
         Cache::put(self::CACHE_LAST_ERROR_CODE, strtoupper(trim($code)), now()->addDay());
-        Cache::put(self::CACHE_LAST_ERROR_REASON, trim($reason), now()->addDay());
+        Cache::put(self::CACHE_LAST_ERROR_REASON, mb_substr(trim($reason), 0, 300), now()->addDay());
         Cache::put(self::CACHE_LAST_ERROR_AT, now()->toDateTimeString(), now()->addDay());
     }
 
@@ -204,28 +218,22 @@ class WeatherProxyController extends Controller
     private function lmGet(string $legacyKey, $default = null)
     {
         $sentinel = '__LIVEMAP_MISSING__';
+        $settingValue = setting($legacyKey, $sentinel);
+        if ($settingValue !== $sentinel) {
+            return $settingValue;
+        }
+
+        // Legacy fall-through for pre-v4.6.4 installs whose values still sit in
+        // storage/app/kvp.json. The admin page promotes these into the DB on
+        // its next load, so this branch disappears on its own over time.
         $suffix = preg_replace('/^acars\.livemap_/', '', $legacyKey);
         if (!is_string($suffix) || trim($suffix) === '') {
             $suffix = str_replace('.', '_', $legacyKey);
         }
 
-        $kvpKey = self::KVP_PREFIX.$suffix;
-        $kvpValue = kvp($kvpKey, $sentinel);
+        $kvpValue = kvp(self::KVP_PREFIX.$suffix, $sentinel);
         if ($kvpValue !== $sentinel) {
             return $kvpValue;
-        }
-
-        // kvp.json may have been wiped (deploy, cache flush, permission reset,
-        // Spatie Valuestore race). Fall back to the durable DB row and re-seed kvp.
-        $settingValue = setting($legacyKey, $sentinel);
-        if ($settingValue !== $sentinel) {
-            try {
-                kvp_save($kvpKey, (string) $settingValue);
-            } catch (\Throwable $e) {
-                // Non-fatal: DB already answered this read.
-            }
-
-            return $settingValue;
         }
 
         return $default;

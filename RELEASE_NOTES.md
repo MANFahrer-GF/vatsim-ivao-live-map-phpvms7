@@ -1,3 +1,44 @@
+## v4.6.5 - DB-only Settings + Page Load Fix + Security Hardening
+
+Release date: 2026-04-22
+
+## Summary
+
+Three fixes in one:
+
+1. **Settings now live fully in the database.** No more reliance on `storage/app/kvp.json`, which was the root cause of settings silently reverting to defaults.
+2. **Live Map page no longer stalls when no OWM key is configured.** Previously, each pageload fired hundreds of proxy tile requests that round-tripped only to return blank SVGs.
+3. **Upstream weather errors are now sanitised** before hitting the error cache / logs, preventing leakage of API-key fragments or log-injection payloads.
+
+## 1) DB-only Settings
+
+- Admin saves go straight into the phpVMS `settings` table under group `livemap_module`.
+- Reads use `setting()` directly (DB + phpVMS's built-in cache), with a one-way legacy fall-through that promotes any remaining `kvp.json` values into the DB once, on the next admin page load.
+- No migration is required — the existing `settings` table is reused.
+
+## 2) Page Load Fix
+
+- The widget now receives a `weatherAvailable` flag.
+- If no OWM key is configured, the frontend skips every weather tile request entirely instead of firing them off and getting blank SVGs back.
+- The default weather layer is also forced to `none` server-side in this case, so the weather controls stay visibly inactive.
+
+## 3) Security Hardening
+
+- All upstream OWM exception messages are now passed through a sanitiser before reaching the error cache or the Laravel log:
+  - `appid=…` substrings redacted
+  - Full URLs replaced with `[url]`
+  - Control characters removed
+  - Length capped at 200 chars
+
+## Upgrade (No SSH)
+
+1. Replace the `LiveMap/` module directory **and** the three `live_map*.blade.php` widget files in your theme with the v4.6.5 versions. If the widget files are left on an older version you will keep seeing mixed-content warnings and over-eager weather requests in the browser console.
+2. Admin → Maintenance → Clear Caches.
+3. Open Admin → Live Map once to trigger the one-time kvp→DB migration.
+4. Re-enter the OWM key if it was lost. It now persists across cache clears, deploys, and hoster storage resets.
+
+---
+
 ## v4.6.4 - Settings Persistence Hotfix
 
 Release date: 2026-04-22

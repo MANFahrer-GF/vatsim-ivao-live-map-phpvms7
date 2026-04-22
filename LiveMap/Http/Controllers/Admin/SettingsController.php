@@ -497,37 +497,27 @@ class SettingsController extends Controller
 
         $stringValue = (string) $value;
 
-        // Fast read-cache (flat file via Spatie Valuestore).
-        try {
-            kvp_save($this->toKvpKey($legacyKey), $stringValue);
-        } catch (\Throwable $e) {
-            // If kvp.json is not writable, we still want the DB backup to succeed.
-        }
-
-        // Durable DB-backed copy. storage/app/kvp.json can be wiped by deploys,
-        // hoster resets, Spatie Valuestore race conditions or cache-clear flows,
-        // so the settings table is the source of truth we can self-heal from.
+        // Durable DB-backed storage is the single source of truth. The phpVMS
+        // `settings` table lives in the database and is backed up with the rest
+        // of the site, unlike storage/app/kvp.json which gets wiped by deploys,
+        // permission resets, or Spatie Valuestore concurrent-write races.
         $this->persistDurableSetting($legacyKey, $stringValue, $type, $definition ?? ($this->definitions()[$legacyKey] ?? []));
     }
 
     private function lmGet(string $legacyKey, $default = null)
     {
         $sentinel = '__LIVEMAP_MISSING__';
+        $settingValue = setting($legacyKey, $sentinel);
+        if ($settingValue !== $sentinel) {
+            return $settingValue;
+        }
+
+        // One-time fall-through for users upgrading from v4.6.1-4.6.3 whose
+        // values still live in storage/app/kvp.json. ensureDurableBackup() will
+        // promote them into the DB on the next admin page load.
         $kvpValue = kvp($this->toKvpKey($legacyKey), $sentinel);
         if ($kvpValue !== $sentinel) {
             return $kvpValue;
-        }
-
-        $settingValue = setting($legacyKey, $sentinel);
-        if ($settingValue !== $sentinel) {
-            // kvp.json was wiped but DB backup still has the saved value — re-seed kvp.
-            try {
-                kvp_save($this->toKvpKey($legacyKey), (string) $settingValue);
-            } catch (\Throwable $e) {
-                // Non-fatal: the DB row itself already answered the read.
-            }
-
-            return $settingValue;
         }
 
         return $default;
@@ -589,44 +579,31 @@ class SettingsController extends Controller
     }
 
     /**
-     * Bidirectional sync so either store can recover the other.
-     *
-     * - If the DB row is missing but kvp has a value -> recreate the durable DB backup.
-     * - If the DB row exists but kvp is missing (e.g. storage/app/kvp.json got wiped
-     *   by a deploy, cache flush, permission reset, or Spatie Valuestore race) -> re-seed kvp.
-     *
-     * No destructive cleanup: the legacy/backup rows are intentionally preserved
-     * because they are the only durable source of truth after kvp.json is lost.
+     * One-way migration: if a value only exists in the legacy kvp.json, copy it
+     * into the durable DB row so future reads go through the settings table.
+     * Runs on every admin page load — idempotent, no destructive cleanup.
      */
     private function ensureDurableBackup(): void
     {
         $sentinel = '__LIVEMAP_MISSING__';
 
         foreach ($this->definitions() as $legacyKey => $definition) {
-            $kvpKey = $this->toKvpKey($legacyKey);
-            $kvpValue = kvp($kvpKey, $sentinel);
             $settingValue = setting($legacyKey, $sentinel);
-
-            $kvpHas = $kvpValue !== $sentinel;
-            $settingHas = $settingValue !== $sentinel;
-
-            if (!$kvpHas && $settingHas) {
-                try {
-                    kvp_save($kvpKey, (string) $settingValue);
-                } catch (\Throwable $e) {
-                    // kvp.json not writable; DB row still answers reads.
-                }
+            if ($settingValue !== $sentinel) {
                 continue;
             }
 
-            if ($kvpHas && !$settingHas) {
-                $this->persistDurableSetting(
-                    $legacyKey,
-                    (string) $kvpValue,
-                    $definition['type'] ?? 'string',
-                    $definition,
-                );
+            $kvpValue = kvp($this->toKvpKey($legacyKey), $sentinel);
+            if ($kvpValue === $sentinel) {
+                continue;
             }
+
+            $this->persistDurableSetting(
+                $legacyKey,
+                (string) $kvpValue,
+                $definition['type'] ?? 'string',
+                $definition,
+            );
         }
     }
 
