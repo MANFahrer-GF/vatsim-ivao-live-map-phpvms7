@@ -1,3 +1,90 @@
+## v4.6.5 - DB-only Settings + Page Load Fix + Security Hardening
+
+Release date: 2026-04-22
+
+## Summary
+
+Three fixes in one:
+
+1. **Settings now live fully in the database.** No more reliance on `storage/app/kvp.json`, which was the root cause of settings silently reverting to defaults.
+2. **Live Map page no longer stalls when no OWM key is configured.** Previously, each pageload fired hundreds of proxy tile requests that round-tripped only to return blank SVGs.
+3. **Upstream weather errors are now sanitised** before hitting the error cache / logs, preventing leakage of API-key fragments or log-injection payloads.
+
+## 1) DB-only Settings
+
+- Admin saves go straight into the phpVMS `settings` table under group `livemap_module`.
+- Reads use `setting()` directly (DB + phpVMS's built-in cache), with a one-way legacy fall-through that promotes any remaining `kvp.json` values into the DB once, on the next admin page load.
+- No migration is required — the existing `settings` table is reused.
+
+## 2) Page Load Fix
+
+- The widget now receives a `weatherAvailable` flag.
+- If no OWM key is configured, the frontend skips every weather tile request entirely instead of firing them off and getting blank SVGs back.
+- The default weather layer is also forced to `none` server-side in this case, so the weather controls stay visibly inactive.
+
+## 3) Security Hardening
+
+- All upstream OWM exception messages are now passed through a sanitiser before reaching the error cache or the Laravel log:
+  - `appid=…` substrings redacted
+  - Full URLs replaced with `[url]`
+  - Control characters removed
+  - Length capped at 200 chars
+
+## Upgrade (No SSH)
+
+1. Replace the `LiveMap/` module directory **and** the three `live_map*.blade.php` widget files in your theme with the v4.6.5 versions. If the widget files are left on an older version you will keep seeing mixed-content warnings and over-eager weather requests in the browser console.
+2. Admin → Maintenance → Clear Caches.
+3. Open Admin → Live Map once to trigger the one-time kvp→DB migration.
+4. Re-enter the OWM key if it was lost. It now persists across cache clears, deploys, and hoster storage resets.
+
+---
+
+## v4.6.4 - Settings Persistence Hotfix
+
+Release date: 2026-04-22
+
+## Summary
+
+Fixes the recurring problem where the OpenWeatherMap API key and all Live Map admin settings silently reverted to factory defaults between sessions (typically after a phpVMS `/update`, a cache clear, a deploy, or a hoster-initiated storage reset).
+
+## Root Cause
+
+Since v4.6.1, settings were stored **only** in `storage/app/kvp.json` (a single flat JSON file managed by Spatie Valuestore) and the durable database backup rows were proactively deleted on every admin page load. If `kvp.json` was lost or corrupted for any reason — hoster deploy wiping `storage/app/`, file permission reset, concurrent-write race in Spatie Valuestore, cache maintenance — there was no fallback and every setting reverted to its code default.
+
+## What v4.6.4 Changes
+
+### 1) Dual-Write Persistence
+
+- every admin save now writes to **both** stores:
+  - fast read path: `kvp` (`storage/app/kvp.json`)
+  - durable backup: module-owned rows in the `settings` table (group `livemap_module`)
+
+### 2) Self-Healing Reads
+
+- admin page, weather tile proxy, and live map frontend all:
+  - read `kvp` first
+  - fall back to the durable DB row if `kvp.json` was wiped
+  - automatically re-seed `kvp.json` from the DB row on the next read
+
+### 3) No More Destructive Cleanup
+
+- the admin page no longer deletes legacy `acars.livemap_*` rows on load
+- those rows (now `group=livemap_module`) are the recovery source of truth
+
+### 4) No DB Migration Required
+
+- the fix uses the existing phpVMS `settings` table — **no** new tables, **no** new migrations, **no** SSH needed
+- upgrade in-place by replacing the module files and hitting **Admin -> Clear Caches**
+
+## Upgrade Instructions (No SSH)
+
+1. Replace the `LiveMap/` module directory and the three `live_map*.blade.php` widget files with the v4.6.4 versions.
+2. Visit **Admin -> Maintenance -> Clear Caches** in phpVMS.
+3. Open **Admin -> Live Map** once. Any value still present in `kvp.json` is mirrored into the durable DB backup automatically.
+4. Re-enter the OWM API key if it was lost during the previous reset — it will now survive future cache clears and deploys.
+
+---
+
 ## v4.6.3 - Weather Proxy Resilience Hotfix
 
 Release date: 2026-04-04

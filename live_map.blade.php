@@ -60,18 +60,25 @@
                         return 'rgba('.$r.','.$g.','.$b.','.(float) $alpha.')';
                     };
                     $lmSetting = function (string $legacyKey, $default = null) {
+                        $sentinel = '__LIVEMAP_MISSING__';
+                        $settingValue = setting($legacyKey, $sentinel);
+                        if ($settingValue !== $sentinel) {
+                            return $settingValue;
+                        }
+
+                        // Legacy fall-through for pre-v4.6.4 installs whose values
+                        // still sit in storage/app/kvp.json. The admin page promotes
+                        // these into the DB on its next load.
                         $suffix = preg_replace('/^acars\.livemap_/', '', $legacyKey);
                         if (!is_string($suffix) || trim($suffix) === '') {
                             $suffix = str_replace('.', '_', $legacyKey);
                         }
-
-                        $sentinel = '__LIVEMAP_MISSING__';
                         $kvpValue = kvp('livemap.'.$suffix, $sentinel);
                         if ($kvpValue !== $sentinel) {
                             return $kvpValue;
                         }
 
-                        return setting($legacyKey, $default);
+                        return $default;
                     };
 
                     $oldStyle = $lmBool($lmSetting('acars.livemap_old_style', false), false);
@@ -90,9 +97,15 @@
                     }
                     $weatherOpacity = (float) $lmSetting('acars.livemap_weather_default_opacity', 1);
                     if (!is_finite($weatherOpacity) || $weatherOpacity < 0.2 || $weatherOpacity > 1) $weatherOpacity = 1;
-                    $owmApiKeyForClient = $weatherProxyEnabled
-                        ? ''
-                        : $lmString($lmSetting('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')), '');
+                    $storedOwmApiKey = $lmString($lmSetting('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')), '');
+                    $owmApiKeyForClient = $weatherProxyEnabled ? '' : $storedOwmApiKey;
+                    // If no key is configured we must not request any weather tile —
+                    // without this flag the frontend still fires hundreds of proxy
+                    // requests that just return blank SVGs and slow the whole page down.
+                    $weatherAvailable = $storedOwmApiKey !== '' || (!$weatherProxyEnabled && $owmApiKeyForClient !== '');
+                    if (!$weatherAvailable) {
+                        $weatherDefault = 'none';
+                    }
                     $flightsHeaderStart = $lmHexColor($lmSetting('acars.livemap_color_flights_header_start', '#1A2A4A'), '#1A2A4A');
                     $flightsHeaderEnd = $lmHexColor($lmSetting('acars.livemap_color_flights_header_end', '#243B6A'), '#243B6A');
                     $weatherHeaderColor = $lmHexColor($lmSetting('acars.livemap_color_weather_header', '#1A2E4A'), '#1A2E4A');
@@ -118,6 +131,7 @@
                         'owmApiKey'             => $owmApiKeyForClient,
                         'weatherDefaultLayer'   => $weatherDefault,
                         'weatherDefaultOpacity' => round($weatherOpacity, 2),
+                        'weatherAvailable'      => $weatherAvailable,
                         // Network box + defaults
                         'showNetworkBox'        => $lmBool($lmSetting('acars.livemap_show_network_box', true), true),
                         'defaultVatsimEnabled'  => $lmBool($lmSetting('acars.livemap_default_network_vatsim', true), true),
