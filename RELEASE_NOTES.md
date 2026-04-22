@@ -1,3 +1,49 @@
+## v4.6.4 - Settings Persistence Hotfix
+
+Release date: 2026-04-22
+
+## Summary
+
+Fixes the recurring problem where the OpenWeatherMap API key and all Live Map admin settings silently reverted to factory defaults between sessions (typically after a phpVMS `/update`, a cache clear, a deploy, or a hoster-initiated storage reset).
+
+## Root Cause
+
+Since v4.6.1, settings were stored **only** in `storage/app/kvp.json` (a single flat JSON file managed by Spatie Valuestore) and the durable database backup rows were proactively deleted on every admin page load. If `kvp.json` was lost or corrupted for any reason — hoster deploy wiping `storage/app/`, file permission reset, concurrent-write race in Spatie Valuestore, cache maintenance — there was no fallback and every setting reverted to its code default.
+
+## What v4.6.4 Changes
+
+### 1) Dual-Write Persistence
+
+- every admin save now writes to **both** stores:
+  - fast read path: `kvp` (`storage/app/kvp.json`)
+  - durable backup: module-owned rows in the `settings` table (group `livemap_module`)
+
+### 2) Self-Healing Reads
+
+- admin page, weather tile proxy, and live map frontend all:
+  - read `kvp` first
+  - fall back to the durable DB row if `kvp.json` was wiped
+  - automatically re-seed `kvp.json` from the DB row on the next read
+
+### 3) No More Destructive Cleanup
+
+- the admin page no longer deletes legacy `acars.livemap_*` rows on load
+- those rows (now `group=livemap_module`) are the recovery source of truth
+
+### 4) No DB Migration Required
+
+- the fix uses the existing phpVMS `settings` table — **no** new tables, **no** new migrations, **no** SSH needed
+- upgrade in-place by replacing the module files and hitting **Admin -> Clear Caches**
+
+## Upgrade Instructions (No SSH)
+
+1. Replace the `LiveMap/` module directory and the three `live_map*.blade.php` widget files with the v4.6.4 versions.
+2. Visit **Admin -> Maintenance -> Clear Caches** in phpVMS.
+3. Open **Admin -> Live Map** once. Any value still present in `kvp.json` is mirrored into the durable DB backup automatically.
+4. Re-enter the OWM API key if it was lost during the previous reset — it will now survive future cache clears and deploys.
+
+---
+
 ## v4.6.3 - Weather Proxy Resilience Hotfix
 
 Release date: 2026-04-04

@@ -209,12 +209,26 @@ class WeatherProxyController extends Controller
             $suffix = str_replace('.', '_', $legacyKey);
         }
 
-        $kvpValue = kvp(self::KVP_PREFIX.$suffix, $sentinel);
+        $kvpKey = self::KVP_PREFIX.$suffix;
+        $kvpValue = kvp($kvpKey, $sentinel);
         if ($kvpValue !== $sentinel) {
             return $kvpValue;
         }
 
-        return setting($legacyKey, $default);
+        // kvp.json may have been wiped (deploy, cache flush, permission reset,
+        // Spatie Valuestore race). Fall back to the durable DB row and re-seed kvp.
+        $settingValue = setting($legacyKey, $sentinel);
+        if ($settingValue !== $sentinel) {
+            try {
+                kvp_save($kvpKey, (string) $settingValue);
+            } catch (\Throwable $e) {
+                // Non-fatal: DB already answered this read.
+            }
+
+            return $settingValue;
+        }
+
+        return $default;
     }
 
     private function lmBool(string $legacyKey, bool $default = false): bool

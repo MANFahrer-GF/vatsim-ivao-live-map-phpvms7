@@ -4,6 +4,32 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.4] — 2026-04-22
+
+### Settings Persistence Hotfix
+
+- Fixed the recurring problem where the OpenWeatherMap API key and other Live Map admin settings silently reverted to defaults between sessions.
+- Root cause: v4.6.1 moved all settings into `storage/app/kvp.json` (Spatie Valuestore flat file) and the admin page actively deleted the durable database backup rows on every load. Any event that wiped, corrupted, or lost `kvp.json` (hoster deploy, permission reset, Spatie Valuestore concurrent-write race, cache maintenance) erased every setting with no way to recover.
+
+### What Changed Internally
+
+- `SettingsController::persistLiveMapSetting` now dual-writes:
+  - fast read path: `kvp_save(livemap.*)`
+  - durable backup: rows in the `settings` table under group `livemap_module`
+- All three read paths are now self-healing:
+  - `SettingsController::lmGet`
+  - `WeatherProxyController::lmGet`
+  - `lmSetting` helper in `live_map.blade.php`
+- When `kvp.json` is missing but the durable DB row is present, the DB value is returned and `kvp` is re-seeded on the fly.
+- Removed the destructive `deleteLegacySettingsRows()` / `migrateLegacySettingsToKvpAndCleanup()` pair and replaced it with a non-destructive `ensureDurableBackup()` that bidirectionally reconciles both stores on admin page load.
+
+### Packaging and Metadata
+
+- Updated module metadata version:
+  - `LiveMap/module.json` -> `"version": "4.6.4"`
+
+---
+
 ## [4.6.3] — 2026-04-04
 
 ### Weather Proxy Resilience

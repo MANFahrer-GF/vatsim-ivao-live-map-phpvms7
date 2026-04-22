@@ -66,12 +66,27 @@
                         }
 
                         $sentinel = '__LIVEMAP_MISSING__';
-                        $kvpValue = kvp('livemap.'.$suffix, $sentinel);
+                        $kvpKey = 'livemap.'.$suffix;
+                        $kvpValue = kvp($kvpKey, $sentinel);
                         if ($kvpValue !== $sentinel) {
                             return $kvpValue;
                         }
 
-                        return setting($legacyKey, $default);
+                        // kvp.json may have been wiped (deploy/cache flush/permission reset).
+                        // Fall back to the durable DB row and re-seed kvp so later reads
+                        // on the same page stay fast.
+                        $settingValue = setting($legacyKey, $sentinel);
+                        if ($settingValue !== $sentinel) {
+                            try {
+                                kvp_save($kvpKey, (string) $settingValue);
+                            } catch (\Throwable $e) {
+                                // Non-fatal: the DB already answered the read.
+                            }
+
+                            return $settingValue;
+                        }
+
+                        return $default;
                     };
 
                     $oldStyle = $lmBool($lmSetting('acars.livemap_old_style', false), false);

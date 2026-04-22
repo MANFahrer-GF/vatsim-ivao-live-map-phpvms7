@@ -15,7 +15,7 @@ class SettingsController extends Controller
 
     public function index()
     {
-        $this->migrateLegacySettingsToKvpAndCleanup();
+        $this->ensureDurableBackup();
 
         return view('livemap::admin.index', [
             'settings'      => $this->currentSettings(),
@@ -104,10 +104,9 @@ class SettingsController extends Controller
                 $key,
                 $payload[$key] ?? ($definition['default'] ?? ''),
                 $definition['type'] ?? 'string',
+                $definition,
             );
         }
-
-        $this->deleteLegacySettingsRows();
 
         return redirect('/admin/livemap')->with('status', 'Live Map settings saved.');
     }
@@ -486,7 +485,7 @@ class SettingsController extends Controller
         return strtoupper($default);
     }
 
-    private function persistLiveMapSetting(string $legacyKey, $value, string $type): void
+    private function persistLiveMapSetting(string $legacyKey, $value, string $type, ?array $definition = null): void
     {
         if ($type === 'bool' || $type === 'boolean') {
             $value = $value ? '1' : '0';
@@ -496,7 +495,19 @@ class SettingsController extends Controller
             $value = (string) $value;
         }
 
-        kvp_save($this->toKvpKey($legacyKey), (string) $value);
+        $stringValue = (string) $value;
+
+        // Fast read-cache (flat file via Spatie Valuestore).
+        try {
+            kvp_save($this->toKvpKey($legacyKey), $stringValue);
+        } catch (\Throwable $e) {
+            // If kvp.json is not writable, we still want the DB backup to succeed.
+        }
+
+        // Durable DB-backed copy. storage/app/kvp.json can be wiped by deploys,
+        // hoster resets, Spatie Valuestore race conditions or cache-clear flows,
+        // so the settings table is the source of truth we can self-heal from.
+        $this->persistDurableSetting($legacyKey, $stringValue, $type, $definition ?? ($this->definitions()[$legacyKey] ?? []));
     }
 
     private function lmGet(string $legacyKey, $default = null)
@@ -507,7 +518,64 @@ class SettingsController extends Controller
             return $kvpValue;
         }
 
-        return setting($legacyKey, $default);
+        $settingValue = setting($legacyKey, $sentinel);
+        if ($settingValue !== $sentinel) {
+            // kvp.json was wiped but DB backup still has the saved value — re-seed kvp.
+            try {
+                kvp_save($this->toKvpKey($legacyKey), (string) $settingValue);
+            } catch (\Throwable $e) {
+                // Non-fatal: the DB row itself already answered the read.
+            }
+
+            return $settingValue;
+        }
+
+        return $default;
+    }
+
+    private function persistDurableSetting(string $legacyKey, string $value, string $type, array $definition): void
+    {
+        try {
+            $id = Setting::formatKey($legacyKey);
+            $name = (string) ($definition['name'] ?? $legacyKey);
+            $description = (string) ($definition['description'] ?? '');
+            $default = (string) ($definition['default'] ?? '');
+
+            $setting = Setting::query()->where('id', $id)->first();
+            if ($setting) {
+                $setting->value = $value;
+                $setting->type = $this->mapDefinitionTypeToSettingType($type);
+                $setting->save();
+            } else {
+                Setting::query()->insert([
+                    'id'          => $id,
+                    'key'         => $legacyKey,
+                    'value'       => $value,
+                    'default'     => $default,
+                    'name'        => $name,
+                    'description' => $description,
+                    'type'        => $this->mapDefinitionTypeToSettingType($type),
+                    'group'       => 'livemap_module',
+                    'options'     => '',
+                    'order'       => 0,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+            }
+
+            $this->forgetSettingCache($legacyKey);
+        } catch (\Throwable $e) {
+            // Swallow: worst case is the DB row is missing; kvp still holds the value.
+        }
+    }
+
+    private function mapDefinitionTypeToSettingType(string $type): string
+    {
+        return match ($type) {
+            'bool', 'boolean' => 'boolean',
+            'float'           => 'float',
+            default           => 'text',
+        };
     }
 
     private function toKvpKey(string $legacyKey): string
@@ -520,51 +588,45 @@ class SettingsController extends Controller
         return self::KVP_PREFIX.$suffix;
     }
 
-    private function migrateLegacySettingsToKvpAndCleanup(): void
+    /**
+     * Bidirectional sync so either store can recover the other.
+     *
+     * - If the DB row is missing but kvp has a value -> recreate the durable DB backup.
+     * - If the DB row exists but kvp is missing (e.g. storage/app/kvp.json got wiped
+     *   by a deploy, cache flush, permission reset, or Spatie Valuestore race) -> re-seed kvp.
+     *
+     * No destructive cleanup: the legacy/backup rows are intentionally preserved
+     * because they are the only durable source of truth after kvp.json is lost.
+     */
+    private function ensureDurableBackup(): void
     {
+        $sentinel = '__LIVEMAP_MISSING__';
+
         foreach ($this->definitions() as $legacyKey => $definition) {
             $kvpKey = $this->toKvpKey($legacyKey);
-            $sentinel = '__LIVEMAP_MISSING__';
-            $existing = kvp($kvpKey, $sentinel);
-            if ($existing !== $sentinel) {
+            $kvpValue = kvp($kvpKey, $sentinel);
+            $settingValue = setting($legacyKey, $sentinel);
+
+            $kvpHas = $kvpValue !== $sentinel;
+            $settingHas = $settingValue !== $sentinel;
+
+            if (!$kvpHas && $settingHas) {
+                try {
+                    kvp_save($kvpKey, (string) $settingValue);
+                } catch (\Throwable $e) {
+                    // kvp.json not writable; DB row still answers reads.
+                }
                 continue;
             }
 
-            $legacyValue = setting($legacyKey, '__LIVEMAP_LEGACY_MISSING__');
-            if ($legacyValue === '__LIVEMAP_LEGACY_MISSING__') {
-                continue;
+            if ($kvpHas && !$settingHas) {
+                $this->persistDurableSetting(
+                    $legacyKey,
+                    (string) $kvpValue,
+                    $definition['type'] ?? 'string',
+                    $definition,
+                );
             }
-
-            kvp_save($kvpKey, (string) $legacyValue);
-        }
-
-        $this->deleteLegacySettingsRows();
-    }
-
-    private function deleteLegacySettingsRows(): void
-    {
-        $keys = array_keys($this->definitions());
-        $ids = array_map(static fn ($k) => Setting::formatKey($k), $keys);
-
-        Setting::query()
-            ->where(function ($q) use ($keys, $ids) {
-                if (!empty($keys)) {
-                    $q->whereIn('key', $keys);
-                }
-                if (!empty($ids)) {
-                    $q->orWhereIn('id', $ids);
-                }
-                $q->orWhere('key', 'like', 'acars.livemap_%')
-                  ->orWhere('id', 'like', 'acars_livemap_%')
-                  ->orWhere(function ($q2) {
-                      $q2->where('group', 'acars')
-                         ->where('name', 'like', 'Live Map:%');
-                  });
-            })
-            ->delete();
-
-        foreach ($keys as $key) {
-            $this->forgetSettingCache($key);
         }
     }
 
