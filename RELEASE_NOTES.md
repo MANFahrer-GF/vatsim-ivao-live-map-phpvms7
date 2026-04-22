@@ -1,3 +1,30 @@
+## v4.6.6 - Mixed-Content Hotfix
+
+Release date: 2026-04-22
+
+## Summary
+
+Silences the "hundreds of mixed-content warnings" symptom seen on installs where a second, older `live_map.js` (from a custom theme, old widget copy, or another phpVMS module) is running in parallel to our widget and still uses `http://` tile URLs.
+
+## What Changed
+
+- `live_map_scripts.blade.php` now wraps `L.TileLayer.initialize()` and `L.TileLayer.setUrl()` with a tiny patch that upgrades any `http://` URL to `https://` before Leaflet ever creates a request.
+- The patch runs once per page load, is idempotent (safe to include even if it's already applied), and requires no configuration.
+- No other behaviour change — all v4.6.5 fixes (DB-only persistence, weather-skip, exception sanitisation) remain in place.
+
+## Upgrade (No SSH)
+
+Replace `live_map_scripts.blade.php` in your theme widgets folder with the v4.6.6 version. The module code in `LiveMap/` did not change (other than the version bump), so re-deploying the module is optional but recommended for consistency.
+
+1. Download the install ZIP.
+2. Upload `live_map_scripts.blade.php` (and the rest of the package for consistency) to your theme widgets folder, overwriting existing files.
+3. phpVMS Admin → Maintenance → Clear Caches.
+4. Hard-refresh your browser.
+
+The 500+ `Mixed Content: ... was automatically upgraded to HTTPS` lines in DevTools should disappear completely on the next page load.
+
+---
+
 ## v4.6.5 - DB-only Settings + Page Load Fix + Security Hardening
 
 Release date: 2026-04-22

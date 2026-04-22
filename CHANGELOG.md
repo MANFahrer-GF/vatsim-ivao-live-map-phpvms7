@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.6] — 2026-04-22
+
+### Mixed-Content Hotfix (HTTPS Upgrade for All Leaflet Tile Layers)
+
+- Added a defensive monkey-patch in `live_map_scripts.blade.php` that forces
+  every `L.TileLayer.initialize(url)` and `L.TileLayer.setUrl(url)` call to
+  upgrade `http://` URLs to `https://`.
+- Fixes the "hundreds of mixed-content warnings" symptom on installs where
+  a second, older `live_map.js` (from a custom theme or another phpVMS
+  module) is running in parallel and still uses `http://` tile URLs.
+- No configuration change required. The patch is idempotent and only applies
+  once per page load.
+
+### Packaging
+
+- Updated module metadata version:
+  - `LiveMap/module.json` -> `"version": "4.6.6"`
+- Updated install ZIP: `dist/LiveMap-full-package-v4.6.6.zip`
+
+---
+
 ## [4.6.5] — 2026-04-22
 
 ### Settings Storage Moved Fully to Database

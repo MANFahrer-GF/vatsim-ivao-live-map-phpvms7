@@ -2,6 +2,29 @@
     @parent
 
     <script>
+        // Defensive: force any L.TileLayer URL — including ones created by other
+        // scripts on the page (legacy live_map.js, themes, core phpVMS map) — to
+        // HTTPS. Without this, mixed-content warnings pile up into the hundreds
+        // whenever another module ships an older Leaflet tile layer with http://.
+        (function lmUpgradeTileUrlsToHttps() {
+            if (!window.L || !L.TileLayer || L.TileLayer.prototype._lmHttpsUpgradePatched) return;
+            var origInit = L.TileLayer.prototype.initialize;
+            L.TileLayer.prototype.initialize = function (url, options) {
+                if (typeof url === 'string' && url.indexOf('http://') === 0) {
+                    url = 'https://' + url.substring(7);
+                }
+                return origInit.call(this, url, options);
+            };
+            var origSetUrl = L.TileLayer.prototype.setUrl;
+            L.TileLayer.prototype.setUrl = function (url, noRedraw) {
+                if (typeof url === 'string' && url.indexOf('http://') === 0) {
+                    url = 'https://' + url.substring(7);
+                }
+                return origSetUrl.call(this, url, noRedraw);
+            };
+            L.TileLayer.prototype._lmHttpsUpgradePatched = true;
+        })();
+
         document.addEventListener('DOMContentLoaded', function () {
             var LIVE_MAP_UI = @json($liveMapUiConfig);
             window.LIVE_MAP_UI = LIVE_MAP_UI || {};
