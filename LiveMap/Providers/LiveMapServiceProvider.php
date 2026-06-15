@@ -62,7 +62,13 @@ class LiveMapServiceProvider extends ServiceProvider
         }, \Config::get('view.paths'));
 
         $paths[] = $sourcePath;
-        $this->loadViewsFrom($paths, 'livemap');
+        // Nur EXISTIERENDE Verzeichnisse registrieren. Die Theme-Override-
+        // Pfade (view.paths + /modules/livemap) existieren i.d.R. nicht.
+        // Live-Rendern überspringt fehlende Dirs lazy (Fallback $sourcePath),
+        // aber `php artisan view:cache`/`optimize` scannt EAGER jeden Pfad per
+        // Symfony-Finder → DirectoryNotFoundException. $sourcePath existiert
+        // immer → der Namespace behält stets einen gültigen Pfad.
+        $this->loadViewsFrom(array_filter($paths, 'is_dir'), 'livemap');
     }
 
     public function provides(): array

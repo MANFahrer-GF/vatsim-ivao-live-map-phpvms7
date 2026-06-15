@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.7] — 2026-06-15
+
+### Fixed
+- **View path registration now only registers existing directories.** `registerViews()` appended `/modules/livemap` to every `view.paths` entry (theme-override paths) which usually don't exist. Live rendering was never affected — the view finder skips missing dirs lazily and falls back to `Resources/views` — but `php artisan view:cache` / `optimize` eager-scans every registered path via the Symfony Finder and threw `DirectoryNotFoundException`. The `$paths` list is now wrapped in `array_filter(…, 'is_dir')`; `Resources/views` always exists so the namespace keeps at least one valid path, and existing theme overrides are still picked up.
+
 ## [4.6.6] — 2026-04-22
 
 ### Mixed-Content Hotfix (HTTPS Upgrade for All Leaflet Tile Layers)
