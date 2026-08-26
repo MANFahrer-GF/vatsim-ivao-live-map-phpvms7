@@ -217,8 +217,90 @@ class SettingsController extends Controller
     private function cartoStatus(): array
     {
         $key = trim((string) $this->lmGet('acars.carto_api_key', env('CARTO_API_KEY', '')));
+        $basemap = (string) $this->lmGet('acars.livemap_default_basemap', 'positron');
+        $cartoInUse = in_array($basemap, ['positron', 'dark'], true);
 
-        return ['hasApiKey' => $key !== ''];
+        if ($key === '') {
+            return [
+                'hasApiKey'  => false,
+                'accepted'   => null,
+                'checkedAt'  => null,
+                'cartoInUse' => $cartoInUse,
+                'badgeClass' => $cartoInUse ? 'danger' : 'info',
+                'title'      => $cartoInUse ? 'CARTO Key Missing' : 'No CARTO Key (not needed)',
+                'message'    => $cartoInUse
+                    ? 'The default basemap is a CARTO style, so every tile carries the '
+                        .'"API KEY REQUIRED" watermark. Paste a key below — free up to 5 million '
+                        .'tiles per month at carto.com/basemaps/apikey.'
+                    : 'The default basemap is not a CARTO style, so no key is required. '
+                        .'You still need one if users switch to Carto Light or Carto Dark.',
+            ];
+        }
+
+        // Das Urteil wird gespeichert, nicht bei jedem Seitenaufruf neu geholt.
+        //
+        // Eine Pruefung kostet drei Anfragen an CARTO. Auf Installationen ohne
+        // Anwendungs-Cache (`CACHE_DRIVER=null`, bei phpVMS nicht selten)
+        // liefe das bei JEDEM Oeffnen der Seite — dafuer ist es zu teuer.
+        //
+        // Der Fingerabdruck haengt am Schluessel: Wird ein anderer eingetragen
+        // — auch ueber die `.env`, an der Oberflaeche vorbei — passt er nicht
+        // mehr, und es wird neu geprueft.
+        $fingerabdruck = substr(hash('sha256', $key), 0, 16);
+        $abgelegt = json_decode((string) $this->lmGet('acars.carto_api_key_checked', ''), true);
+        $passt = is_array($abgelegt) && ($abgelegt['fp'] ?? null) === $fingerabdruck;
+
+        if (!$passt) {
+            $pruefung = $this->verifyCartoApiKey($key);
+            $abgelegt = [
+                'fp' => $fingerabdruck,
+                'ok' => $pruefung['valid'],
+                'at' => now()->toIso8601String(),
+            ];
+            Setting::updateOrCreate(
+                ['id' => 'acars.carto_api_key_checked'],
+                ['value' => json_encode($abgelegt)]
+            );
+        }
+
+        $ok = $abgelegt['ok'] ?? null;
+
+        if ($ok === true) {
+            return [
+                'hasApiKey'  => true,
+                'accepted'   => true,
+                'checkedAt'  => $abgelegt['at'] ?? null,
+                'cartoInUse' => $cartoInUse,
+                'badgeClass' => 'success',
+                'title'      => 'CARTO Key OK',
+                'message'    => 'CARTO returns a clean tile for this key — the watermark is gone.',
+            ];
+        }
+
+        if ($ok === false) {
+            return [
+                'hasApiKey'  => true,
+                'accepted'   => false,
+                'checkedAt'  => $abgelegt['at'] ?? null,
+                'cartoInUse' => $cartoInUse,
+                'badgeClass' => 'danger',
+                'title'      => 'CARTO Key Not Accepted',
+                'message'    => 'CARTO returns the same tile as without a key, so it is being ignored. '
+                    .'Check the value against the CARTO email (format: cb1_…). '
+                    .'The map still carries the watermark.',
+            ];
+        }
+
+        return [
+            'hasApiKey'  => true,
+            'accepted'   => null,
+            'checkedAt'  => $abgelegt['at'] ?? null,
+            'cartoInUse' => $cartoInUse,
+            'badgeClass' => 'warning',
+            'title'      => 'CARTO Key Set — Not Verified',
+            'message'    => 'A key is stored, but CARTO could not be reached to confirm it is accepted. '
+                .'This says nothing about the key itself; it will be checked again later.',
+        ];
     }
 
     private function layerOptions(): array

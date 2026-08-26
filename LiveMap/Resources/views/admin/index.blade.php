@@ -130,6 +130,68 @@
           </p>
         </div>
 
+        <hr style="margin:32px 0 24px;">
+        <h5>Basemap</h5>
+        <p class="help-block" style="margin:0 0 18px;">
+          The tiles the map is drawn on. Only the two CARTO styles need a key —
+          OpenStreetMap and Satellite do not.
+        </p>
+
+      <div class="alert alert-{{ $cartoStatus['badgeClass'] }}" style="margin:0 0 22px;">
+        <strong>CARTO Basemap Status:</strong>
+        {{ $cartoStatus['title'] }}<br>
+        <span style="font-size:12px">{{ $cartoStatus['message'] }}</span>
+        <div style="margin-top:8px; font-size:12px;">
+          <span>API Key: <strong>{{ $cartoStatus['hasApiKey'] ? 'SET' : 'MISSING' }}</strong></span>
+          <span style="margin-left:10px;">Accepted by CARTO:
+            <strong>{{ $cartoStatus['accepted'] === true ? 'YES' : ($cartoStatus['accepted'] === false ? 'NO' : 'UNKNOWN') }}</strong>
+          </span>
+          <span style="margin-left:10px;">Default basemap uses CARTO:
+            <strong>{{ $cartoStatus['cartoInUse'] ? 'YES' : 'NO' }}</strong>
+          </span>
+        </div>
+        @if(!empty($cartoStatus['checkedAt']))
+          <div style="margin-top:10px; font-size:12px; border-top:1px solid rgba(0,0,0,0.08); padding-top:8px;">
+            Last checked: {{ $cartoStatus['checkedAt'] }} — re-checked automatically
+            whenever the stored key changes.
+          </div>
+        @endif
+      </div>
+
+
+        <div class="form-group" style="margin-bottom:8px;">
+          <label for="carto_api_key" style="margin-bottom:8px;">CARTO Basemaps API Key</label>
+          <input
+            id="carto_api_key"
+            name="carto_api_key"
+            type="password"
+            class="form-control"
+            value="{{ old('carto_api_key', '') }}"
+            autocomplete="new-password"
+            placeholder="{{ $cartoStatus['hasApiKey'] ? 'Leave empty to keep current key, or enter a new one' : 'Paste CARTO key (cb1_…)' }}">
+          @if($cartoStatus['hasApiKey'])
+            <div class="checkbox" style="margin-top:14px;">
+              <label>
+                <input type="checkbox" name="carto_api_key_clear" value="1" {{ old('carto_api_key_clear') ? 'checked' : '' }}>
+                Remove currently stored API key on save
+              </label>
+            </div>
+          @endif
+          <p class="help-block" style="margin-top:16px;">
+            Required since 26 Aug 2026 for the <strong>Carto Light</strong> and <strong>Carto Dark</strong>
+            basemaps — without a key CARTO stamps “API KEY REQUIRED” across every tile.
+            Free up to 5 million tiles per month:
+            <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noreferrer">carto.com/basemaps/apikey</a>.
+            OpenStreetMap and Satellite are not affected.
+          </p>
+          <p class="help-block" style="margin-top:12px; margin-bottom:0;">
+            New keys are checked on Save: CARTO answers <em>every</em> tile request with 200, even for a
+            wrong key — so the check compares the returned image against the un-keyed one. Identical means
+            the key was not accepted. Keeping CARTO and OpenStreetMap attribution visible is a condition of
+            the free tier.
+          </p>
+        </div>
+
         <hr>
         <h5>Weather</h5>
         <div class="form-group">
@@ -167,38 +229,6 @@
           @endif
           <p class="help-block" style="margin-top:6px">
             New keys are validated on Save against OpenWeatherMap. Leave this field empty to keep the current key.
-          </p>
-        </div>
-        <div class="form-group">
-          <label for="carto_api_key">CARTO Basemaps API Key</label>
-          <input
-            id="carto_api_key"
-            name="carto_api_key"
-            type="password"
-            class="form-control"
-            value="{{ old('carto_api_key', '') }}"
-            autocomplete="new-password"
-            placeholder="{{ $cartoStatus['hasApiKey'] ? 'Leave empty to keep current key, or enter a new one' : 'Paste CARTO key (cb1_…)' }}">
-          @if($cartoStatus['hasApiKey'])
-            <div class="checkbox" style="margin-top:8px;">
-              <label>
-                <input type="checkbox" name="carto_api_key_clear" value="1" {{ old('carto_api_key_clear') ? 'checked' : '' }}>
-                Remove currently stored API key on save
-              </label>
-            </div>
-          @endif
-          <p class="help-block" style="margin-top:6px">
-            Required since 26 Aug 2026 for the <strong>Carto Light</strong> and <strong>Carto Dark</strong>
-            basemaps — without a key CARTO stamps “API KEY REQUIRED” across every tile.
-            Free up to 5 million tiles per month:
-            <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noreferrer">carto.com/basemaps/apikey</a>.
-            OpenStreetMap and Satellite are not affected.
-          </p>
-          <p class="help-block">
-            New keys are checked on Save: CARTO answers <em>every</em> tile request with 200, even for a
-            wrong key — so the check compares the returned image against the un-keyed one. Identical means
-            the key was not accepted. Keeping CARTO and OpenStreetMap attribution visible is a condition of
-            the free tier.
           </p>
         </div>
         <div class="form-group">

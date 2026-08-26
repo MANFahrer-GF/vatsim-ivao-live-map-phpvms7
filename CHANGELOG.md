@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.1] — 2026-08-26
+
+### Added
+- **CARTO Basemap Status box**, next to the existing Weather Proxy status. Shows
+  whether a key is stored, whether **CARTO actually accepts it**, and whether the
+  default basemap is a CARTO style at all. Green when the key works, red when it
+  is ignored or missing while a CARTO style is selected, amber when CARTO could
+  not be reached (which says nothing about the key).
+
+  The verdict is stored, not re-fetched on every page load: a check costs three
+  requests to CARTO, and on installs without an application cache
+  (`CACHE_DRIVER=null`, not unusual with phpVMS) that would run every time the
+  page opens. It is re-checked automatically whenever the stored key changes —
+  including a change made in `.env`, past the settings page.
+
+### Changed
+- The CARTO key moved out of the **Weather** section into its own **Basemap**
+  section, with deliberate spacing instead of the framework defaults.
+
+---
+
 ## [4.7.0] — 2026-08-26
 
 ### Added — CARTO Basemaps API key
