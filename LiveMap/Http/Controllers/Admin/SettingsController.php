@@ -216,16 +216,45 @@ class SettingsController extends Controller
      */
     private function cartoStatus(): array
     {
-        $key = trim((string) $this->lmGet('acars.carto_api_key', env('CARTO_API_KEY', '')));
+        // Woher der Schluessel kommt, gehoert in die Anzeige.
+        //
+        // Vorher stand dort nur "API Key: SET" — und genau das war
+        // irrefuehrend: Der Schluessel lag in der `.env`, das Feld war leer,
+        // und warum das Loeschen-Haekchen scheinbar nichts tat, war von der
+        // Seite aus nicht zu erkennen. Ein Status, der den Zustand nennt aber
+        // nicht die Quelle, beantwortet die naechste Frage nicht.
+        //
+        // Der Wachwert trennt "keine Zeile" von "Zeile, aber leer". Nur das
+        // erste ist der Erstzustand, in dem die `.env` greift; das zweite ist
+        // ein bewusstes Loeschen und schlaegt sie.
+        $wachwert = '__LIVEMAP_KEINE_ZEILE__';
+        $ausEinstellung = $this->lmGet('acars.carto_api_key', $wachwert);
+        $ausEnv = trim((string) env('CARTO_API_KEY', ''));
+
+        if ($ausEinstellung === $wachwert) {
+            $key = $ausEnv;
+            $quelle = $ausEnv !== '' ? 'env' : 'none';
+        } else {
+            $key = trim((string) $ausEinstellung);
+            $quelle = $key !== '' ? 'setting' : 'none';
+        }
+
+        // Ein geleerter Eintrag, waehrend die `.env` noch etwas enthaelt: Das
+        // ist kein Fehler, aber es gehoert gesagt — sonst sucht jemand die
+        // `.env`-Zeile und wundert sich, dass sie wirkungslos ist.
+        $envUeberstimmt = $key === '' && $ausEnv !== '' && $ausEinstellung !== $wachwert;
+
         $basemap = (string) $this->lmGet('acars.livemap_default_basemap', 'positron');
         $cartoInUse = in_array($basemap, ['positron', 'dark'], true);
 
         if ($key === '') {
             return [
-                'hasApiKey'  => false,
-                'accepted'   => null,
-                'checkedAt'  => null,
-                'cartoInUse' => $cartoInUse,
+                'hasApiKey'      => false,
+                'accepted'       => null,
+                'checkedAt'      => null,
+                'quelle'         => $quelle,
+                'envUeberstimmt' => $envUeberstimmt,
+                'cartoInUse'     => $cartoInUse,
                 'badgeClass' => $cartoInUse ? 'danger' : 'info',
                 'title'      => $cartoInUse ? 'CARTO Key Missing' : 'No CARTO Key (not needed)',
                 'message'    => $cartoInUse
@@ -288,6 +317,8 @@ class SettingsController extends Controller
                 'hasApiKey'  => true,
                 'accepted'   => true,
                 'checkedAt'  => $abgelegt['at'] ?? null,
+                'quelle'         => $quelle,
+                'envUeberstimmt' => $envUeberstimmt,
                 'cartoInUse' => $cartoInUse,
                 'badgeClass' => 'success',
                 'title'      => 'CARTO Key OK',
@@ -300,6 +331,8 @@ class SettingsController extends Controller
                 'hasApiKey'  => true,
                 'accepted'   => false,
                 'checkedAt'  => $abgelegt['at'] ?? null,
+                'quelle'         => $quelle,
+                'envUeberstimmt' => $envUeberstimmt,
                 'cartoInUse' => $cartoInUse,
                 'badgeClass' => 'danger',
                 'title'      => 'CARTO Key Not Accepted',
@@ -310,11 +343,13 @@ class SettingsController extends Controller
         }
 
         return [
-            'hasApiKey'  => true,
-            'accepted'   => null,
-            'checkedAt'  => $abgelegt['at'] ?? null,
-            'cartoInUse' => $cartoInUse,
-            'badgeClass' => 'warning',
+            'hasApiKey'      => true,
+            'accepted'       => null,
+            'checkedAt'      => $abgelegt['at'] ?? null,
+            'quelle'         => $quelle,
+            'envUeberstimmt' => $envUeberstimmt,
+            'cartoInUse'     => $cartoInUse,
+            'badgeClass'     => 'warning',
             'title'      => 'CARTO Key Set — Not Verified',
             'message'    => 'A key is stored, but CARTO could not be reached to confirm it is accepted. '
                 .'This says nothing about the key itself; it will be checked again later.',

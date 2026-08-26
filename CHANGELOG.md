@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.3] — 2026-08-26
+
+### Added
+- **The status box now names the source of the key** — `(from this page)` or
+  `(from .env)`. Previously it only said `SET`, which left the more useful
+  question open: a key coming from `.env` looks exactly like one entered here,
+  and that is precisely when the "remove key" checkbox appears to do nothing.
+- **A note when `.env` is being overridden**: if `CARTO_API_KEY` is set but the
+  key was cleared on the settings page, the box says so and explains that a value
+  set on the page wins.
+- **Instructions for entering the key in `.env`**, right under the field —
+  the line to add, the cache clear afterwards, and the precedence rule.
+
+---
+
 ## [4.7.2] — 2026-08-26
 
 Three faults in the CARTO key handling from v4.7.0/v4.7.1. If you entered a key

@@ -142,7 +142,18 @@
         {{ $cartoStatus['title'] }}<br>
         <span style="font-size:12px">{{ $cartoStatus['message'] }}</span>
         <div style="margin-top:8px; font-size:12px;">
-          <span>API Key: <strong>{{ $cartoStatus['hasApiKey'] ? 'SET' : 'MISSING' }}</strong></span>
+          {{-- Die Quelle gehoert neben den Zustand. "SET" allein laesst offen,
+               ob der Schluessel aus diesem Formular kommt oder aus der .env —
+               und damit auch, warum das Loeschen-Haekchen scheinbar nichts tut. --}}
+          <span>API Key:
+            <strong>{{ $cartoStatus['hasApiKey'] ? 'SET' : 'MISSING' }}</strong>@if($cartoStatus['hasApiKey'])<span style="opacity:.75;">
+              @if(($cartoStatus['quelle'] ?? '') === 'env')
+                (from <code>.env</code>)
+              @else
+                (from this page)
+              @endif
+            </span>@endif
+          </span>
           <span style="margin-left:10px;">Accepted by CARTO:
             <strong>{{ $cartoStatus['accepted'] === true ? 'YES' : ($cartoStatus['accepted'] === false ? 'NO' : 'UNKNOWN') }}</strong>
           </span>
@@ -150,6 +161,13 @@
             <strong>{{ $cartoStatus['cartoInUse'] ? 'YES' : 'NO' }}</strong>
           </span>
         </div>
+        @if(!empty($cartoStatus['envUeberstimmt']))
+          <div style="margin-top:10px; font-size:12px; border-top:1px solid rgba(0,0,0,0.08); padding-top:8px;">
+            <strong>Note:</strong> <code>CARTO_API_KEY</code> is set in <code>.env</code>, but the key was
+            cleared on this page — and a value set here wins. Remove the <code>.env</code> line too if you
+            want it gone for good, or enter a key above to use one again.
+          </div>
+        @endif
         @if(!empty($cartoStatus['checkedAt']))
           <div style="margin-top:10px; font-size:12px; border-top:1px solid rgba(0,0,0,0.08); padding-top:8px;">
             Last checked: {{ $cartoStatus['checkedAt'] }} — re-checked automatically
@@ -184,11 +202,22 @@
             <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noreferrer">carto.com/basemaps/apikey</a>.
             OpenStreetMap and Satellite are not affected.
           </p>
-          <p class="help-block" style="margin-top:12px; margin-bottom:0;">
+          <p class="help-block" style="margin-top:12px;">
             New keys are checked on Save: CARTO answers <em>every</em> tile request with 200, even for a
             wrong key — so the check compares the returned image against the un-keyed one. Identical means
             the key was not accepted. Keeping CARTO and OpenStreetMap attribution visible is a condition of
             the free tier.
+          </p>
+          <p class="help-block" style="margin-top:16px; margin-bottom:0;">
+            <strong>Without database access?</strong> Add the key to your <code>.env</code> instead —
+            useful before anyone opens this page, or when you deploy by file:
+          </p>
+          <pre style="margin-top:10px; margin-bottom:12px; padding:12px; font-size:12px;">CARTO_API_KEY=cb1_...</pre>
+          <p class="help-block" style="margin-top:0; margin-bottom:0;">
+            Then run <code>php artisan config:clear</code> (or Admin&nbsp;→&nbsp;Maintenance&nbsp;→&nbsp;Clear
+            Caches) so the new value is read. <strong>A key entered on this page always wins over
+            <code>.env</code></strong> — including one you deliberately removed here. The <code>.env</code>
+            value applies only while nobody has set one above.
           </p>
         </div>
 
