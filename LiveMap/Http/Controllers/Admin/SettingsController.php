@@ -257,9 +257,27 @@ class SettingsController extends Controller
                 'ok' => $pruefung['valid'],
                 'at' => now()->toIso8601String(),
             ];
-            Setting::updateOrCreate(
-                ['id' => 'acars.carto_api_key_checked'],
-                ['value' => json_encode($abgelegt)]
+            // ⚠ NICHT `Setting::updateOrCreate(['id' => …])`.
+            //
+            // Die Tabelle schluesselt auf einen ABGELEITETEN Wert
+            // (`Setting::formatKey()`), und `id` ist nicht fuellbar. Ein
+            // `updateOrCreate` auf den rohen Namen legt deshalb eine Zeile
+            // OHNE id an — und die zweite davon scheitert am
+            // Primaerschluessel:
+            //
+            //     Duplicate entry '' for key 'PRIMARY'
+            //
+            // Sichtbar wurde das erst, als Thomas den Schluessel entfernte:
+            // Beim naechsten Aufruf der Einstellungsseite kam ein 500er.
+            // Der Modul-eigene Weg macht es richtig.
+            $this->persistDurableSetting(
+                'acars.carto_api_key_checked',
+                (string) json_encode($abgelegt),
+                'text',
+                [
+                    'name'        => 'CARTO key check result',
+                    'description' => 'Cached verdict of the last CARTO key verification.',
+                ]
             );
         }
 
@@ -531,6 +549,23 @@ class SettingsController extends Controller
             'acars.livemap_owm_api_key' => [
                 'name'        => 'Live Map: OpenWeatherMap API Key',
                 'description' => 'Used by weather proxy, kept server-side when proxy is enabled',
+                'type'        => 'string',
+                'default'     => '',
+            ],
+            // ⚠ Ohne diesen Eintrag wird der Schluessel NIE gespeichert.
+            //
+            // `update()` legt zwar jeden Wert in `$payload` ab, geschrieben
+            // wird danach aber ueber `foreach ($this->definitions() …)` —
+            // was hier fehlt, faellt bei jedem Speichern lautlos heraus.
+            //
+            // Genau das ist Thomas am 26.08.2026 aufgefallen: Das Haekchen
+            // „Remove stored key" hatte keine Wirkung. Der Wert kam nie in
+            // die Datenbank, also las jede Seite weiter die `.env` — der
+            // Schluessel liess sich nicht loeschen, und ein neuer liesse
+            // sich genauso wenig eintragen.
+            'acars.carto_api_key' => [
+                'name'        => 'Live Map: CARTO Basemaps API Key',
+                'description' => 'Required since 26 Aug 2026 for the CARTO light/dark basemaps',
                 'type'        => 'string',
                 'default'     => '',
             ],

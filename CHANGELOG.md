@@ -4,6 +4,36 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.2] — 2026-08-26
+
+Three faults in the CARTO key handling from v4.7.0/v4.7.1. If you entered a key
+in either of those versions, **enter it again after upgrading** — it was never
+stored.
+
+### Fixed
+- **The key was never saved.** `acars.carto_api_key` had no entry in the module's
+  settings definitions, and `update()` persists only what is defined there —
+  everything else is dropped, without an error. The field accepted input, the
+  page reported success, and the value went nowhere. The OpenWeatherMap key was
+  never affected; it has had its definition since v4.6.5.
+- **"Remove Currently Stored API Key On Save" had no effect**, for the same
+  reason. A delete that does not delete is worse than none: it reads as removed
+  while the key is still served on every page.
+- **HTTP 500 on the second visit to the settings page.** The cached verification
+  verdict was written with `Setting::updateOrCreate(['id' => …])`, but the table
+  keys on a *derived* id (`Setting::formatKey()`) and `id` is not fillable — so
+  the row was inserted without one, and the next write collided on the empty
+  primary key (`Duplicate entry '' for key 'PRIMARY'`). This hit every install
+  that saved settings twice, whether or not CARTO is used.
+
+### Changed
+- **An entry made in the admin UI now beats `CARTO_API_KEY` in `.env`, including
+  a deliberately emptied one.** Previously the `.env` value returned as soon as
+  the setting was blank, which made removal through the UI impossible. The `.env`
+  now applies only while nobody has set a value — the state before first use.
+
+---
+
 ## [4.7.1] — 2026-08-26
 
 ### Added
