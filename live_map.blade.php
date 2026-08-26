@@ -117,11 +117,27 @@
                     $mobileButtonRgba = $lmHexToRgba($mobileButtonColor, 0.92);
                     $mobileButtonActiveRgba = $lmHexToRgba($mobileButtonActiveColor, 0.92);
 
+                    // CARTO verlangt seit dem 26.08.2026 einen Schluessel fuer seine
+                    // Basiskarten — frei bis fuenf Millionen Kacheln im Monat. Die
+                    // RASTER-Kacheln (und nur die) tragen seither ein Wasserzeichen
+                    // "API KEY REQUIRED" quer ueber die Karte; genau die benutzen die
+                    // Stile "Carto Light" und "Carto Dark" hier.
+                    //
+                    // Ohne hinterlegten Schluessel bleibt alles wie bisher — die Karte
+                    // laedt, sie traegt nur das Wasserzeichen. Kein Bruch bei einem
+                    // Update, keine Pflichtangabe.
+                    //
+                    // Der Name ist bewusst NICHT `livemap_` vorangestellt: Es ist der
+                    // Schluessel des ganzen Auftritts. Andere Bausteine, die CARTO
+                    // zeichnen, lesen denselben Wert.
+                    $cartoApiKey = $lmString($lmSetting('acars.carto_api_key', env('CARTO_API_KEY', '')), '');
+
                     $liveMapUiConfig = [
                         // Top flights panel ("old style" = hidden)
                         'oldStyle'              => $oldStyle,
                         'showTopFlightsPanel'   => $showTopFlights,
                         'defaultBasemap'        => $defaultBasemap,
+                        'cartoApiKey'           => $cartoApiKey,
                         'showBasemapSwitcher'   => $lmBool($lmSetting('acars.livemap_show_basemap_switcher', true), true),
                         'enableSatelliteBasemap'=> $lmBool($lmSetting('acars.livemap_enable_satellite', true), true),
                         // Weather box + defaults

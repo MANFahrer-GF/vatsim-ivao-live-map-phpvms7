@@ -4,6 +4,54 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.0] — 2026-08-26
+
+### Added — CARTO Basemaps API key
+
+CARTO now requires an API key for its basemaps. Since **26 August 2026** the
+**raster** service stamps `API KEY REQUIRED` diagonally across every tile —
+which is exactly what the *Carto Light* and *Carto Dark* basemaps use. The
+vector service is not affected yet; CARTO says it will announce that
+separately. OpenStreetMap and Satellite were never affected.
+
+A key is **free up to 5 million tile requests per calendar month**, counted
+across both services: <https://carto.com/basemaps/apikey/>
+
+**What was added**
+
+- A `CARTO Basemaps API Key` field in the LiveMap admin settings, with the
+  same handling as the OpenWeatherMap key: leaving it empty keeps the stored
+  key, and a separate checkbox clears it. The stored value is never
+  pre-filled into the form.
+- The key is appended **once, where the tile layer is created**, not on each
+  basemap entry — so any CARTO style added later is covered automatically.
+- Falls back to a `CARTO_API_KEY` entry in `.env`, so the key can be in place
+  before anyone opens the settings page.
+
+**Why the key is validated by comparing images**
+
+CARTO answers *every* tile request with HTTP 200 — no key, wrong key, empty
+key alike — and the response headers are identical too. A typo would stay
+invisible until someone opens the map. What does differ is the image.
+Measured on the same tile:
+
+    no key          18,917 B   md5 c4ff8359e505
+    wrong key       18,917 B   md5 c4ff8359e505   (identical)
+    empty key       18,917 B   md5 c4ff8359e505   (identical)
+    valid key       20,251 B   md5 78f84118df46   (different)
+
+So on save the module fetches the tile with the candidate key and compares it
+against the un-keyed one. Identical means the key was not accepted. If the
+un-keyed tile itself is not stable across two fetches, no verdict is passed
+and saving is not blocked — better no judgement than a wrong one.
+
+### Note on attribution
+
+Visible CARTO and OpenStreetMap attribution is a condition of the free tier.
+The basemap definitions already carry it; please keep it.
+
+---
+
 ## [4.6.7] — 2026-06-15
 
 ### Fixed

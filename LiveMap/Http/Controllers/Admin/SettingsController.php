@@ -22,6 +22,7 @@ class SettingsController extends Controller
             'layerOptions'  => $this->layerOptions(),
             'basemapOptions' => $this->basemapOptions(),
             'weatherProxyStatus' => $this->weatherProxyStatus(),
+            'cartoStatus'        => $this->cartoStatus(),
             'acarsLiveTimeStatus' => $this->acarsLiveTimeStatus(),
         ]);
     }
@@ -34,6 +35,7 @@ class SettingsController extends Controller
             'weather_default_layer'   => 'required|in:none,clouds,radar,storms,wind,temp,combo',
             'weather_default_opacity' => 'required|numeric|min:0.2|max:1',
             'owm_api_key'             => 'nullable|string|max:128',
+            'carto_api_key'           => 'nullable|string|max:128',
             'ui_primary_color'           => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'ui_accent_color'            => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'color_box_background'       => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
@@ -51,6 +53,22 @@ class SettingsController extends Controller
             return back()->withInput()->withErrors([
                 'owm_api_key' => 'OpenWeatherMap API key is required when weather proxy is enabled.',
             ]);
+        }
+
+        // CARTO-Schluessel — dieselbe Mechanik wie beim Wetter-Schluessel:
+        // leer heisst "behalten", nur das Haekchen loescht.
+        $currentCartoKey = trim((string) $this->lmGet('acars.carto_api_key', env('CARTO_API_KEY', '')));
+        $submittedCartoKey = trim((string) ($validated['carto_api_key'] ?? ''));
+        $clearCartoKey = $request->boolean('carto_api_key_clear');
+        $cartoKey = $submittedCartoKey !== ''
+            ? $submittedCartoKey
+            : ($clearCartoKey ? '' : $currentCartoKey);
+
+        if ($cartoKey !== '' && $cartoKey !== $currentCartoKey) {
+            $pruefung = $this->verifyCartoApiKey($cartoKey);
+            if ($pruefung['valid'] === false) {
+                return back()->withInput()->withErrors(['carto_api_key' => $pruefung['message']]);
+            }
         }
 
         $owmApiKeyChanged = $owmApiKey !== $currentOwmApiKey;
@@ -79,6 +97,7 @@ class SettingsController extends Controller
             'acars.livemap_weather_default_layer'       => $validated['weather_default_layer'],
             'acars.livemap_weather_default_opacity'     => $validated['weather_default_opacity'],
             'acars.livemap_owm_api_key'                 => $owmApiKey,
+            'acars.carto_api_key'                       => $cartoKey,
             'acars.livemap_show_network_box'            => $request->boolean('show_network_box'),
             'acars.livemap_default_network_vatsim'      => $request->boolean('default_network_vatsim'),
             'acars.livemap_default_network_ivao'        => $request->boolean('default_network_ivao'),
@@ -119,6 +138,87 @@ class SettingsController extends Controller
         }
 
         return $values;
+    }
+
+    /**
+     * Prueft, ob CARTO den Schluessel wirklich annimmt.
+     *
+     * # Warum das nicht ueber den Statuscode geht
+     *
+     * CARTO antwortet auf eine Kachelanfrage IMMER mit 200 — ohne
+     * Schluessel, mit falschem Schluessel, mit leerem Schluessel. Auch die
+     * Kopfzeilen unterscheiden sich nicht. Ein Tippfehler waere damit
+     * unsichtbar, bis jemand die Karte aufmacht und das Wasserzeichen
+     * sieht.
+     *
+     * Was sich unterscheidet, ist das BILD. Gemessen am 26.08.2026 an
+     * derselben Kachel:
+     *
+     *     ohne Schluessel    18.917 B   md5 c4ff8359e505
+     *     falscher Schluessel 18.917 B   md5 c4ff8359e505   (identisch)
+     *     leerer Schluessel  18.917 B   md5 c4ff8359e505   (identisch)
+     *     echter Schluessel  20.251 B   md5 78f84118df46   (anders)
+     *
+     * Ein nicht angenommener Schluessel liefert also byteweise dieselbe
+     * Kachel wie gar keiner. Genau daran erkennt man ihn.
+     *
+     * # Wann NICHT geurteilt wird
+     *
+     * Zuerst wird die Kachel ohne Schluessel ZWEIMAL geholt. Sind schon
+     * diese beiden verschieden, taugt der Vergleich nicht (CDN-Knoten,
+     * geaenderte Kachel) — dann wird das Speichern nicht blockiert. Lieber
+     * kein Urteil als ein falsches.
+     */
+    private function verifyCartoApiKey(string $schluessel): array
+    {
+        $adresse = 'https://a.basemaps.cartocdn.com/light_all/6/33/21.png';
+
+        try {
+            $ohne1 = Http::timeout(8)->get($adresse);
+            $ohne2 = Http::timeout(8)->get($adresse);
+            if (!$ohne1->successful() || !$ohne2->successful()) {
+                return ['valid' => null, 'message' => ''];
+            }
+            $referenz = md5($ohne1->body());
+            if ($referenz !== md5($ohne2->body())) {
+                // Die Vergleichskachel ist nicht stabil — nicht urteilen.
+                return ['valid' => null, 'message' => ''];
+            }
+
+            $mit = Http::timeout(8)->get($adresse, ['key' => $schluessel]);
+            if (!$mit->successful()) {
+                return ['valid' => null, 'message' => ''];
+            }
+
+            if (md5($mit->body()) === $referenz) {
+                return [
+                    'valid'   => false,
+                    'message' => 'CARTO liefert mit diesem Schlüssel dieselbe Kachel wie ohne — '
+                        .'er wird also nicht angenommen. Bitte den Wert aus der CARTO-Mail prüfen '
+                        .'(Format: cb1_…). Die Karte trägt sonst weiterhin das Wasserzeichen.',
+                ];
+            }
+
+            return ['valid' => true, 'message' => ''];
+        } catch (\Throwable $e) {
+            // CARTO nicht erreichbar: kein Grund, das Speichern zu verhindern.
+            return ['valid' => null, 'message' => ''];
+        }
+    }
+
+    /**
+     * Ob ein CARTO-Schluessel hinterlegt ist — mehr braucht die Ansicht nicht.
+     *
+     * Der Wert selbst wird NICHT zurueckgegeben. Ein Schluessel, der im
+     * Eingabefeld vorausgefuellt steht, landet in jedem Browser-Cache und
+     * in jedem Bildschirmfoto; das Feld bleibt deshalb leer und "leer"
+     * heisst "behalten".
+     */
+    private function cartoStatus(): array
+    {
+        $key = trim((string) $this->lmGet('acars.carto_api_key', env('CARTO_API_KEY', '')));
+
+        return ['hasApiKey' => $key !== ''];
     }
 
     private function layerOptions(): array

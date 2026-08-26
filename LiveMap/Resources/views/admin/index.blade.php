@@ -170,6 +170,38 @@
           </p>
         </div>
         <div class="form-group">
+          <label for="carto_api_key">CARTO Basemaps API Key</label>
+          <input
+            id="carto_api_key"
+            name="carto_api_key"
+            type="password"
+            class="form-control"
+            value="{{ old('carto_api_key', '') }}"
+            autocomplete="new-password"
+            placeholder="{{ $cartoStatus['hasApiKey'] ? 'Leave empty to keep current key, or enter a new one' : 'Paste CARTO key (cb1_…)' }}">
+          @if($cartoStatus['hasApiKey'])
+            <div class="checkbox" style="margin-top:8px;">
+              <label>
+                <input type="checkbox" name="carto_api_key_clear" value="1" {{ old('carto_api_key_clear') ? 'checked' : '' }}>
+                Remove currently stored API key on save
+              </label>
+            </div>
+          @endif
+          <p class="help-block" style="margin-top:6px">
+            Required since 26 Aug 2026 for the <strong>Carto Light</strong> and <strong>Carto Dark</strong>
+            basemaps — without a key CARTO stamps “API KEY REQUIRED” across every tile.
+            Free up to 5 million tiles per month:
+            <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noreferrer">carto.com/basemaps/apikey</a>.
+            OpenStreetMap and Satellite are not affected.
+          </p>
+          <p class="help-block">
+            New keys are checked on Save: CARTO answers <em>every</em> tile request with 200, even for a
+            wrong key — so the check compares the returned image against the un-keyed one. Identical means
+            the key was not accepted. Keeping CARTO and OpenStreetMap attribution visible is a condition of
+            the free tier.
+          </p>
+        </div>
+        <div class="form-group">
           <label for="weather_default_layer">Default weather layer</label>
           <select id="weather_default_layer" name="weather_default_layer" class="form-control">
             @php($currentLayer = $lmS('acars.livemap_weather_default_layer', 'combo'))

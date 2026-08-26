@@ -1510,11 +1510,29 @@
                         var enabledKeys = ['positron', 'osm', 'dark'];
                         if (allowSatellite) enabledKeys.push('satellite');
 
+                        // Den CARTO-Schluessel an die Adresse haengen — an EINER
+                        // Stelle, nicht an jedem Eintrag.
+                        //
+                        // CARTO verlangt ihn seit dem 26.08.2026 fuer seine
+                        // Rasterkacheln; ohne ihn liegt "API KEY REQUIRED" quer
+                        // ueber der Karte. Betroffen sind hier "Carto Light" und
+                        // "Carto Dark" — OpenStreetMap und Esri nicht.
+                        //
+                        // Weil hier und nicht an den Eintraegen: Wer spaeter einen
+                        // weiteren CARTO-Stil ergaenzt, bekommt den Schluessel
+                        // automatisch mit und muss nicht daran denken.
+                        var cartoKey = String(cfg.cartoApiKey || '');
+                        var mitCartoKey = function (url) {
+                            if (!cartoKey || String(url).indexOf('cartocdn.com') === -1) return url;
+                            if (/[?&]key=/.test(url)) return url;
+                            return url + (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(cartoKey);
+                        };
+
                         var mapLayers = {};
                         enabledKeys.forEach(function(key) {
                             var def = basemapDefs[key];
                             if (!def) return;
-                            var layer = L.tileLayer(def.url, def.options || {});
+                            var layer = L.tileLayer(mitCartoKey(def.url), def.options || {});
                             layer._lmBasemapKey = key;
                             mapLayers[key] = layer;
                         });
