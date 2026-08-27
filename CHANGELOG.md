@@ -4,6 +4,40 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.6] — 2026-08-27
+
+### Fixed
+- **Die Einstellungen standen doppelt: unter `Admin → Live Map` und ein zweites
+  Mal in den Kern-Einstellungen.** Die Einstellungsseite von phpVMS filtert nach
+  dem **Typ**, nicht nach der Gruppe:
+
+  ```php
+  $settings = Setting::where('type', '!=', 'hidden')->orderBy('order')->get();
+  $settings = $settings->groupBy('group');
+  ```
+
+  Unsere 30 Zeilen erschienen damit als eigener Abschnitt `livemap_module`
+  mitten in den Kern-Einstellungen. Zwei Formulare für dieselben Werte — und das
+  im Kern **ohne unsere Prüfungen**: Ein dort eingetragener CARTO- oder
+  Wetter-Schlüssel wird nie gegen den Anbieter geprüft, und die Statusbox weiss
+  nichts davon.
+
+  Die Zeilen tragen jetzt `type = 'hidden'`; bestehende Installationen werden
+  beim Öffnen der Modulseite einmalig umgestellt.
+
+  Das bestand vermutlich seit v4.6.5, als die Einstellungen in die Datenbank
+  wanderten — gemeldet von zwei VAs am 27.08.2026.
+
+  ⚠ `SettingRepository::retrieve()` gibt bei `hidden` den **rohen Text** zurück
+  statt eines umgewandelten Wertes. Das ist hier gefahrlos, weil das Modul
+  normalisiert speichert (`'1'`/`'0'`, `number_format`) — `'0'` ist in PHP
+  falsch, `'1'` wahr, `'0.60'` rechnet wie eine Zahl. Am Bestand nachgemessen:
+  alle 17 Wahrheitswerte behalten ihren Zustand, die 6 ausgeschalteten bleiben
+  aus. Wer hier je etwas anderes als `'1'`/`'0'` speichert, muss diese
+  Entscheidung neu prüfen.
+
+---
+
 ## [4.7.5] — 2026-08-27
 
 Zwei Befunde von fremden VAs, beide kosteten Stunden — und beide gingen auf

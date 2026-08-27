@@ -16,6 +16,7 @@ class SettingsController extends Controller
     public function index()
     {
         $this->ensureDurableBackup();
+        $this->altbestandVerstecken();
 
         return view('livemap::admin.index', [
             'settings'      => $this->currentSettings(),
@@ -831,13 +832,72 @@ class SettingsController extends Controller
         }
     }
 
+    /**
+     * Der `type` der phpVMS-Zeile — immer `hidden`.
+     *
+     * # Warum die Einstellungen doppelt auftauchten
+     *
+     * Die Einstellungsseite des phpVMS-Kerns zeigt ALLES, was nicht
+     * `hidden` ist:
+     *
+     * ```php
+     * $settings = Setting::where('type', '!=', 'hidden')->orderBy('order')->get();
+     * $settings = $settings->groupBy('group');
+     * ```
+     *
+     * Sie filtert nach dem TYP, nicht nach der Gruppe. Unsere 30 Zeilen
+     * standen damit als eigener Abschnitt „livemap_module" mitten in den
+     * Kern-Einstellungen — und zusaetzlich auf unserer eigenen Seite.
+     * Zwei Formulare fuer dieselben Werte, und das im Kern ohne unsere
+     * Pruefungen: Ein CARTO- oder Wetter-Schluessel, dort eingetragen,
+     * wird nie gegen den Anbieter geprueft.
+     *
+     * Gemeldet von zwei VAs am 27.08.2026; es bestand vermutlich seit
+     * v4.6.5, als die Einstellungen in die Datenbank wanderten.
+     *
+     * # Warum `hidden` hier gefahrlos ist
+     *
+     * `SettingRepository::retrieve()` wandelt anhand des Typs um und
+     * gibt bei `hidden` den ROHEN Text zurueck. Das waere gefaehrlich,
+     * wenn wir „true"/„false" speicherten — beides sind wahre
+     * Zeichenketten.
+     *
+     * Wir speichern aber normalisiert (siehe `persistLiveMapSetting`):
+     * Wahrheitswerte als `'1'`/`'0'`, Kommazahlen ueber `number_format`.
+     * `'0'` ist in PHP falsch, `'1'` wahr, `'0.60'` rechnet sich wie
+     * eine Zahl — der rohe Text verhaelt sich also genau wie der
+     * umgewandelte Wert. Am Bestand nachgesehen: 11 Zeilen `'1'`,
+     * 6 Zeilen `'0'`, keine andere Schreibweise.
+     *
+     * ⚠ Wer hier je etwas anderes als `'1'`/`'0'` speichert, muss diese
+     * Entscheidung neu pruefen.
+     */
     private function mapDefinitionTypeToSettingType(string $type): string
     {
-        return match ($type) {
-            'bool', 'boolean' => 'boolean',
-            'float'           => 'float',
-            default           => 'text',
-        };
+        unset($type);
+
+        return 'hidden';
+    }
+
+    /**
+     * Altbestand einsammeln: Zeilen dieses Moduls auf `hidden` setzen.
+     *
+     * Ohne das blieben bestehende Installationen doppelt, bis jede
+     * einzelne Einstellung einmal neu gespeichert wird. Laeuft beim
+     * Oeffnen der Modulseite, ist billig (ein UPDATE ueber hoechstens 30
+     * Zeilen) und idempotent.
+     */
+    private function altbestandVerstecken(): void
+    {
+        try {
+            Setting::query()
+                ->where('group', 'livemap_module')
+                ->where('type', '!=', 'hidden')
+                ->update(['type' => 'hidden']);
+        } catch (\Throwable $e) {
+            // Kosmetik. Schlaegt es fehl, stehen die Werte weiterhin
+            // doppelt — aber die Seite muss deshalb nicht scheitern.
+        }
     }
 
     private function toKvpKey(string $legacyKey): string
