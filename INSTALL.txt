@@ -1,0 +1,192 @@
+LiveMap v4.7.5 - Install Package
+================================
+
+Contents:
+  LiveMap/                     -> phpVMS module (copy to <phpvms-root>/modules/LiveMap/)
+  live_map.blade.php           -> theme widget
+  live_map_styles.blade.php    -> theme widget
+  live_map_scripts.blade.php   -> theme widget
+
+Fixed in v4.7.4 (reported by ProAvia):
+
+  "API KEY REQUIRED" still showed on page load even with a key stored -
+  and went away after switching map style. Cause: TWO base layers. The
+  widget passes providers:{'CartoDB.Positron':{}} to render_live_map,
+  and the phpVMS core builds its OWN tile layer from that, via the
+  leaflet-providers catalog - which has no slot for a key. No module
+  code could reach it, and it sat on top.
+
+  The key is now attached at L.TileLayer.prototype.getTileUrl, the one
+  place every tile passes through, whoever created the layer. The
+  duplicate core layer is also removed - it was fetching every tile
+  twice, i.e. double your CARTO quota.
+
+  If you are on 4.7.0-4.7.3 and see the watermark on load, this is it.
+
+Where to put the CARTO key - two ways:
+
+  A) Admin -> Live Map -> CARTO Basemaps API Key, then Save.
+     This is the normal way and it wins over .env.
+
+  B) In your .env, useful before anyone opens the settings page or when
+     you deploy by file only:
+
+         CARTO_API_KEY=cb1_...
+
+     Then clear the config cache so the value is read:
+
+         php artisan config:clear
+
+     or Admin -> Maintenance -> Clear Caches.
+
+  Precedence: a key entered in the admin page ALWAYS wins over .env -
+  including one you deliberately removed there. The .env value applies
+  only while nobody has set one in the admin page. So if you cleared the
+  key on the page and it is still active, remove the .env line as well.
+
+  From v4.7.3 the status box says which of the two the active key comes
+  from, so you no longer have to guess.
+
+What this release fixes (IMPORTANT if you run v4.7.0 or v4.7.1):
+
+  The CARTO API key was never stored. You could paste it, the page said
+  it was saved - and nothing was written. Three separate faults:
+
+  1) The key had no entry in the module's settings definitions, and only
+     defined settings are persisted. Everything else was dropped on save,
+     silently.
+
+     Consequence: If you entered a key in v4.7.0 or v4.7.1 and the map
+     still shows the watermark, that is why. Enter it again after this
+     upgrade - it will stick this time.
+
+  2) "Remove Currently Stored API Key On Save" had no effect, for the
+     same reason.
+
+  3) Opening the settings page a second time returned HTTP 500. The
+     cached key-verification verdict was written without its primary
+     key, so the second write collided with the first
+     ("Duplicate entry '' for key 'PRIMARY'").
+
+     This one hits every installation that saved settings twice, whether
+     or not you use CARTO.
+
+  If your key lives in .env instead: an entry made through the admin UI
+  now wins over CARTO_API_KEY, including an entry you deliberately
+  cleared. The .env value only applies while nobody has set one - so
+  removing the key in the UI really removes it.
+
+What the 4.7 line added (v4.7.0 + v4.7.1):
+
+  CARTO requires a key since 26 Aug 2026. Its RASTER service - which the
+  "Carto Light" and "Carto Dark" basemaps use - stamps "API KEY REQUIRED"
+  across every tile without one. The vector service is not affected yet.
+  OpenStreetMap and Satellite were never affected. A key is free up to
+  5 million tile requests per calendar month:
+
+      https://carto.com/basemaps/apikey/
+
+  You get:
+
+  - A key field under Admin -> Live Map, handled like the OpenWeatherMap
+    key: empty keeps the stored key, a checkbox clears it. The stored
+    value is never pre-filled into the form.
+  - Its own "Basemap" section, no longer squeezed under "Weather".
+  - A status box that separates three things: is a key stored, does CARTO
+    actually accept it, and is the default basemap a CARTO style at all.
+    The verdict is stored, not re-fetched on every page load.
+  - The key is appended once where the tile layer is created, so any CARTO
+    style added later is covered automatically.
+  - A fallback to CARTO_API_KEY in .env, so the key can be in place before
+    anyone opens the settings page.
+
+  The key is checked by comparing images, not status codes: CARTO answers
+  every tile request with HTTP 200 - no key, wrong key, empty key alike,
+  with identical headers. Only the image differs. A wrong key would
+  otherwise stay invisible until someone opens the map.
+
+  Without a key nothing breaks - the map still loads, it just carries
+  the watermark.
+
+  Keep the CARTO and OpenStreetMap attribution visible; that is the
+  condition of the free tier.
+
+Older fixes still included:
+  (v4.6.7) View paths are only registered when they exist, so
+           `php artisan view:cache` no longer throws.
+  (v4.6.6) Mixed-content warnings silenced (HTTPS upgrade).
+  (v4.6.5) Settings persist in the phpVMS database.
+
+Installation (no SSH required):
+
+1) Upload the module folder - UPLOAD FIRST, SWAP LAST
+
+   !! Do NOT delete or overwrite the live LiveMap/ folder while the site
+      is running. If module.json is in place before Providers/ has
+      finished uploading, phpVMS finds the module, tries to load
+      Modules\LiveMap\Providers\LiveMapServiceProvider, cannot, and
+      throws a fatal error on EVERY page - including /admin. You are
+      then locked out of your own site until you fix it from the
+      database (see "If your site is down" below).
+
+      This is not theoretical: it happened to a VA on 27 Aug 2026,
+      following the older wording of this very file. That wording was
+      ours, and it was wrong.
+
+   Do this instead - the swap is a rename, which takes milliseconds:
+
+     a) Upload/extract the LiveMap/ folder from this ZIP as
+          <phpvms-root>/modules/LiveMap_new/
+        (phpVMS only scans folders that contain a module.json AND are
+        registered; a folder under a different name is inert)
+     b) Verify the upload is complete. These must exist:
+          modules/LiveMap_new/module.json
+          modules/LiveMap_new/Providers/LiveMapServiceProvider.php
+          modules/LiveMap_new/Http/Controllers/Admin/SettingsController.php
+     c) Rename modules/LiveMap  ->  modules/LiveMap_old
+     d) Rename modules/LiveMap_new  ->  modules/LiveMap
+     e) Delete modules/LiveMap_old once the site is confirmed working
+
+   If your site is down with "LiveMapServiceProvider not found":
+
+     In phpMyAdmin, table `modules`, row where name = 'LiveMap':
+     set `enabled` from 1 to 0. The site comes back immediately.
+     Then finish the upload properly and set it back to 1.
+
+2) Upload the three widget blade files into your active theme's widgets folder.
+   Examples:
+     resources/views/layouts/SPTheme/widgets/
+     resources/views/layouts/Disposable_v3/widgets/
+   Overwrite:
+     live_map.blade.php
+     live_map_styles.blade.php
+     live_map_scripts.blade.php
+   IMPORTANT: all three files together, not just one.
+
+3) In your browser, open:
+     https://<your-site>/update
+
+4) In phpVMS: Admin -> Maintenance -> Clear Caches
+
+5) In phpVMS: Admin -> Live Map
+   - Paste your OpenWeatherMap API key (or leave empty and disable weather box)
+   - Keep "Enable server-side weather proxy" ON (recommended)
+   - Click Save Settings
+
+6) Hard-refresh your browser (clear site data or Ctrl+F5).
+
+Troubleshooting:
+  "Settings reset every day"        -> upgrade to v4.6.6.
+  "Map loads and loads and loads"   -> redeploy all three widget files.
+  "Mixed-content warnings"          -> this release includes the HTTPS upgrade patch.
+  "Weather Proxy: API Key Missing"  -> paste key in Admin -> Live Map, Save.
+  "CARTO key will not save/delete"  -> upgrade to v4.7.2, then enter it again.
+  "OpenWeatherMap rejected the key" -> a NEW OWM key returns 401 for up to
+                                       two hours until it activates. From
+                                       v4.7.5 the key is saved anyway and
+                                       the status box re-checks it.
+  "LiveMapServiceProvider not found" -> partial upload. See step 1 and the
+                                       database recovery above.
+  "Settings page throws HTTP 500"   -> upgrade to v4.7.2.
+
+Support: https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2

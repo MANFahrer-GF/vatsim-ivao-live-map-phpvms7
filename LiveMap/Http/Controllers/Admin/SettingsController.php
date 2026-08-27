@@ -71,13 +71,26 @@ class SettingsController extends Controller
             }
         }
 
+        // ⚠ Ein abgelehnter Wetter-Schluessel darf das Speichern NICHT
+        // verhindern.
+        //
+        // OpenWeatherMap gibt fuer einen frisch erzeugten Schluessel bis
+        // zu zwei Stunden lang HTTP 401 zurueck — er ist richtig, nur noch
+        // nicht freigeschaltet. Vorher brach das Speichern hier ab, und
+        // der Betreiber konnte seinen korrekten Schluessel ueberhaupt
+        // nicht hinterlegen. Am 27.08.2026 hat das eine fremde VA eine
+        // Stunde gekostet: „keeps saying openweathermap rejected the key,
+        // but it's definitely right" — zwanzig Minuten spaeter lief er.
+        //
+        // Also speichern und warnen, statt zu blockieren. Ob der
+        // Schluessel wirkt, sagt ohnehin die Statusbox — und sie prueft
+        // erneut, sobald sich der hinterlegte Wert aendert.
         $owmApiKeyChanged = $owmApiKey !== $currentOwmApiKey;
+        $owmWarnung = '';
         if ($owmApiKey !== '' && $owmApiKeyChanged) {
             $verification = $this->verifyOwmApiKey($owmApiKey);
             if (!$verification['valid']) {
-                return back()->withInput()->withErrors([
-                    'owm_api_key' => $verification['message'],
-                ]);
+                $owmWarnung = $verification['message'];
             }
         }
 
@@ -127,7 +140,12 @@ class SettingsController extends Controller
             );
         }
 
-        return redirect('/admin/livemap')->with('status', 'Live Map settings saved.');
+        $meldung = 'Live Map settings saved.';
+        if ($owmWarnung !== '') {
+            $meldung .= ' — '.$owmWarnung;
+        }
+
+        return redirect('/admin/livemap')->with('status', $meldung);
     }
 
     private function currentSettings(): array
@@ -519,7 +537,9 @@ class SettingsController extends Controller
         if ($status === 401 || $status === 403) {
             return [
                 'valid' => false,
-                'message' => 'OpenWeatherMap rejected this API key (HTTP '.$status.'). Please check the key.',
+                'message' => 'OpenWeatherMap did not accept this key yet (HTTP '.$status.'). '
+                    .'The key was saved anyway: a newly created OpenWeatherMap key can take up to two hours '
+                    .'to activate, and returns 401 until then. If it still fails after that, check the key.',
             ];
         }
 

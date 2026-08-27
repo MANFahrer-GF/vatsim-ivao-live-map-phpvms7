@@ -4,6 +4,44 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.5] — 2026-08-27
+
+Zwei Befunde von fremden VAs, beide kosteten Stunden — und beide gingen auf
+uns zurück, nicht auf ihre Installation.
+
+### Fixed
+- **Ein frisch erzeugter OpenWeatherMap-Schlüssel liess sich nicht speichern.**
+  OWM antwortet auf einen neuen Schlüssel bis zu **zwei Stunden** lang mit
+  HTTP 401 — er ist richtig, nur noch nicht freigeschaltet. Das Speichern brach
+  dann ab, und der Betreiber konnte seinen korrekten Schlüssel überhaupt nicht
+  hinterlegen: *„keeps saying openweathermap rejected the key, but it's
+  definitely right"*, zwanzig Minuten später lief er.
+
+  Der Schlüssel wird jetzt **gespeichert** und die Meldung erklärt die
+  Freischaltzeit, statt zu blockieren. Ob er wirkt, sagt ohnehin die Statusbox,
+  und sie prüft erneut, sobald sich der Wert ändert.
+
+### Changed
+- **`INSTALL.txt`: erst hochladen, dann umbenennen.** Die bisherige Anleitung
+  sagte „Delete or rename the existing LiveMap/ folder" und dann hochladen. Auf
+  einer laufenden Seite ist das ein Fenster von Minuten, in dem `module.json`
+  schon da ist und `Providers/` noch nicht — phpVMS findet das Modul, kann den
+  Provider nicht laden und wirft auf **jeder** Seite einen Fatalfehler,
+  einschliesslich `/admin`. Der Betreiber ist dann aus der eigenen Seite
+  ausgesperrt.
+
+  Am 27.08.2026 genau so passiert. Der Weg zurück (in der Tabelle `modules`
+  `enabled` auf 0) stand nirgends in unserer Anleitung; ein anderer VA-Betreiber
+  hat ihn herausgefunden.
+
+  Neu: in einen Nebenordner hochladen, Vollständigkeit prüfen, dann in **einem**
+  Umbenennen tauschen. Dazu ein Abschnitt „If your site is down".
+- **`INSTALL.txt` liegt jetzt im Repo**, nicht nur im Paket. Sie ist Teil des
+  Produkts und gehört versioniert wie der Code — die alte Fassung existierte
+  ausschliesslich in den erzeugten ZIPs.
+
+---
+
 ## [4.7.4] — 2026-08-27
 
 Behebt den Befund von **ProAvia**: „I still see the api key required message on
