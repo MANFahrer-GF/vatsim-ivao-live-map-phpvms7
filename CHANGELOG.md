@@ -4,6 +4,43 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.4] — 2026-08-27
+
+Behebt den Befund von **ProAvia**: „I still see the api key required message on
+page load. If I open the map type box, select another map style and then select
+Carto Light it loads fine."
+
+### Fixed
+- **Wasserzeichen beim Laden, obwohl der Schlüssel hinterlegt ist.** Auf der
+  Karte lagen **zwei** Grundebenen. Die Widget-Datei reicht
+  `providers: {'CartoDB.Positron': {}}` an `render_live_map` durch, und der
+  phpVMS-Kern baut daraus eine **eigene** Kachelebene:
+
+  ```js
+  for (r in i.providers) n.tileLayer.provider(r, i.providers[r]).addTo(o)
+  ```
+
+  Deren Adresse kommt aus dem Katalog von `leaflet-providers` — und der hat für
+  CartoDB **keinen Platz für einen Schlüssel**. An dieser Ebene kam kein
+  Modul-Code vorbei, und sie lag obenauf. Nach dem Umschalten der Kartenart
+  verschwand sie, deshalb war die Karte danach sauber.
+
+  Der Schlüssel wird jetzt an `L.TileLayer.prototype.getTileUrl` angehängt — die
+  eine Stelle, durch die **jede** Kachel geht, gleich wer die Ebene gebaut hat.
+  Mit einem Wachposten auf `window.L`, falls das Theme Leaflet später lädt.
+
+### Changed
+- **Die doppelte Grundebene wird entfernt.** Sie kostete jede Kachel zweimal,
+  also doppeltes CARTO-Kontingent (frei sind 5 Mio./Monat). `providers` einfach
+  wegzulassen geht nicht — bei leerer Liste setzt der Kern von sich aus
+  `Esri.WorldStreetMap` ein. Entfernt werden nur CARTO-Ebenen ohne die Marke des
+  Moduls; eine selbst hinzugefügte Grundkarte bleibt.
+
+  Am 27.08.2026 auf der laufenden Karte nachgemessen: vorher zwei Grundebenen,
+  danach eine, 20 von 20 Kacheln geladen, 0 ohne Schlüssel.
+
+---
+
 ## [4.7.3] — 2026-08-26
 
 ### Added

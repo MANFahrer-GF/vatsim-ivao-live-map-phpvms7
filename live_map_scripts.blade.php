@@ -25,6 +25,90 @@
             L.TileLayer.prototype._lmHttpsUpgradePatched = true;
         })();
 
+        {{-- Den CARTO-Schluessel an JEDE Kachel haengen, auch an die, die
+             dieses Modul gar nicht baut.
+
+             # Der Befund (ProAvia, 27.08.2026)
+
+             „I still see the api key required message on page load. If I
+             open the map type box, select another map style and then
+             select Carto Light it loads fine."
+
+             Genau das Muster: Die Ebenen, die DIESES Modul erzeugt, tragen
+             den Schluessel (siehe `mitCartoKey` weiter unten) — deshalb ist
+             die Karte nach dem Umschalten sauber. Beim Laden liegt aber eine
+             ANDERE Ebene oben. Sie stammt aus dem phpVMS-Kern: Die Seite
+             reicht `providers: {'CartoDB.Positron': {}}` an
+             `render_live_map` durch, und der Kern baut daraus selbst eine
+             Kachelebene:
+
+                 for (r in i.providers)
+                     n.tileLayer.provider(r, i.providers[r]).addTo(o)
+
+             Deren Adresse kommt aus dem Katalog von `leaflet-providers`, und
+             der hat fuer CartoDB **keinen Platz fuer einen Schluessel**. An
+             dieser Ebene kommt kein Modul-Code vorbei.
+
+             # Warum hier
+
+             Dieselbe Ueberlegung wie beim HTTPS-Aufzug direkt darueber: die
+             eine Stelle abfangen, durch die jede Kachel geht. Damit ist
+             gleichgueltig, wer die Ebene baut — Kern, Theme, dieses Modul
+             oder eine, die spaeter dazukommt.
+
+             `getTileUrl` und nicht `initialize`: Manche Ebenen bekommen ihre
+             Adresse erst spaeter (`setUrl`), und der Katalog setzt sie aus
+             Bausteinen zusammen. Beim Abruf steht sie fest.
+
+             ⚠ Das laeuft VOR `DOMContentLoaded`. Ein Skript weiter unten
+             kaeme zu spaet: Die ersten Kacheln waeren schon angefordert und
+             trugen das Wasserzeichen, bis der Nutzer schwenkt. --}}
+        @php
+            // Bewusst hier selbst gelesen statt aus $liveMapUiConfig: Diese
+            // Datei soll nicht davon abhaengen, dass das andere Widget
+            // vorher gerendert wurde.
+            $lmCartoKeyFuerPatch = trim((string) (setting('acars.carto_api_key', env('CARTO_API_KEY', '')) ?? ''));
+        @endphp
+        @if($lmCartoKeyFuerPatch !== '')
+        (function lmCartoKeyAnJedeKachel() {
+            var SCHLUESSEL = @json($lmCartoKeyFuerPatch);
+
+            function patch(L) {
+                if (!L || !L.TileLayer || !L.TileLayer.prototype) return false;
+                if (L.TileLayer.prototype._lmCartoKeyPatched) return true;
+                var alt = L.TileLayer.prototype.getTileUrl;
+                if (typeof alt !== 'function') return false;
+                L.TileLayer.prototype.getTileUrl = function (coords) {
+                    var url = alt.call(this, coords);
+                    if (typeof url === 'string' && url.indexOf('cartocdn.com') !== -1 && !/[?&]key=/.test(url)) {
+                        url += (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(SCHLUESSEL);
+                    }
+                    return url;
+                };
+                L.TileLayer.prototype._lmCartoKeyPatched = true;
+                return true;
+            }
+
+            // Ist Leaflet schon da, ist es hier vorbei.
+            if (patch(window.L)) return;
+
+            // Sonst ein Wachposten auf `window.L`. Themes laden Leaflet
+            // unterschiedlich frueh; ein reines `if (!window.L) return;`
+            // wuerde bei einem spaeten Theme LAUTLOS nichts tun, und das
+            // Wasserzeichen bliebe — ohne dass irgendwo etwas anschlaegt.
+            try {
+                var wert;
+                Object.defineProperty(window, 'L', {
+                    configurable: true,
+                    get: function () { return wert; },
+                    set: function (v) { wert = v; patch(v); }
+                });
+            } catch (e) { /* Eigenschaft nicht setzbar — die Notnagel unten greifen. */ }
+            document.addEventListener('DOMContentLoaded', function () { patch(window.L); });
+            window.addEventListener('load', function () { patch(window.L); });
+        })();
+        @endif
+
         document.addEventListener('DOMContentLoaded', function () {
             var LIVE_MAP_UI = @json($liveMapUiConfig);
             window.LIVE_MAP_UI = LIVE_MAP_UI || {};
@@ -1556,6 +1640,50 @@
 
                         clearCurrentBaseLayers();
                         mapLayers[selectedKey].addTo(map);
+
+                        // Die Grundebene des Kerns nachtraeglich entfernen.
+                        //
+                        // # Warum sie ueberhaupt da ist
+                        //
+                        // Die Seite reicht `providers: {'CartoDB.Positron': {}}`
+                        // an `render_live_map` durch, und der Kern baut daraus
+                        // eine eigene Kachelebene. Sie WEGZULASSEN geht nicht:
+                        // Bei leerer Liste setzt der Kern von sich aus
+                        // `Esri.WorldStreetMap` ein.
+                        //
+                        // `clearCurrentBaseLayers()` oben erwischt sie nicht,
+                        // weil der Kern sie erst danach hinzufuegt. Am
+                        // 27.08.2026 auf der laufenden Karte nachgesehen: Es
+                        // lagen ZWEI Grundebenen uebereinander.
+                        //
+                        // # Was das kostet
+                        //
+                        // Jede Kachel wurde doppelt geholt — doppeltes
+                        // CARTO-Kontingent (frei sind 5 Mio. im Monat), und die
+                        // obere trug kein `?key=`, also das Wasserzeichen. Das
+                        // ist ProAvias Befund vom 27.08.: beim Laden bestempelt,
+                        // nach dem Umschalten sauber (weil das Umschalten die
+                        // Fremdebene mitnimmt).
+                        //
+                        // # Vorsichtig
+                        //
+                        // Entfernt werden NUR CARTO-Ebenen ohne unsere Marke.
+                        // Wer eine eigene Grundkarte dazulegt, behaelt sie.
+                        var fremdeCartoEbenenWeg = function () {
+                            map.eachLayer(function (layer) {
+                                if (!(layer instanceof L.TileLayer)) return;
+                                if (layer._lmBasemapKey) return;
+                                var pane = (layer.options && layer.options.pane) || 'tilePane';
+                                if (pane === 'weatherPane') return;
+                                if (String(layer._url || '').indexOf('cartocdn.com') === -1) return;
+                                map.removeLayer(layer);
+                            });
+                        };
+                        map.whenReady(fremdeCartoEbenenWeg);
+                        // Und einmal nach dem aktuellen Durchlauf: `whenReady`
+                        // feuert sofort, wenn die Karte schon bereit ist — dann
+                        // waere die Ebene des Kerns womoeglich noch nicht da.
+                        setTimeout(fremdeCartoEbenenWeg, 0);
 
                         if (showSwitcher && Object.keys(mapLayers).length > 1) {
                             var controlLayers = {};
