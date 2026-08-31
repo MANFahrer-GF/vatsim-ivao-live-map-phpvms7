@@ -480,6 +480,53 @@
             }
 
             // ════════════════════════════════════════════════════════════
+            //  POSITION AUF PLAUSIBILITAET PRUEFEN — "Null Island" (0°/0°)
+            //
+            //  Ein Simulator meldet 0/0, solange er nicht weiss, wo die
+            //  Maschine steht (P3D vor dem Laden des Flugplatzes, MSFS
+            //  waehrend des Ladens). phpVMS speichert das als ganz normale
+            //  ACARS-Position — mit drei sichtbaren Folgen:
+            //    * der Flieger sitzt im Golf von Guinea,
+            //    * die "geflogene" Strecke ist der Abstand Abflugort → 0/0
+            //      (KSEA → 0/0 sind rund 7.200 nm),
+            //    * der Fortschritt steht dadurch auf 100 %.
+            //  Gemeldet am 01.09.2026 (FA852 KSEA→KFLL, P3Dv5).
+            //
+            //  Solche Positionen gelten hier als NICHT vorhanden: kein
+            //  Marker, keine Strecke, kein Fortschritt, kein Auto-Zoom
+            //  dorthin. Der Flug selbst bleibt in der Liste stehen.
+            // ════════════════════════════════════════════════════════════
+            var LM_NULL_ISLAND_DEG = 0.05; // ~5,5 km um 0/0 — dort liegt kein Flugplatz
+
+            function lmUsableLatLng(lat, lng) {
+                lat = parseFloat(lat);
+                lng = parseFloat(lng);
+                if (!isFinite(lat) || !isFinite(lng)) return false;
+                if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false;
+                // NUR wenn BEIDE nahe 0 sind. 0°N/10°E ist Gabun und voellig gueltig.
+                if (Math.abs(lat) < LM_NULL_ISLAND_DEG && Math.abs(lng) < LM_NULL_ISLAND_DEG) return false;
+                return true;
+            }
+            window.lmUsableLatLng = lmUsableLatLng;
+
+            // Entwertet die Position eines Flugs an Ort und Stelle, wenn sie
+            // unbrauchbar ist. Alles Weitere (Zeile, Boarding-Pass, Auto-Zoom)
+            // liest `position` und faellt damit von selbst auf "—" zurueck.
+            function lmSanitizeFlightPosition(f) {
+                if (!f || !f.position) return f;
+                var p   = f.position;
+                var lat = p.lat;
+                var lng = (p.lon != null) ? p.lon : p.lng;
+                if (lat == null || lng == null || !lmUsableLatLng(lat, lng)) {
+                    f._lmNoPosition  = true;
+                    f._lmRawPosition = p; // nur zum Nachsehen in der Konsole
+                    f.position       = null;
+                }
+                return f;
+            }
+            window.lmSanitizeFlightPosition = lmSanitizeFlightPosition;
+
+            // ════════════════════════════════════════════════════════════
             //  VA FLIGHTS PANEL — neues Design mit Tabs + Scroll
             //  Active = ACARS-Flüge in der Luft/rollend
             //  Planned = ACARS-Flüge in Boarding/Pre-flight-Zustand
@@ -690,6 +737,9 @@
                                 : distPlanned !== null ? '— / ' + distPlanned
                                 : '—';
 
+                    // Sim kennt die Position noch nicht (0/0) — Zelle sagt warum
+                    var noPosTitle = f._lmNoPosition ? ' title="No position reported by the simulator yet"' : '';
+
                     var pName = pilotName(f);
                     var pRank = pilotRank(f);
                     var callsignHtml = h(callsign || '—');
@@ -710,9 +760,9 @@
                     row.innerHTML =
                         '<div class="va-c-flight">' + rowLogoHtml(f.airline) + '<span>' + callsignHtml + '</span></div>' +
                         '<div class="va-c-route"><span class="va-icao">' + depHtml + '</span><span class="va-arr">›</span><span class="va-icao">' + arrHtml + '</span></div>' +
-                        '<div class="va-c-alt">' + altHtml + '</div>' +
-                        '<div class="va-c-spd">' + spdHtml + '</div>' +
-                        '<div class="va-c-dist">' + distHtml + '</div>' +
+                        '<div class="va-c-alt"' + noPosTitle + '>' + altHtml + '</div>' +
+                        '<div class="va-c-spd"' + noPosTitle + '>' + spdHtml + '</div>' +
+                        '<div class="va-c-dist"' + noPosTitle + '>' + distHtml + '</div>' +
                         '<div style="text-align:center"><span class="va-st ' + sCls + '">' + statHtml + '</span></div>' +
                         '<div><div class="va-c-pilot-name" title="' + h(pName) + '">' + h(pName) + '</div>' +
                         (pRank ? '<div class="va-c-pilot-rank">' + pRankHtml + '</div>' : '') + '</div>';
@@ -806,6 +856,9 @@
 
                 function renderFlights(flights) {
                     if (!rowsActive || !rowsPlanned) return;
+
+                    // 0/0-Positionen entwerten, BEVOR sie in Zeile, Pass oder Auto-Zoom landen
+                    flights.forEach(function(f){ lmSanitizeFlightPosition(f); });
 
                     var activeList  = [];
                     var plannedList = [];
@@ -1806,7 +1859,10 @@
                         var distFlown   = flight.position&&flight.position.distance&&flight.position.distance.nmi!=null?Math.round(parseFloat(flight.position.distance.nmi)):null;
                         var distPlanned = flight.planned_distance&&flight.planned_distance.nmi!=null?Math.round(parseFloat(flight.planned_distance.nmi)):null;
                         var prog = '—';
-                        if(distFlown!==null&&distPlanned!==null&&distPlanned>0){
+                        if(flight._lmNoPosition){
+                            // Sim meldet noch keine Position — jede Fortschrittsangabe waere erfunden
+                            prog = (distPlanned!==null&&distPlanned>0) ? 'No position yet · '+distPlanned+' nm total' : 'No position yet';
+                        } else if(distFlown!==null&&distPlanned!==null&&distPlanned>0){
                             prog = Math.min(100,Math.round((distFlown/distPlanned)*100))+'%  ('+distFlown+' / '+distPlanned+' nm)';
                         } else if(distPlanned!==null){ prog = distPlanned+' nm total'; }
                         var pilot='—';
@@ -1849,8 +1905,10 @@
                             if(logoWrap){logoWrap.classList.add('no-logo');logoWrap.textContent=(flight.airline&&flight.airline.icao)||cs.substring(0,3)||'';}
                         }
 
-                        if(lat!==null&&lng!==null)map.setView([lat,lng],Math.max(map.getZoom(),7),{ animate:true, _lmUserFocus:true });
-                        if(lat!==null&&lng!==null&&arr&&arr!=='—'){
+                        // Unbrauchbare Position (0/0) nie anfliegen und keine Linie dorthin ziehen
+                        var posOk = lat!==null&&lng!==null&&window.lmUsableLatLng(lat,lng);
+                        if(posOk)map.setView([lat,lng],Math.max(map.getZoom(),7),{ animate:true, _lmUserFocus:true });
+                        if(posOk&&arr&&arr!=='—'){
                             drawSeq++;routeLineLayer.clearLayers();lastDrawnArr=null;
                             showRouteLine(map,L.latLng(lat,lng),arr);
                         }
@@ -1872,12 +1930,41 @@
                         }).observe(rivCard,{attributes:true,attributeFilter:['style','class']});
                     })();
 
+                    var nullIslandSeen = 0;
+
                     map.on('layeradd', function(e) {
                         var layer=e.layer;
-                        if(!layer||!layer.getIcon) return;
+                        if(!layer) return;
+
+                        // Die Flug-Gruppe des Kerns: 0/0-Marker muessen AUS DER GRUPPE raus.
+                        // `map.removeLayer()` allein genuegt nicht — der Kern zentriert die
+                        // Karte ueber `layerFlights.getBounds()`, und die Gruppe kennt das
+                        // Kind sonst weiter. Genau das zog die Ansicht auf die halbe Welt.
+                        // Leaflet feuert `layeradd` erst fuer die Kinder, dann fuer die
+                        // Gruppe — die Markierung unten ist hier also schon gesetzt.
+                        if(!layer.getIcon){
+                            if(!nullIslandSeen||typeof layer.eachLayer!=='function'||typeof layer.removeLayer!=='function') return;
+                            var doomed=[];
+                            layer.eachLayer(function(child){ if(child&&child._lmNullIsland) doomed.push(child); });
+                            for(var d=0;d<doomed.length;d++){ try{ layer.removeLayer(doomed[d]); }catch(err0){} }
+                            return;
+                        }
                         try {
                             var icon=layer.getIcon(), url=(icon&&icon.options&&icon.options.iconUrl)||'';
                             if(url.indexOf('aircraft.png')===-1) return;
+
+                            // 0/0 heisst "der Sim weiss noch nicht, wo die Maschine steht" —
+                            // nicht zeichnen, statt sie in den Golf von Guinea zu setzen.
+                            var mll = layer.getLatLng ? layer.getLatLng() : null;
+                            if(mll && !window.lmUsableLatLng(mll.lat, mll.lng)){
+                                layer._lmNullIsland = true;
+                                nullIslandSeen++;
+                                var deadCs=(layer.options&&layer.options.title)||'';
+                                if(deadCs && vaMarkerCache[deadCs]) delete vaMarkerCache[deadCs];
+                                try{ map.removeLayer(layer); }catch(err1){}
+                                return;
+                            }
+
                             layer.setIcon(makeVaIcon());
                             layer.setZIndexOffset(10000);
                             var cs=(layer.options&&layer.options.title)||'';

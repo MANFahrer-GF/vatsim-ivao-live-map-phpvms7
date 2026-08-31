@@ -4,6 +4,50 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.7] — 2026-09-01
+
+### Fixed
+- **Ein Flug stand bei 0°/0° im Golf von Guinea, mit „100 %" Fortschritt und
+  7.247 von 2.408 nm.** Gemeldet am 01.09.2026 (FA852 KSEA→KFLL, P3Dv5).
+
+  Der Simulator meldet **0/0**, solange er nicht weiss, wo die Maschine steht —
+  bei P3D, bevor der Flugplatz geladen ist, bei MSFS waehrend des Ladens. Das
+  ist keine Fehlbedienung des Piloten und kein Fehler seines ACARS-Programms:
+  phpVMS nimmt diese Position entgegen wie jede andere. In der Tabelle `acars`
+  stehen `lat` und `lon` sogar mit **Vorgabewert `0.00000`** — wer nichts
+  schickt, sitzt dort.
+
+  Sichtbar war das dreifach, und alles drei ging auf dieselbe Zeile zurueck:
+  * der Flieger sass mitten im Atlantik,
+  * die „geflogene" Strecke war der Abstand **Abflugort → 0/0** (KSEA sind rund
+    7.200 nm) und damit groesser als die geplante,
+  * der Fortschritt stand deshalb auf 100 %.
+
+  Ausserdem zog es die **ganze Karte auseinander**: Der Kern zentriert ueber
+  `layerFlights.getBounds()`, und in diesen Rahmen ging 0/0 mit ein — der echte
+  Flug und der Phantom-Punkt zusammen ergaben die halbe Weltkarte.
+
+  Solche Positionen gelten jetzt als **nicht vorhanden**: kein Marker, keine
+  Strecke, kein Fortschritt, kein Auto-Zoom dorthin. Der Flug selbst
+  verschwindet **nicht** — er bleibt in der Liste stehen, mit `—` in Hoehe,
+  Tempo und Strecke und dem Hinweis „No position reported by the simulator yet".
+  Sobald der Sim eine echte Position schickt, ist alles wieder da.
+
+  ⚠ Die Pruefung verlangt, dass **beide** Werte nahe 0 liegen (0,05° ≈ 5,5 km).
+  Wer nur den Breitengrad prueft, wirft echte Fluege weg: **0°N/9,7°E ist
+  Libreville**, 0°N/32,5°E ist Entebbe. Als Gegenprobe mitgetestet.
+
+  ⚠ `map.removeLayer()` allein genuegt hier nicht. Der Marker muss **aus der
+  Flug-Gruppe des Kerns** entfernt werden, sonst bleibt er in deren `getBounds()`
+  und zieht die Ansicht weiter auseinander, obwohl man ihn nicht mehr sieht.
+
+  Nachgemessen an einer laufenden phpVMS-7.0.8-Installation mit zwei echten
+  ACARS-Fluegen (einer bei 0/0, einer ueber Jamaika) ueber fuenf
+  Aktualisierungen des Kerns: Der Phantom-Marker bleibt weg, der echte Flug
+  behaelt Marker, Strecke (120/273 nm) und Fortschritt (44 %).
+
+---
+
 ## [4.7.6] — 2026-08-27
 
 ### Fixed
