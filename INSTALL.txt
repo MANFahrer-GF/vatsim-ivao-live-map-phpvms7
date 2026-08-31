@@ -1,4 +1,4 @@
-LiveMap v4.7.5 - Install Package
+LiveMap v4.7.7 - Install Package
 ================================
 
 Contents:
@@ -6,6 +6,31 @@ Contents:
   live_map.blade.php           -> theme widget
   live_map_styles.blade.php    -> theme widget
   live_map_scripts.blade.php   -> theme widget
+
+Fixed in v4.7.7 (reported by ProAvia):
+
+  An aircraft sat at 0/0 in the Gulf of Guinea, showing "100%" progress
+  and 7247 of 2408 nm. Not pilot error: a simulator reports 0/0 while it
+  does not yet know where the aircraft is - P3D before the airport is
+  loaded, MSFS while loading. phpVMS accepts that like any other ACARS
+  position; in the `acars` table `lat` and `lon` even DEFAULT to 0.00000.
+
+  One row, four symptoms: the aircraft in the Atlantic, "distance flown"
+  = departure -> 0/0 (about 7,200 nm from KSEA), progress at 100%, and
+  the whole map pulled out to half the world, because the core centres
+  on the bounds of all flight markers and the phantom point is in them.
+
+  Such positions now count as NO position: no marker, no distance, no
+  progress, no auto-zoom. The flight stays in the list showing "-" and a
+  note that the sim has not reported a position yet. As soon as a real
+  position arrives, everything is back on the next refresh.
+
+  Two more places, same cause, same release: the flown track drawn when
+  you click a flight ran across the Atlantic if a single 0/0 point sat
+  in its log, and selecting a flight without a position left the
+  previous flight's route line on the map.
+
+  Only BOTH coordinates near zero count as bogus - 0N/9.7E is Libreville.
 
 Fixed in v4.7.4 (reported by ProAvia):
 
@@ -112,6 +137,10 @@ What the 4.7 line added (v4.7.0 + v4.7.1):
   condition of the free tier.
 
 Older fixes still included:
+  (v4.7.6) Live Map settings no longer appear a second time in the core
+           settings page.
+  (v4.7.5) A brand-new OpenWeatherMap key can be saved even while OWM
+           still answers 401 during its activation window.
   (v4.6.7) View paths are only registered when they exist, so
            `php artisan view:cache` no longer throws.
   (v4.6.6) Mixed-content warnings silenced (HTTPS upgrade).
@@ -188,5 +217,10 @@ Troubleshooting:
   "LiveMapServiceProvider not found" -> partial upload. See step 1 and the
                                        database recovery above.
   "Settings page throws HTTP 500"   -> upgrade to v4.7.2.
+  "Aircraft parked at 0/0 / progress
+   stuck at 100% / map zoomed out"  -> upgrade to v4.7.7. The sim has not
+                                       reported a position yet; the map
+                                       now ignores 0/0 instead of drawing
+                                       it.
 
 Support: https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2

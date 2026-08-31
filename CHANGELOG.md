@@ -44,7 +44,27 @@ All notable changes to this project are documented in this file.
   Nachgemessen an einer laufenden phpVMS-7.0.8-Installation mit zwei echten
   ACARS-Fluegen (einer bei 0/0, einer ueber Jamaika) ueber fuenf
   Aktualisierungen des Kerns: Der Phantom-Marker bleibt weg, der echte Flug
-  behaelt Marker, Strecke (120/273 nm) und Fortschritt (44 %).
+  behaelt Marker, Strecke (120/273 nm) und Fortschritt (44 %). Sobald der Sim
+  eine echte Position schickt, ist der Flug im selben Durchlauf wieder
+  vollstaendig da — der Zustand klebt nicht.
+
+- **Die geflogene Spur lief ebenfalls in den Golf — dieselbe Ursache, andere
+  Stelle.** Beim Klick auf einen Flug zeichnet der Kern die Spur ueber
+  `L.Geodesic.fromGeoJson`. Ein **einziger** 0/0-Punkt im Flugweg genuegt, und
+  die Linie laeuft quer ueber den Atlantik und zurueck (an 13 Punkten
+  nachgemessen: 193 Linienpunkte statt 177). Der Filter sitzt an der Methode,
+  **nicht** am `layeradd`-Ereignis — der Kern setzt die Punkte erst nach
+  `addTo(map)`, zum Ereigniszeitpunkt ist die Linie noch leer.
+
+  Gegenprobe: derselbe Flugweg ohne den 0/0-Punkt ergibt exakt dieselben 177
+  Punkte — der Filter nimmt nur den Phantom-Punkt mit. Bleiben nach dem Filtern
+  weniger als zwei Punkte uebrig, wird gar keine Linie gezeichnet (getestet,
+  keine Fehler).
+
+- **Beim Umschalten auf einen Flug ohne Position blieb die Linie des vorherigen
+  stehen.** Der Boarding-Pass zeigte schon den neuen Flug, die Karte noch die
+  Strecke des alten — sie sah damit aus, als gehoere sie zum neuen. Die Linie
+  wird jetzt in beiden Faellen geraeumt.
 
 ---
 

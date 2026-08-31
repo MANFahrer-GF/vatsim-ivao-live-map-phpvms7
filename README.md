@@ -1,6 +1,6 @@
 # VATSIM + IVAO Live Map for phpVMS 7
 
-Version: **4.6.6** (2026-04-22)
+Version: **4.7.7** (2026-09-01)
 
 Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR sectors, VA flight panels, weather overlays, and an admin-driven configuration module.
 
@@ -14,6 +14,8 @@ Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR secto
 - Admin settings page (`/admin/livemap`) for layout, weather, network, mobile, colors
 - Mobile cleanup: single mobile **Flights** button + separate Network side tab
 - Simplified color system: only 3 admin colors (Primary, Accent, Box Background)
+- CARTO Basemaps API key support with a status box that verifies the key
+- Bogus 0/0 positions are ignored instead of drawing phantom aircraft
 
 ## Package Contents
 

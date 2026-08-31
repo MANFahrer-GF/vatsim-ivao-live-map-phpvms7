@@ -526,6 +526,41 @@
             }
             window.lmSanitizeFlightPosition = lmSanitizeFlightPosition;
 
+            // Dieselbe Pruefung fuer die geflogene Spur: GeoJSON-Koordinaten kommen als
+            // [lon, lat, alt]. Es wird KOPIERT statt am Original geaendert — die Antwort
+            // des Kerns wird beim naechsten Durchlauf noch einmal verwendet.
+            function lmStripNullIslandFromGeoJson(gj) {
+                if (!gj || typeof gj !== 'object') return gj;
+                var keep = function (c) { return Array.isArray(c) && lmUsableLatLng(c[1], c[0]); };
+                var walk = function (node) {
+                    if (!node || typeof node !== 'object') return node;
+                    if (node.type === 'FeatureCollection' && Array.isArray(node.features)) {
+                        return Object.assign({}, node, { features: node.features.map(walk) });
+                    }
+                    if (node.type === 'Feature') {
+                        return Object.assign({}, node, { geometry: walk(node.geometry) });
+                    }
+                    if (node.type === 'LineString' && Array.isArray(node.coordinates)) {
+                        var pts = node.coordinates.filter(keep);
+                        // Eine Linie aus einem einzigen Punkt zeichnet nichts, kann aber
+                        // in Leaflet-Erweiterungen stolpern — dann lieber gar keine.
+                        return Object.assign({}, node, { coordinates: pts.length >= 2 ? pts : [] });
+                    }
+                    if (node.type === 'MultiLineString' && Array.isArray(node.coordinates)) {
+                        return Object.assign({}, node, {
+                            coordinates: node.coordinates.map(function (line) {
+                                if (!Array.isArray(line)) return line;
+                                var l = line.filter(keep);
+                                return l.length >= 2 ? l : [];
+                            }).filter(function (line) { return !Array.isArray(line) || line.length > 0; }),
+                        });
+                    }
+                    return node;
+                };
+                return walk(gj);
+            }
+            window.lmStripNullIslandFromGeoJson = lmStripNullIslandFromGeoJson;
+
             // ════════════════════════════════════════════════════════════
             //  VA FLIGHTS PANEL — neues Design mit Tabs + Scroll
             //  Active = ACARS-Flüge in der Luft/rollend
@@ -1608,6 +1643,25 @@
             // ── Leaflet-Hooks (registrieren VOR render_live_map) ──
             if (typeof L !== 'undefined' && L.Map && typeof L.Map.addInitHook === 'function') {
 
+                // Beim Klick auf einen Flug zeichnet der KERN die geflogene Spur
+                // (`L.Geodesic.fromGeoJson`). Steht auch nur EIN 0/0-Punkt im Flugweg,
+                // laeuft die Spur bis in den Golf von Guinea und zurueck. Am Bestand
+                // nachgemessen: ein einziger Punkt unter 13 reicht dafuer.
+                // Der Kern setzt die Punkte erst NACH `addTo(map)` — ueber `layeradd`
+                // waere die Linie zu diesem Zeitpunkt noch leer. Deshalb an der Methode.
+                if (L.Geodesic && L.Geodesic.prototype
+                    && typeof L.Geodesic.prototype.fromGeoJson === 'function'
+                    && !L.Geodesic.prototype._lmNullIslandFiltered) {
+                    var lmOrigFromGeoJson = L.Geodesic.prototype.fromGeoJson;
+                    L.Geodesic.prototype.fromGeoJson = function (geojson) {
+                        var cleaned = geojson;
+                        try { cleaned = lmStripNullIslandFromGeoJson(geojson); }
+                        catch (e) { cleaned = geojson; }
+                        return lmOrigFromGeoJson.call(this, cleaned);
+                    };
+                    L.Geodesic.prototype._lmNullIslandFiltered = true;
+                }
+
                 L.Map.addInitHook(function () {
                     attachWeatherToMap(this);
                 });
@@ -1911,6 +1965,11 @@
                         if(posOk&&arr&&arr!=='—'){
                             drawSeq++;routeLineLayer.clearLayers();lastDrawnArr=null;
                             showRouteLine(map,L.latLng(lat,lng),arr);
+                        } else {
+                            // Ohne Position KEINE Linie stehen lassen: sonst behaelt die Karte
+                            // die Linie des zuvor angeklickten Fluges, waehrend der Pass schon
+                            // den neuen zeigt — sie sieht dann aus, als gehoere sie zu diesem.
+                            drawSeq++;routeLineLayer.clearLayers();lastDrawnArr=null;
                         }
 
                         var rivCard=document.getElementById('map-info-box');

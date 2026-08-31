@@ -1,3 +1,95 @@
+## v4.7.7 - 0/0 is not a position
+
+Release date: 2026-09-01
+
+Fixes the finding from **@ProAvia**: an aircraft parked at 0/0 in the Gulf of Guinea, "100%" progress and 7247 of 2408 nm (FA852 KSEA-KFLL, P3Dv5).
+
+---
+
+## English
+
+### What happened
+
+A simulator reports **0/0** while it does not yet know where the aircraft is - P3D before the airport is loaded, MSFS while loading. That is not pilot error and not really a simulator fault either: phpVMS accepts the position like any other ACARS row. In the `acars` table, `lat` and `lon` even **default to `0.00000`**, so a client that has not reported yet is parked there.
+
+One row produced four symptoms:
+
+- the aircraft sat in the Gulf of Guinea,
+- "distance flown" became departure -> 0/0, roughly 7,200 nm from KSEA, hence **7247 / 2408**,
+- progress therefore read **100%**,
+- and the map pulled out to half the world, because the core centres on `layerFlights.getBounds()` and the phantom point sits inside those bounds.
+
+### What changed
+
+Such positions now count as **no position**: no marker, no distance, no progress, no auto-zoom. The flight itself does **not** disappear - it stays in the list with `-` for altitude, speed and distance, and a tooltip saying the simulator has not reported a position yet. As soon as a real position arrives, everything is back on the next refresh; the state does not stick.
+
+Two more places, same cause, found during QA and fixed in the same release:
+
+- **The flown track** drawn when you click a flight (`L.Geodesic.fromGeoJson`) ran across the Atlantic and back if a **single** 0/0 point sat in the log - measured on a 13-point track: 193 line points instead of 177.
+- **Switching to a flight without a position** left the previous flight's route line on the map, while the boarding pass already showed the new flight.
+
+### Notes for anyone touching this code
+
+- The check requires **both** coordinates to be near zero (0.05 deg, about 5.5 km). Checking latitude alone throws away real flights: **0N/9.7E is Libreville**, 0N/32.5E is Entebbe.
+- `map.removeLayer()` alone is not enough. The marker has to be removed **from the core's flight group**, or it stays inside that group's `getBounds()` and keeps pulling the view apart although nobody can see it.
+- The track filter sits on the method, **not** on the `layeradd` event: the core sets the points only after `addTo(map)`, so at event time the line is still empty.
+
+### Verified
+
+Measured against a running phpVMS 7.0.8 with real ACARS flights, not on paper. Before, on v4.7.6: marker at 0/0, row "6800 / 0", map centred in the Atlantic, track with the detour. After, across five core refresh cycles: phantom gone, the real flight keeps its marker, 120/273 nm and 44% progress. Counter-checks: a genuine equator position (0N/9.7E) is untouched, a track without a 0/0 point comes out with exactly the same 177 points, and with every flight at 0/0 the map simply stays where it is.
+
+### Known limit
+
+If an ACARS client keeps accumulating its own "distance flown" across the 0/0 jump, that number reappears once real positions arrive. This happens in the client / `acars.distance`, not in the map, and it is deliberately **not** papered over with a plausibility heuristic - that would also discard genuine diversions and holdings.
+
+---
+
+## Deutsch
+
+### Was passiert ist
+
+Ein Simulator meldet **0/0**, solange er nicht weiss, wo die Maschine steht - P3D, bevor der Flugplatz geladen ist, MSFS waehrend des Ladens. Das ist weder Pilotenfehler noch wirklich ein Fehler des Simulators: phpVMS nimmt die Position entgegen wie jede andere ACARS-Zeile. In der Tabelle `acars` haben `lat` und `lon` sogar den **Vorgabewert `0.00000`** - wer nichts schickt, sitzt dort.
+
+Aus dieser einen Zeile folgten vier Erscheinungen:
+
+- der Flieger sass im Golf von Guinea,
+- die "geflogene" Strecke war Abflugort -> 0/0, rund 7.200 nm ab KSEA, daher **7247 / 2408**,
+- der Fortschritt stand deshalb auf **100 %**,
+- und die Karte zog sich auf die halbe Welt auf, weil der Kern ueber `layerFlights.getBounds()` zentriert und der Phantom-Punkt in diesem Rahmen liegt.
+
+### Was sich geaendert hat
+
+Solche Positionen gelten jetzt als **nicht vorhanden**: kein Marker, keine Strecke, kein Fortschritt, kein Auto-Zoom. Der Flug selbst verschwindet **nicht** - er bleibt in der Liste, mit `-` bei Hoehe, Tempo und Strecke und einem Hinweis, dass der Simulator noch keine Position meldet. Sobald eine echte Position eintrifft, ist im naechsten Durchlauf alles wieder da; der Zustand klebt nicht.
+
+Zwei weitere Stellen, gleiche Ursache, in der QS gefunden und mit derselben Version behoben:
+
+- **Die geflogene Spur** beim Klick auf einen Flug (`L.Geodesic.fromGeoJson`) lief quer ueber den Atlantik und zurueck, sobald ein **einziger** 0/0-Punkt im Flugweg stand - an 13 Punkten nachgemessen: 193 Linienpunkte statt 177.
+- **Beim Umschalten auf einen Flug ohne Position** blieb die Linie des vorherigen Fluges stehen, waehrend der Boarding-Pass schon den neuen zeigte.
+
+### Fuer alle, die an diesem Code arbeiten
+
+- Die Pruefung verlangt, dass **beide** Werte nahe 0 liegen (0,05 Grad, rund 5,5 km). Wer nur den Breitengrad prueft, wirft echte Fluege weg: **0N/9,7O ist Libreville**, 0N/32,5O ist Entebbe.
+- `map.removeLayer()` allein genuegt nicht. Der Marker muss **aus der Flug-Gruppe des Kerns** heraus, sonst bleibt er in deren `getBounds()` und zieht die Ansicht weiter auseinander, obwohl ihn niemand mehr sieht.
+- Der Spur-Filter sitzt an der Methode, **nicht** am `layeradd`-Ereignis: Der Kern setzt die Punkte erst nach `addTo(map)`, zum Ereigniszeitpunkt ist die Linie noch leer.
+
+### Nachgemessen
+
+An einer laufenden phpVMS-7.0.8-Installation mit echten ACARS-Fluegen geprueft, nicht auf dem Papier. Vorher mit v4.7.6: Marker bei 0/0, Zeile "6800 / 0", Kartenmitte im Atlantik, Spur mit Umweg. Nachher ueber fuenf Aktualisierungen des Kerns: Phantom weg, der echte Flug behaelt Marker, 120/273 nm und 44 % Fortschritt. Gegenproben: eine echte Aequator-Position (0N/9,7O) bleibt unangetastet, ein Flugweg ohne 0/0-Punkt ergibt exakt dieselben 177 Punkte, und mit allen Fluegen auf 0/0 bleibt die Karte einfach stehen.
+
+### Bekannte Grenze
+
+Rechnet ein ACARS-Programm seine "geflogene" Strecke ueber den 0/0-Sprung hinweg selbst weiter, taucht diese Zahl wieder auf, sobald echte Positionen kommen. Das entsteht im Programm bzw. in `acars.distance`, nicht in der Karte, und es wird bewusst **nicht** mit einer Plausibilitaetsregel uebertuencht - die wuerde auch echte Ausweichfluege und Warteschleifen verwerfen.
+
+### Upgrade
+
+1. Deploy all four parts from the ZIP - the module folder and the **three** widget blade files together (see `INSTALL.txt`, step 1: upload first, swap last).
+2. Admin -> Maintenance -> Clear Caches.
+3. Hard-refresh the browser.
+
+No settings change, no migration.
+
+---
+
 ## v4.6.6 - Mixed-Content Hotfix
 
 Release date: 2026-04-22
