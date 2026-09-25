@@ -16,6 +16,7 @@ Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR secto
 - Simplified color system: only 3 admin colors (Primary, Accent, Box Background)
 - CARTO Basemaps API key support with a status box that verifies the key
 - Bogus 0/0 positions are ignored instead of drawing phantom aircraft
+- Route line to the destination crosses the date line instead of wrapping around the world
 
 ## Package Contents
 

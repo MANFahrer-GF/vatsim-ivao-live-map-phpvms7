@@ -1,3 +1,37 @@
+## v4.7.8 - Route line across the date line
+
+Release date: 2026-09-25
+
+---
+
+## English
+
+### What happened
+
+When you click a flight over the Pacific, the map draws a red dashed line from the aircraft to its destination. If the flight was about to cross the date line (for example over the Aleutians, from 179° E to 179° W), that line ran **once around the whole world** as a horizontal stripe instead of the short hop to the destination. Leaflet connects two points on the shortest way in *degrees of longitude* - and from 179° E to 179° W that is 358°.
+
+### What changed
+
+The destination is moved by a full 360° next to the aircraft (181° instead of -179°). Leaflet draws longitudes outside ±180 seamlessly in the neighbouring copy of the world, so the line now takes the short way. The destination label moves with it.
+
+The flown track drawn by the phpVMS core (`L.Geodesic`) was not affected.
+
+---
+
+## Deutsch
+
+### Was passiert ist
+
+Klickt man auf einen Flug über dem Pazifik, zeichnet die Karte eine rote gestrichelte Linie vom Flugzeug zum Ziel. Stand der Flug kurz vor der Datumsgrenze (etwa über den Aleuten, von 179° O nach 179° W), lief diese Linie **einmal um die ganze Welt** als waagerechter Streifen statt der kurzen Strecke zum Ziel. Leaflet verbindet zwei Punkte auf dem kurzen Weg in *Längengraden* - und von 179° O nach 179° W sind das 358°.
+
+### Was sich geändert hat
+
+Das Ziel wird um volle 360° neben das Flugzeug gelegt (181° statt -179°). Leaflet zeichnet Längen außerhalb ±180 nahtlos in der Nachbarkopie der Welt weiter, die Linie nimmt jetzt den kurzen Weg. Die Ziel-Beschriftung wandert mit.
+
+Die geflogene Spur des phpVMS-Kerns (`L.Geodesic`) war nicht betroffen.
+
+---
+
 ## v4.7.7 - 0/0 is not a position
 
 Release date: 2026-09-01

@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.8] — 2026-09-25
+
+### Fixed
+- **Die rote Ziel-Linie lief an der Datumsgrenze quer über die ganze Karte.**
+  Ein Flug über den Pazifik (z. B. über die Aleuten, 179° O → 179° W) bekam
+  statt einer kurzen Linie zum Ziel eine Gerade einmal um die Welt. Leaflet
+  verbindet zwei Punkte auf dem kurzen Weg in *Längengraden* — von 179° O nach
+  179° W sind das 358°. Das Ziel wird jetzt um volle 360° neben das Flugzeug
+  gelegt (181° statt −179°); Leaflet zeichnet Längen außerhalb ±180 in der
+  Nachbarkopie der Welt weiter. Die geflogene Spur des Kerns (`L.Geodesic`)
+  war nicht betroffen.
+
+---
+
 ## [4.7.7] — 2026-09-01
 
 ### Fixed
