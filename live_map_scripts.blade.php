@@ -1075,8 +1075,15 @@
                 var toPos = staticAirportPos[rawIcao] || staticAirportPos['K'+rawIcao] || staticAirportPos['C'+rawIcao] || staticAirportPos['P'+rawIcao];
                 if (!toPos) return;
                 var toIcaoSafe = h(safeCallsign(rawIcao) || rawIcao || '—');
-                L.polyline([fromLatLng, toPos], { color:'#e74c3c', weight:2, opacity:0.8, dashArray:'8 6' }).addTo(routeLineLayer);
-                L.marker(toPos, {
+                // Datumsgrenze: Leaflet zieht eine Gerade von 179° O nach 179° W
+                // einmal quer ueber die Welt. Das Ziel deshalb um volle 360°
+                // neben das Flugzeug legen (181° statt −179°) — Leaflet zeichnet
+                // Laengen ausserhalb ±180 in der Nachbarkopie der Welt weiter.
+                var von = L.latLng(fromLatLng);
+                var ziel = L.latLng(toPos[0], toPos[1]);
+                ziel = L.latLng(ziel.lat, ziel.lng + 360 * Math.round((von.lng - ziel.lng) / 360));
+                L.polyline([von, ziel], { color:'#e74c3c', weight:2, opacity:0.8, dashArray:'8 6' }).addTo(routeLineLayer);
+                L.marker(ziel, {
                     icon: L.divIcon({ html:'<div style="background:#e74c3c;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.4)">' + toIcaoSafe + '</div>', className:'', iconSize:[null,null], iconAnchor:[20,-4] }),
                     interactive: false,
                 }).addTo(routeLineLayer);
