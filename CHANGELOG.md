@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.7.9] — 2026-09-25
+
+### Fixed
+- **VATSIM-/IVAO-Sektoren an der Datumsgrenze waren zerschnitten.** Die
+  VATSpy-Grenzen teilen Pazifik-FIRs (Anchorage, Oakland Oceanic, Magadan,
+  Nadi, Auckland …) bei genau ±180° in zwei Stücke. Leaflet zeigte davon
+  zwei Fehler: Der Rand zog an 180° eine senkrechte Naht mitten durch den
+  Sektor, und beim Verschieben der Karte über die Datumsgrenze fehlte die
+  andere Hälfte — Leaflet zeichnet Flächen nur in *einer* Weltkopie.
+  Sektoren, die ±180° berühren, werden jetzt als Fläche ohne Rand plus
+  eigenem Umriss ohne Schnittkante gezeichnet, zusätzlich um ±360°
+  verschoben, samt Beschriftung. Alle anderen Sektoren werden unverändert
+  gezeichnet.
+
+---
+
 ## [4.7.8] — 2026-09-25
 
 ### Fixed

@@ -1309,6 +1309,62 @@
                 } catch(e){return 0;}
             }
 
+            // ════════════════════════════════════════════════════════════
+            //  SEKTOREN AN DER DATUMSGRENZE
+            //
+            //  Die VATSpy-Grenzen teilen Pazifik-FIRs (Anchorage, Oakland
+            //  Oceanic, Magadan, Nadi, Auckland …) bei ±180° in zwei Stuecke.
+            //  Leaflet zeigte davon zwei Fehler:
+            //    * der Rand zog an 180° eine senkrechte Naht mitten durch den
+            //      Sektor,
+            //    * Flaechen gibt es nur in EINER Weltkopie — schiebt man die
+            //      Karte ueber die Datumsgrenze, fehlte die andere Haelfte.
+            //  Nur Sektoren, die ±180° beruehren, werden deshalb als Flaeche
+            //  ohne Rand + eigener Umriss ohne Schnittkante gezeichnet, und
+            //  zusaetzlich um ±360° verschoben. Alle anderen bleiben wie bisher.
+            // ════════════════════════════════════════════════════════════
+            function lmAufDatumsgrenze(lon) { return Math.abs(Math.abs(lon) - 180) < 1e-9; }
+
+            function lmRinge(feature) {
+                var g = feature && feature.geometry;
+                if (!g) return [];
+                if (g.type === 'Polygon') return g.coordinates;
+                if (g.type === 'MultiPolygon') { var r = []; g.coordinates.forEach(function (p) { p.forEach(function (ring) { r.push(ring); }); }); return r; }
+                return [];
+            }
+
+            function lmBeruehrtDatumsgrenze(feature) {
+                return lmRinge(feature).some(function (ring) {
+                    return ring.some(function (c) { return lmAufDatumsgrenze(c[0]); });
+                });
+            }
+
+            /** Umriss ohne die Kanten, die genau auf ±180° liegen. */
+            function lmUmrissOhneNaht(feature) {
+                var linien = [];
+                lmRinge(feature).forEach(function (ring) {
+                    var zug = [];
+                    for (var i = 0; i < ring.length; i++) {
+                        var a = ring[i - 1], b = ring[i];
+                        // Auch +180 → −180 direkt: diese Kante liefe sonst einmal um die Welt.
+                        if (i > 0 && lmAufDatumsgrenze(a[0]) && lmAufDatumsgrenze(b[0])) {
+                            if (zug.length >= 2) linien.push(zug);
+                            zug = [b];
+                        } else {
+                            zug.push(b);
+                        }
+                    }
+                    if (zug.length >= 2) linien.push(zug);
+                });
+                return { type: 'Feature', properties: {}, geometry: { type: 'MultiLineString', coordinates: linien } };
+            }
+
+            /** Dasselbe Feature um `d` Grad Laenge verschoben (Weltkopie). */
+            function lmVerschoben(feature, d) {
+                function schiebe(c) { return typeof c[0] === 'number' ? [c[0] + d].concat(c.slice(1)) : c.map(schiebe); }
+                return { type: 'Feature', properties: feature.properties || {}, geometry: { type: feature.geometry.type, coordinates: schiebe(feature.geometry.coordinates) } };
+            }
+
             function renderActiveSectors(activeFirMap, sectorTarget) {
                 var sectorLayer=sectorTarget||vatsimSectorLayer;
                 sectorLayer.clearLayers();
@@ -1354,26 +1410,56 @@
                     var freqSafe = safeFreq(info.frequency || '') || '—';
                     var firLabelSafe = h((freqSafe && freqSafe !== '—') ? freqSafe : ((firName || '').split(' ')[0] || '—'));
                     var netBadge=info.network==='IVAO'?'<span style="background:#e67e22;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">IVAO</span>':'<span style="background:#27ae60;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">VATSIM</span>'; var popupContent='<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+callsignSafe+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px"><span class="vatsim-popup-route" style="margin:0">'+h(firName)+'</span>'+netBadge+'</div>'+(isUpper?'<div style="font-size:10px;color:#8e44ad;font-weight:700;margin-top:2px">▲ Upper Airspace</div>':'')+'</div><div class="vatsim-popup-body">'+vRow('Frequency',safeFreq(info.frequency || '') || '—')+ctrlInfoLine(info)+'</div></div>';
+                    var anDerDatumsgrenze=false;
                     features.forEach(function(feature){
                         try {
-                            var layer=L.geoJSON(feature,{style:{color:color,weight:borderWeight,opacity:0.75,fillColor:color,fillOpacity:fillOpacity,dashArray:dashArray}});
-                            layer.on('mouseover',function(e){e.target.setStyle({fillOpacity:hoverFill,weight:borderWeight+0.5,dashArray:''}); });
-                            layer.on('mouseout',function(e){e.target.setStyle({fillOpacity:fillOpacity,weight:borderWeight,dashArray:dashArray}); });
-                            layer.bindPopup(popupContent,{maxWidth:260});
-                            layer.addTo(sectorLayer);
+                            if (!lmBeruehrtDatumsgrenze(feature)) {
+                                var layer=L.geoJSON(feature,{style:{color:color,weight:borderWeight,opacity:0.75,fillColor:color,fillOpacity:fillOpacity,dashArray:dashArray}});
+                                layer.on('mouseover',function(e){e.target.setStyle({fillOpacity:hoverFill,weight:borderWeight+0.5,dashArray:''}); });
+                                layer.on('mouseout',function(e){e.target.setStyle({fillOpacity:fillOpacity,weight:borderWeight,dashArray:dashArray}); });
+                                layer.bindPopup(popupContent,{maxWidth:260});
+                                layer.addTo(sectorLayer);
+                                return;
+                            }
+                            // An der Datumsgrenze: Flaeche ohne Rand + Umriss ohne
+                            // Schnittkante, in der Hauptwelt und je eine Weltkopie
+                            // links und rechts. Hover wirkt auf alle Teile zugleich.
+                            anDerDatumsgrenze=true;
+                            var umriss=lmUmrissOhneNaht(feature);
+                            var flaechen=[], raender=[];
+                            [0, 360, -360].forEach(function(d){
+                                var f=d?lmVerschoben(feature,d):feature;
+                                var u=d?lmVerschoben(umriss,d):umriss;
+                                var fl=L.geoJSON(f,{style:{stroke:false,fillColor:color,fillOpacity:fillOpacity}});
+                                var rd=L.geoJSON(u,{interactive:false,style:{color:color,weight:borderWeight,opacity:0.75,dashArray:dashArray,fill:false}});
+                                fl.bindPopup(popupContent,{maxWidth:260});
+                                flaechen.push(fl); raender.push(rd);
+                            });
+                            var hover=function(an){
+                                flaechen.forEach(function(fl){fl.setStyle({fillOpacity:an?hoverFill:fillOpacity});});
+                                raender.forEach(function(rd){rd.setStyle({weight:an?borderWeight+0.5:borderWeight,dashArray:an?'':dashArray});});
+                            };
+                            flaechen.forEach(function(fl){
+                                fl.on('mouseover',function(){hover(true);});
+                                fl.on('mouseout',function(){hover(false);});
+                                fl.addTo(sectorLayer);
+                            });
+                            raender.forEach(function(rd){rd.addTo(sectorLayer);});
                         } catch(e){}
                     });
                     var biggest=features.reduce(function(best,f){return polyArea(f)>polyArea(best)?f:best;},features[0]);
                     var center=polyCenter(biggest);
                     if(!center) return;
                     var labelW=Math.max(short.length*8+16,64), labelH=36;
-                    L.marker(center,{
+                    (anDerDatumsgrenze ? [0, 360, -360] : [0]).forEach(function(d){
+                    L.marker([center[0], center[1] + d],{
                         icon:L.divIcon({html:'<div style="background:'+color+';color:#fff;padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 2px 5px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);white-space:nowrap;text-align:center">'+shortSafe+'<br><span style="font-size:9px;font-weight:400;opacity:0.85">'+firLabelSafe+'</span></div>',className:'',iconSize:[labelW,labelH],iconAnchor:[labelW/2,labelH/2]}),
                         zIndexOffset: -200,
                         interactive: false,
                         keyboard: false,
                         title: info.callsign
                     }).addTo(sectorLayer);
+                    });
                 });
             }
 

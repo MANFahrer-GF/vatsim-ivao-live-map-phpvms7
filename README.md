@@ -17,6 +17,7 @@ Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR secto
 - CARTO Basemaps API key support with a status box that verifies the key
 - Bogus 0/0 positions are ignored instead of drawing phantom aircraft
 - Route line to the destination crosses the date line instead of wrapping around the world
+- Pacific ATC sectors (Anchorage, Oakland Oceanic, Magadan …) are shown whole across the date line
 
 ## Package Contents
 

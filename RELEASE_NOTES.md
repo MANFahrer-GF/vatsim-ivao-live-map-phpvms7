@@ -1,3 +1,43 @@
+## v4.7.9 - ATC sectors across the date line
+
+Release date: 2026-09-25
+
+---
+
+## English
+
+### What happened
+
+The VATSpy boundary data splits Pacific FIRs - Anchorage, Oakland Oceanic, Magadan, Nadi, Auckland and a few more - at exactly ±180° into two pieces. On the map this showed up in two ways when such a sector was staffed:
+
+* the border drew a **vertical seam** at 180° right through the middle of the sector,
+* when you panned the map across the date line, **the other half of the sector was missing** - Leaflet draws shapes in one copy of the world only.
+
+### What changed
+
+Only sectors that touch ±180° are drawn differently: as a filled area without a border plus a separate outline that leaves out the cut edge, and additionally shifted by ±360° so they appear on both sides of the date line, label included. Hovering highlights all parts together, the popup works on every copy.
+
+All other sectors are drawn exactly as before.
+
+---
+
+## Deutsch
+
+### Was passiert ist
+
+Die VATSpy-Grenzdaten teilen Pazifik-FIRs - Anchorage, Oakland Oceanic, Magadan, Nadi, Auckland und einige mehr - bei genau ±180° in zwei Stücke. War so ein Sektor besetzt, zeigte die Karte das auf zwei Arten:
+
+* der Rand zog bei 180° eine **senkrechte Naht** mitten durch den Sektor,
+* schob man die Karte über die Datumsgrenze, **fehlte die andere Hälfte** des Sektors - Leaflet zeichnet Flächen nur in einer Kopie der Welt.
+
+### Was sich geändert hat
+
+Nur Sektoren, die ±180° berühren, werden anders gezeichnet: als Fläche ohne Rand plus eigenem Umriss ohne die Schnittkante, und zusätzlich um ±360° verschoben, damit sie auf beiden Seiten der Datumsgrenze erscheinen - samt Beschriftung. Beim Überfahren leuchten alle Teile gemeinsam auf, das Popup funktioniert auf jeder Kopie.
+
+Alle anderen Sektoren werden genau wie bisher gezeichnet.
+
+---
+
 ## v4.7.8 - Route line across the date line
 
 Release date: 2026-09-25
