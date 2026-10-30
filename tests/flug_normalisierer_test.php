@@ -71,6 +71,7 @@ pruefe('ueber 180 ist ungueltig', !N::nutzbar(10, 181));
 
 // Kennungen, die in eine Adresse gehen
 pruefe('Kennung mit Schraegstrich abgelehnt', N::ausLive(array_merge($live, ['pilot_id' => '../x'])) === null);
+pruefe('Kennung mit Zeilenumbruch am Ende abgelehnt ("$" erlaubt sonst ein \n)', !N::kennungGueltig("1003\n"));
 pruefe('Kennung zu lang abgelehnt', !N::kennungGueltig(str_repeat('a', 41)));
 pruefe('Steuerzeichen aus Texten entfernt', N::ausLive(array_merge($live, ['callsign' => "JAL\x007"]))['callsign'] === 'JAL7');
 pruefe('Phase mit fremden Zeichen verworfen', N::ausLive(array_merge($live, ['current_phase' => '<b>']))['phase'] === null);

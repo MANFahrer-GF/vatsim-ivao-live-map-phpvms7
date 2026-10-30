@@ -121,7 +121,7 @@ final class FlugNormalisierer
     /** Kennung, wie sie in der Adresse steht: nur Buchstaben, Ziffern, `_-.`, hoechstens 40 Zeichen. */
     public static function kennungGueltig(string $wert): bool
     {
-        return preg_match('/^[A-Za-z0-9_.\-]{1,40}$/', $wert) === 1;
+        return preg_match('/^[A-Za-z0-9_.\-]{1,40}$/D', $wert) === 1;
     }
 
     /** Ein Eintrag aus `GET /api/flights` (live, `flightRowToDto`). */
