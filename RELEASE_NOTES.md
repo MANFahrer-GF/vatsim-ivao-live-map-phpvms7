@@ -1,3 +1,59 @@
+## v5.0.0 - Live map 3.0: data through the module, new layout
+
+Release date: 2026-10-30
+
+---
+
+## English
+
+### What changed
+
+* **Flight data always comes through the module** (`/livemap/api/fluege`, 8 s buffer) instead of the phpVMS core helper `render_live_map`. No more doubled VA aircraft, no second base layer without a CARTO key.
+* **Source is a setting** under Admin → Live Map: *phpVMS* (default, the running PIREPs of this site) or *AeroACARS Live* (same flights, fields and phases as the admin web app on live.kant.ovh). The read key for AeroACARS Live stays on the server and is only ever sent to `https://live.kant.ovh`, without redirects. Only a fixed field list leaves the server; pilot names are shortened ("Kenji M.").
+* **New layout:** flight list on the left, flight detail on the right, tools top right (network, weather, map, follow), light and dark following SPTheme. Below 760 px widget width list and detail open as sheets from the bottom. The map fills the window (440–1400 px).
+* Phases, colours, names and order as in the web app.
+* The "Mobile Flights Button" colours and the height argument of the widget call are no longer used.
+
+### Fixed
+
+* Below zoom 3 **all aircraft disappeared** (the marker pane itself was hidden).
+* Track and marker of a flight across 180° always sit in the world copy the map currently shows.
+* A short outage of the source keeps the last good state (marked stale, with "retry"); a wrong key empties the list.
+
+### Upgrade
+
+Copy `LiveMap/` to `modules/` and **all three** widget files to your theme's `widgets/` folder. The module adds routes: if your site caches routes, run `php artisan route:cache`, otherwise the map stays empty. Then `php artisan view:clear`. Without a stored source the map uses phpVMS, nothing else to do.
+
+Install ZIP attached: `LiveMap-full-package-v5.0.0.zip`.
+
+---
+
+## Deutsch
+
+### Was sich geändert hat
+
+* **Die Flugdaten kommen immer über das Modul** (`/livemap/api/fluege`, Puffer 8 s) statt über `render_live_map` des phpVMS-Kerns. Keine doppelten VA-Flieger mehr, keine zweite Grundebene ohne CARTO-Schlüssel.
+* **Die Quelle ist eine Einstellung** unter Admin → Live Map: *phpVMS* (Standard, die laufenden PIREPs dieser Seite) oder *AeroACARS Live* (dieselben Flüge, Felder und Phasen wie die Admin-Webapp auf live.kant.ovh). Der Lese-Schlüssel für AeroACARS Live bleibt auf dem Server und geht nur an `https://live.kant.ovh`, ohne Weiterleitungen. Nur eine feste Feldliste verlässt den Server, Pilotennamen werden gekürzt („Kenji M.“).
+* **Neue Gestaltung:** Flugliste links, Flugdetail rechts, Werkzeuge oben rechts (Netzwerk, Wetter, Karte, Folgen), hell und dunkel nach SPTheme. Unter 760 px Widget-Breite öffnen Liste und Detail als Blatt von unten. Die Karte füllt das Fenster (440–1400 px).
+* Phasen, Farben, Namen und Reihenfolge wie in der Webapp.
+* Die Farben „Mobile Flights Button“ und die Höhe aus dem Widget-Aufruf werden nicht mehr benutzt.
+
+### Behoben
+
+* Unter Zoom 3 **verschwanden alle Flugzeuge** (ausgeblendet wurde die Marker-Ebene selbst).
+* Spur und Marker eines Flugs über 180° liegen immer in der Weltkopie, in der die Karte gerade steht.
+* Eine kurze Störung der Quelle lässt den letzten guten Stand stehen (als veraltet markiert, mit „Erneut versuchen“); ein falscher Schlüssel leert die Liste.
+
+### Aktualisieren
+
+`LiveMap/` nach `modules/` kopieren, **alle drei** Widget-Dateien in den `widgets/`-Ordner des Themes. Das Modul bringt neue Routen mit: Bei gecachten Routen `php artisan route:cache` ausführen, sonst bleibt die Karte leer. Danach `php artisan view:clear`. Ohne gespeicherte Quelle nimmt die Karte phpVMS, sonst ist nichts zu tun.
+
+Install-ZIP angehängt: `LiveMap-full-package-v5.0.0.zip`.
+
+**Full changelog:** https://github.com/MANFahrer-GF/vatsim-ivao-live-map-phpvms7/compare/v4.7.9...v5.0.0
+
+---
+
 ## v4.7.9 - ATC sectors across the date line
 
 Release date: 2026-09-25

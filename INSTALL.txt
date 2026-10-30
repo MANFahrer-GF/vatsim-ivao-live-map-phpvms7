@@ -1,4 +1,4 @@
-LiveMap v4.7.7 - Install Package
+LiveMap v5.0.0 - Install Package
 ================================
 
 Contents:
@@ -6,6 +6,38 @@ Contents:
   live_map.blade.php           -> theme widget
   live_map_styles.blade.php    -> theme widget
   live_map_scripts.blade.php   -> theme widget
+
+New in v5.0.0:
+
+  Flight data now always comes through the module (/livemap/api/fluege,
+  8 s buffer) instead of the phpVMS core helper render_live_map. The
+  source is a setting under Admin -> Live Map:
+
+  - phpVMS (default): the running PIREPs of this site, as before.
+  - AeroACARS Live: the same flights, fields and phases as the admin
+    web app on live.kant.ovh. Needs a read key; the key stays on the
+    server and is only ever sent to https://live.kant.ovh.
+
+  Without a stored source the map uses phpVMS - nothing to do after the
+  upgrade. Only a fixed field list leaves the server, pilot names are
+  shortened ("Kenji M.").
+
+  New layout: flight list on the left, flight detail on the right, tools
+  top right (network, weather, map, follow); below 760 px widget width
+  list and detail open as sheets from the bottom. The map fills the
+  window (440-1400 px). The "Mobile Flights Button" colours and the
+  height argument of the widget call are no longer used.
+
+  Fixed: below zoom 3 all aircraft disappeared; tracks and markers of a
+  flight across 180 degrees stay in the world copy currently shown; a
+  short outage of the source keeps the last good state (marked stale).
+
+  UPGRADE: the module adds routes. If your site caches routes
+  (bootstrap/cache/routes-v7.php exists), run "php artisan route:cache"
+  after copying, otherwise /livemap/api/fluege answers 404 and the map
+  stays empty. Then "php artisan view:clear". Replace ALL THREE widget
+  files - the 5.0 widget does not work with the old module and vice
+  versa.
 
 Fixed in v4.7.7 (reported by ProAvia):
 

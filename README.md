@@ -1,6 +1,6 @@
 # VATSIM + IVAO Live Map for phpVMS 7
 
-Version: **4.7.7** (2026-09-01)
+Version: **5.0.0** (2026-10-30)
 
 Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR sectors, VA flight panels, weather overlays, and an admin-driven configuration module.
 
@@ -18,6 +18,7 @@ Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR secto
 - Bogus 0/0 positions are ignored instead of drawing phantom aircraft
 - Route line to the destination crosses the date line instead of wrapping around the world
 - Pacific ATC sectors (Anchorage, Oakland Oceanic, Magadan …) are shown whole across the date line
+- 5.0: flight data always fetched through the module (`/livemap/api/fluege`), source phpVMS (default) or AeroACARS Live; own Leaflet map, new layout, map fills the window
 
 ## Package Contents
 

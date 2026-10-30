@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [5.0.0] — unveröffentlicht (Zweig feat/livemap-3)
+## [5.0.0] — 2026-10-30
 
 AeroACARS 3.0, Pflichtenheft P-11.11 (A-75, N-12, F-020).
 
