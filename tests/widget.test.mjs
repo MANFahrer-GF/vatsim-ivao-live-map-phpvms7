@@ -123,3 +123,15 @@ test('Kurze Stoerung haelt den letzten Stand, falscher Schluessel nicht', () => 
   for (const c of ['nicht_erreichbar', 'netz', 'ungueltig', 'phpvms']) assert.equal(LM3.fehlerIstVoruebergehend(c), true, c);
   for (const c of ['abgelehnt', 'kein_schluessel', 'adresse']) assert.equal(LM3.fehlerIstVoruebergehend(c), false, c);
 });
+
+test('Jeder Fehlercode des Servers hat im Widget einen deutschen und englischen Text', () => {
+  const controller = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Http', 'Controllers', 'LiveFlightsController.php'), 'utf8');
+  const codes = new Set([...controller.matchAll(/'fehler'\s*=>\s*'([a-z_]+)'/g)].map((m) => m[1]));
+  for (const c of ['ungueltig', 'phpvms', 'abgelehnt', 'nicht_erreichbar', 'adresse', 'kein_schluessel']) codes.add(c);
+  assert.ok(codes.size >= 6);
+  const bloecke = [...skript.matchAll(/fehler:\s*\{([^}]*)\}/g)].map((m) => m[1]);
+  assert.equal(bloecke.length, 2, 'zwei Sprachen erwartet');
+  for (const block of bloecke) for (const c of codes) assert.match(block, new RegExp('\\b' + c + ':'), c);
+  // und jeder Code ist entweder "kurze Stoerung" (Stand halten) oder nicht — nie undefiniert
+  for (const c of codes) assert.equal(typeof LM3.fehlerIstVoruebergehend(c), 'boolean', c);
+});
