@@ -1,8 +1,8 @@
 {
     "name": "LiveMap",
-    "version": "4.7.9",
+    "version": "5.0.0",
     "alias": "livemap",
-    "description": "Live Map admin settings and weather proxy",
+    "description": "Live Map admin settings, flight data proxy and weather proxy",
     "keywords": [
         "phpvms",
         "livemap",

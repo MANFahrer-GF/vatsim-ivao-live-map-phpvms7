@@ -4,6 +4,40 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.0.0] — unveröffentlicht (Zweig feat/livemap-3)
+
+AeroACARS 3.0, Pflichtenheft P-11.11 (A-75, N-12, F-020).
+
+### Changed / Geändert
+- **Datenquelle der Flüge ist eine Einstellung.** *phpVMS* (Standard, laufende
+  PIREPs dieser Seite) oder *AeroACARS Live* (dieselben Flüge, Felder und
+  Phasen wie die Admin-Webapp auf live.kant.ovh). Abgerufen wird immer über
+  das Modul (`/livemap/api/fluege`, Puffer 8 s); der Lese-Schlüssel für
+  AeroACARS Live bleibt auf dem Server. Nur eine feste Feldliste verlässt den
+  Server, Pilotennamen gekürzt („Kenji M.").
+  *Flight data source is now a setting (phpVMS or AeroACARS Live), always
+  fetched server-side; the read key never reaches the browser.*
+- **Eigene Karte statt `render_live_map` des phpVMS-Kerns.** Keine doppelten
+  VA-Flieger, keine zweite Grundebene ohne CARTO-Schlüssel mehr.
+  *Own Leaflet map instead of the core helper.*
+- **Neue Gestaltung nach den GSG-Markenregeln** (Navy/Rot/Gold, hell und
+  dunkel nach SPTheme): Flugliste links mit den Feldern der Flugtafel,
+  Flugdetail rechts mit den Feldern des Webapp-Flugdetails, Werkzeuge oben
+  rechts (Netzwerk, Wetter, Karte, Folgen). Unter 760 px Widget-Breite
+  Liste und Detail als Blatt von unten.
+  *Redesign following the GSG brand rules, responsive by widget width.*
+- Phasen, Farben, Namen, Reihenfolge und „Level"-Anzeige wie die Webapp
+  (Test vergleicht mit einer Abschrift von `phaseColors.ts`).
+
+### Fixed / Behoben
+- Unter Zoom 3 verschwand die ganze Marker-Ebene (Flughafen-Lotsen-Logik
+  blendete das Elternelement aus — das war die Ebene selbst).
+  *Below zoom 3 the whole marker pane was hidden.*
+- Spur und Marker eines Flugs über 180° liegen immer in der Weltkopie, in der
+  die Karte gerade steht.
+
+---
+
 ## [4.7.9] — 2026-09-25
 
 ### Fixed

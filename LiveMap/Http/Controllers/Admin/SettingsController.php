@@ -37,6 +37,9 @@ class SettingsController extends Controller
             'weather_default_opacity' => 'required|numeric|min:0.2|max:1',
             'owm_api_key'             => 'nullable|string|max:128',
             'carto_api_key'           => 'nullable|string|max:128',
+            'flight_source'           => 'required|in:phpvms,aeroacars',
+            'live_url'                => 'nullable|string|max:200',
+            'live_key'                => 'nullable|string|max:256',
             'ui_primary_color'           => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'ui_accent_color'            => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'color_box_background'       => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
@@ -95,6 +98,25 @@ class SettingsController extends Controller
             }
         }
 
+        // Datenquelle der Fluege. Der Schluessel fuer AeroACARS Live folgt
+        // derselben Mechanik wie die anderen: leer heisst "behalten", nur das
+        // Haekchen loescht. Er geht nie an den Browser (LiveFlightsController).
+        $currentLiveKey = trim((string) $this->lmGet('acars.livemap_live_key', ''));
+        $submittedLiveKey = trim((string) ($validated['live_key'] ?? ''));
+        $liveKey = $submittedLiveKey !== ''
+            ? $submittedLiveKey
+            : ($request->boolean('live_key_clear') ? '' : $currentLiveKey);
+        $liveUrl = rtrim(trim((string) ($validated['live_url'] ?? '')), '/');
+        if ($liveUrl === '') {
+            $liveUrl = \Modules\LiveMap\Http\Controllers\LiveFlightsController::STANDARD_BASIS;
+        }
+        if (!preg_match('#^https://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$#', $liveUrl)
+            && !preg_match('#^http://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?$#', $liveUrl)) {
+            return back()->withInput()->withErrors([
+                'live_url' => 'Die Adresse muss mit https:// beginnen und darf keinen Pfad enthalten.',
+            ]);
+        }
+
         $layoutMode = $validated['layout_mode'];
         $primaryColor = $this->normalizeHexColor($validated['ui_primary_color'] ?? '', '#1A2A4A');
         $accentColor = $this->normalizeHexColor($validated['ui_accent_color'] ?? '', '#243B6A');
@@ -112,7 +134,10 @@ class SettingsController extends Controller
             'acars.livemap_weather_default_opacity'     => $validated['weather_default_opacity'],
             'acars.livemap_owm_api_key'                 => $owmApiKey,
             'acars.carto_api_key'                       => $cartoKey,
-            'acars.livemap_show_network_box'            => $request->boolean('show_network_box'),
+            'acars.livemap_quelle'                      => $validated['flight_source'],
+            'acars.livemap_live_url'                    => $liveUrl,
+            'acars.livemap_live_key'                    => $liveKey,
+            'acars.livemap_show_network_box'          => $request->boolean('show_network_box'),
             'acars.livemap_default_network_vatsim'      => $request->boolean('default_network_vatsim'),
             'acars.livemap_default_network_ivao'        => $request->boolean('default_network_ivao'),
             'acars.livemap_default_show_pilots'         => $request->boolean('default_show_pilots'),
@@ -622,6 +647,26 @@ class SettingsController extends Controller
             'acars.carto_api_key' => [
                 'name'        => 'Live Map: CARTO Basemaps API Key',
                 'description' => 'Required since 26 Aug 2026 for the CARTO light/dark basemaps',
+                'type'        => 'string',
+                'default'     => '',
+            ],
+            // Datenquelle der Fluege (v5). Ohne Eintrag hier wuerde nichts
+            // gespeichert — siehe Hinweis beim CARTO-Schluessel.
+            'acars.livemap_quelle' => [
+                'name'        => 'Live Map: Flight Data Source',
+                'description' => 'phpvms = running PIREPs of this site, aeroacars = AeroACARS Live server',
+                'type'        => 'string',
+                'default'     => 'phpvms',
+            ],
+            'acars.livemap_live_url' => [
+                'name'        => 'Live Map: AeroACARS Live URL',
+                'description' => 'Base address of the AeroACARS Live server',
+                'type'        => 'string',
+                'default'     => \Modules\LiveMap\Http\Controllers\LiveFlightsController::STANDARD_BASIS,
+            ],
+            'acars.livemap_live_key' => [
+                'name'        => 'Live Map: AeroACARS Live Read Key',
+                'description' => 'Read key for the flight list, kept server-side',
                 'type'        => 'string',
                 'default'     => '',
             ],

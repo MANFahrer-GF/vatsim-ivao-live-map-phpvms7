@@ -1,3 +1,4 @@
+<!-- lm3:anfang -->
 <div class="row">
     <div class="col-xxl-12 col-xl-12 col-lg-12 col-md-12 col-sm-12 mb-3">
         <div class="card border mb-0">
@@ -81,6 +82,9 @@
                         return $default;
                     };
 
+                    // Sprache der Bedienelemente: Deutsch, wenn die Seite deutsch ist.
+                    $lmDe = str_starts_with(strtolower((string) app()->getLocale()), 'de');
+
                     $oldStyle = $lmBool($lmSetting('acars.livemap_old_style', false), false);
                     $showTopFlights = $oldStyle
                         ? false
@@ -163,6 +167,14 @@
                         'mobileNetworkOpen'       => $lmBool($lmSetting('acars.livemap_mobile_network_open', false), false),
                         'mobileButtonInactive'    => $mobileButtonRgba,
                         'mobileButtonActive'      => $mobileButtonActiveRgba,
+                        // v5: Fluege kommen ueber das Modul (Quelle laut Einstellung).
+                        'flightsApi'              => rtrim(url('/livemap/api/fluege'), '/'),
+                        'quelle'                  => class_exists(\Modules\LiveMap\Http\Controllers\LiveFlightsController::class)
+                            ? \Modules\LiveMap\Http\Controllers\LiveFlightsController::quelle() : 'phpvms',
+                        'refreshMs'               => 10000,
+                        'sprache'                 => $lmDe ? 'de' : 'en',
+                        'center'                  => [(float) ($center[0] ?? 50), (float) ($center[1] ?? 10)],
+                        'zoom'                    => (int) ($zoom ?? 5),
                     ];
                 @endphp
 
@@ -205,299 +217,139 @@
                 @endif
 
                 {{-- ══════════════════════════════════════════════════════════
-                     VA ACTIVE FLIGHTS PANEL (TOP-CENTER) — neues Design
-                     Header: dunkelblau, zugeklappt/aufgeklappt
-                     Tabs: Active Flights | Planned Flights
-                     Scroll ab 5 Einträgen mit Fade-Effekt
+                     LIVE-KARTE v5 (AeroACARS 3.0, Pflichtenheft P-11.11)
+                     Links: Live-Fluege (Felder wie die Flugtafel der Webapp)
+                     Rechts: Flugdetail (Felder wie das Flugdetail der Webapp)
+                     Oben rechts: Werkzeuge (Netz, Wetter, Folgen)
+                     Schmal (< 760 px Widget-Breite): Liste und Detail als
+                     Blatt von unten. Die Breite misst das Skript am Widget,
+                     nicht am Fenster — die Seitenleiste des Themes zaehlt mit.
                 ══════════════════════════════════════════════════════════ --}}
+                <div class="live-map-wrapper lm3" id="lm3" data-quelle="{{ $liveMapUiConfig['quelle'] }}">
+                    <div id="map" role="region" aria-label="{{ $lmDe ? 'Live-Karte' : 'Live map' }}"></div>
 
-                <div class="live-map-wrapper">
-                    <div id="map"></div>
-
-                    {{-- ══ VA FLIGHTS PANEL (TOP-CENTER) ══ --}}
-                    <div id="va-flights-panel">
-
-                        {{-- Collapsed Header (sichtbar wenn zugeklappt) --}}
-                        <div id="va-header-collapsed">
-                            <div class="va-header-left">
-                                <div class="va-header-stat va-stat-active">
-                                    <span class="va-hdr-icon">✈</span>
-                                    <span>Active Flights</span>
-                                    <span class="va-hdr-num" id="va-count-active-hdr">—</span>
-                                </div>
-                                <div class="va-header-divider"></div>
-                                <div class="va-header-stat va-stat-planned">
-                                    <span class="va-hdr-icon">📋</span>
-                                    <span>Planned Flights</span>
-                                    <span class="va-hdr-num" id="va-count-planned-hdr">—</span>
-                                </div>
+                    {{-- ══ Live-Fluege ══ --}}
+                    <section class="lm3-panel" id="lm3-panel" aria-labelledby="lm3-titel">
+                        <header class="lm3-panel-kopf">
+                            <h2 class="lm3-titel" id="lm3-titel">
+                                <span class="lm3-punkt" id="lm3-status-punkt" aria-hidden="true"></span>
+                                {{ $lmDe ? 'Live-Flüge' : 'Live flights' }}
+                                <span class="lm3-zahl" id="lm3-zahl">—</span>
+                            </h2>
+                            <button type="button" class="lm3-ikon" id="lm3-panel-zu" aria-expanded="true" aria-controls="lm3-panel-inhalt"
+                                    title="{{ $lmDe ? 'Liste ein-/ausklappen' : 'Collapse / expand list' }}">
+                                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                        </header>
+                        <div class="lm3-panel-inhalt" id="lm3-panel-inhalt">
+                            <div class="lm3-tabs" role="tablist">
+                                <button type="button" role="tab" id="lm3-tab-aktiv" aria-selected="true">
+                                    {{ $lmDe ? 'Aktiv' : 'Active' }} <span class="lm3-tabzahl" id="lm3-n-aktiv">0</span>
+                                </button>
+                                <button type="button" role="tab" id="lm3-tab-geplant" aria-selected="false">
+                                    {{ $lmDe ? 'Geplant' : 'Planned' }} <span class="lm3-tabzahl" id="lm3-n-geplant">0</span>
+                                </button>
                             </div>
-                            <div class="va-header-chevron" id="va-chevron-collapsed">▼</div>
+                            <div class="lm3-filter" id="lm3-filter">
+                                <label for="lm3-phase">{{ $lmDe ? 'Phase' : 'Phase' }}</label>
+                                <select id="lm3-phase"></select>
+                            </div>
+                            <p class="lm3-meldung" id="lm3-meldung" role="status" hidden></p>
+                            <div class="lm3-liste" id="lm3-liste" role="list"></div>
                         </div>
+                    </section>
 
-                        {{-- Expanded Body (sichtbar wenn aufgeklappt) --}}
-                        <div id="va-flights-body">
+                    {{-- ══ Flugdetail (vom Skript gefuellt) ══ --}}
+                    <aside class="lm3-detail" id="lm3-detail" aria-live="polite" hidden></aside>
 
-                            {{-- Expanded Header (klickbar zum Schließen) --}}
-                            <div class="va-header-expanded" id="va-header-expanded">
-                                <div class="va-header-left">
-                                    <div class="va-header-stat va-stat-active">
-                                        <span class="va-hdr-icon">✈</span>
-                                        <span>Active Flights</span>
-                                        <span class="va-hdr-num" id="va-count-active-exp">—</span>
-                                    </div>
-                                    <div class="va-header-divider"></div>
-                                    <div class="va-header-stat va-stat-planned">
-                                        <span class="va-hdr-icon">📋</span>
-                                        <span>Planned Flights</span>
-                                        <span class="va-hdr-num" id="va-count-planned-exp">—</span>
-                                    </div>
-                                </div>
-                                <div class="va-header-chevron is-open">▼</div>
-                            </div>
-
-                            {{-- Tabs --}}
-                            <div class="va-tabs">
-                                <div class="va-tab active" id="va-tab-btn-active">
-                                    ✈ Active <span class="va-tab-count" id="va-tab-count-active">0</span>
-                                </div>
-                                <div class="va-tab" id="va-tab-btn-planned">
-                                    📋 Planned <span class="va-tab-count" id="va-tab-count-planned">0</span>
-                                </div>
-                            </div>
-
-                            {{-- ── Active Flights Tab ── --}}
-                            <div class="va-tab-panel active" id="va-tab-active">
-                                <div class="va-thead va-g-act">
-                                    <div>Flight</div>
-                                    <div>Route</div>
-                                    <div>Alt</div>
-                                    <div>Spd</div>
-                                    <div>Distance</div>
-                                    <div class="va-status-center">Status</div>
-                                    <div>Pilot</div>
-                                </div>
-                                <div class="va-scroll-wrap" id="va-scroll-active">
-                                    <div class="va-scroll-body" id="va-rows-active">
-                                        <div class="va-table-info">Loading…</div>
-                                    </div>
-                                    <div class="va-scroll-hint">scroll for more</div>
-                                </div>
-                            </div>
-
-                            {{-- ── Planned Flights Tab ── --}}
-                            <div class="va-tab-panel" id="va-tab-planned">
-                                <div class="va-thead va-g-plan">
-                                    <div>Flight</div>
-                                    <div>Pilot</div>
-                                </div>
-                                <div class="va-scroll-wrap" id="va-scroll-planned">
-                                    <div class="va-scroll-body" id="va-rows-planned">
-                                        <div class="va-table-info">Loading…</div>
-                                    </div>
-                                    <div class="va-scroll-hint">scroll for more</div>
-                                </div>
-                            </div>
-
-                        </div>
+                    {{-- ══ Werkzeuge ══ --}}
+                    <div class="lm3-werkzeuge" role="toolbar" aria-label="{{ $lmDe ? 'Kartenwerkzeuge' : 'Map tools' }}">
+                        <button type="button" class="lm3-wz lm3-wz-fluege" id="mob-toggle-panel" aria-pressed="false" aria-controls="lm3-panel">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="currentColor"/></svg>
+                            <span>{{ $lmDe ? 'Flüge' : 'Flights' }}</span>
+                        </button>
+                        <button type="button" class="lm3-wz" id="lm3-btn-netz" aria-expanded="false" aria-controls="vatsim-box">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                            <span>{{ $lmDe ? 'Netzwerk' : 'Network' }}</span>
+                            <span class="vatsim-dot" id="vatsimDot" aria-hidden="true"></span>
+                        </button>
+                        <button type="button" class="lm3-wz" id="lm3-btn-wetter" aria-expanded="false" aria-controls="weather-box">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.6-7.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                            <span>{{ $lmDe ? 'Wetter' : 'Weather' }}</span>
+                        </button>
+                        <button type="button" class="lm3-wz" id="lm3-btn-karte" aria-expanded="false" aria-controls="lm3-karte-box">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z M3 13l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                            <span>{{ $lmDe ? 'Karte' : 'Map' }}</span>
+                        </button>
+                        <button type="button" class="lm3-wz vatsim-btn-follow" id="btnFollowFlight" aria-pressed="false">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2"/></svg>
+                            <span>{{ $lmDe ? 'Folgen' : 'Follow' }}</span>
+                        </button>
                     </div>
 
-                    {{-- FLIGHT INFO (TOP-RIGHT) --}}
-                    <div id="map-info-box" class="map-info-card-big" rv-show="pirep.id">
-                        <div class="map-info-card-header">
-                            <img id="map-airline-logo"
-                                 class="map-airline-logo"
-                                 rv-src="pirep.airline.logo"
-                                 alt=""
-                                 onerror="this.style.display='none'"
-                                 onload="this.style.display='block'">
-                            <div class="map-info-route-big">
-                                { pirep.dpt_airport.icao }&nbsp;›&nbsp;{ pirep.arr_airport.icao }
-                            </div>
-                        </div>
-                        <div class="map-info-card-body">
-                            <div class="map-info-row-big">
-                                <strong class="map-info-callsign">{ pirep.airline.icao }{ pirep.flight_number }</strong>
-                            </div>
-                            <div class="map-info-row-big">
-                                { pirep.aircraft.registration } ({ pirep.aircraft.icao })
-                            </div>
-                            <hr>
-                            <div class="map-info-row-big">{ pirep.position.altitude } ft</div>
-                            <div class="map-info-row-big">{ pirep.position.gs } kts</div>
-                            <div class="map-info-row-big">Time flown: { pirep.flight_time | time_hm }</div>
-                            <hr>
-                            <span class="status-badge"
-                                  rv-text="pirep.status_text"
-                                  rv-data-status="pirep.status_text"></span>
-                        </div>
-                    </div>
-
-                    {{-- ══ CREW BOARDING PASS — initial vollständig versteckt ══ --}}
-
-                    <div id="va-boarding-pass">
-                        <div class="bp-head">
-                            <div class="bp-head-left">
-                                <div class="bp-logo-wrap" id="bp-logo-wrap">
-                                    <img id="bp-logo" alt="" onerror="this.parentElement.classList.add('no-logo');this.style.display='none'">
-                                </div>
-                                <span class="bp-callsign" id="bp-callsign">—</span>
-                            </div>
-                            <button class="bp-close" onclick="window.vaInfoCardClose()" title="Close">✕</button>
-                        </div>
-                        <div class="bp-route">
-                            <div class="bp-icao">
-                                <div class="bp-icao-code" id="bp-dep">—</div>
-                                <div class="bp-icao-label" id="bp-dep-name"></div>
-                            </div>
-                            <div class="bp-arrow">
-                                <span class="bp-arrow-icon">✈</span>
-                                <span class="bp-arrow-dist" id="bp-dist"></span>
-                            </div>
-                            <div class="bp-icao">
-                                <div class="bp-icao-code" id="bp-arr">—</div>
-                                <div class="bp-icao-label" id="bp-arr-name"></div>
-                            </div>
-                        </div>
-                        <div class="bp-grid">
-                            <div class="bp-cell"><div class="bp-cell-label">Pilot</div><div class="bp-cell-value" id="bp-pilot">—</div></div>
-                            <div class="bp-cell"><div class="bp-cell-label">Aircraft</div><div class="bp-cell-value" id="bp-aircraft">—</div></div>
-                            <div class="bp-cell"><div class="bp-cell-label">Altitude</div><div class="bp-cell-value" id="bp-alt">—</div></div>
-                            <div class="bp-cell"><div class="bp-cell-label">Speed</div><div class="bp-cell-value" id="bp-spd">—</div></div>
-                            <div class="bp-cell"><div class="bp-cell-label">Heading</div><div class="bp-cell-value" id="bp-hdg">—</div></div>
-                            <div class="bp-cell"><div class="bp-cell-label">Progress</div>
-                                <div class="bp-cell-value" id="bp-progress">—</div>
-                                <div class="bp-progress-wrap">
-                                    <div class="bp-progress-bar-bg"><div class="bp-progress-bar-fill" id="bp-progress-bar"></div></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="bp-footer">
-                            <span class="bp-status status-badge" id="bp-status" data-status=""></span>
-                            <span class="bp-crew-label">Crew Pass</span>
-                        </div>
-                    </div>
-
-                    {{-- WEATHER BOX (BOTTOM-LEFT) --}}
-                    <div class="map-weather-box-left" id="weather-box">
-                        <div class="map-weather-title" id="weather-title" onclick="window.mobToggleWeather()">Weather Layers <span id="weather-chevron" class="weather-chevron">▼</span></div>
-                        <div id="weather-content">
-                        <div class="map-weather-buttons">
-                            <button id="btnClouds" type="button" class="weather-btn" title="Clouds">
-                                <i class="fas fa-cloud"></i><span>Clouds</span>
-                            </button>
-                            <button id="btnRadar" type="button" class="weather-btn" title="Radar / Precipitation">
-                                <i class="fas fa-cloud-sun-rain"></i><span>Radar</span>
-                            </button>
-                            <button id="btnStorms" type="button" class="weather-btn" title="Pressure (storm proxy)">
-                                <i class="fas fa-bolt"></i><span>Pressure</span>
-                            </button>
-                            <button id="btnWind" type="button" class="weather-btn" title="Wind">
-                                <i class="fas fa-wind"></i><span>Wind</span>
-                            </button>
-                            <button id="btnTemp" type="button" class="weather-btn" title="Temperature">
-                                <i class="fas fa-thermometer-half"></i><span>Temp</span>
-                            </button>
-                            <button id="btnCombined" type="button" class="weather-btn" title="Combined mode">
-                                <i class="fas fa-layer-group"></i><span>Combo</span>
-                            </button>
-                            <button id="btnDarkMap" type="button" class="weather-btn weather-btn-full" title="Dark map">
-                                <i class="fas fa-moon"></i><span>Dark map</span>
-                            </button>
-                        </div>
-                        <div class="weather-slider-wrapper">
-                            <span>Opacity</span>
-                            <input type="range" id="weatherOpacity" min="0.2" max="1" step="0.05" value="1">
-                        </div>
-                    </div><!-- end weather-content -->
-                    </div><!-- end weather-box -->
-
-                    {{-- NETWORK BOX (BOTTOM-RIGHT) --}}
-                    {{-- Mobile Toggle Buttons --}}
-                    <button id="mob-toggle-panel" onclick="window.mobTogglePanel()">
-                        ✈ Flights ▼
-                    </button>
-                    <div class="map-vatsim-box" id="vatsim-box">
-                        <div class="map-vatsim-title" id="vatsim-title" onclick="window.mobToggleVatsimContent()">
-                            <span class="vatsim-dot" id="vatsimDot"></span>
-                            Network <span id="vatsim-chevron" class="vatsim-chevron">▼</span>
-                        </div>
+                    {{-- ══ Netzwerk (VATSIM / IVAO) ══ --}}
+                    <div class="lm3-box map-vatsim-box" id="vatsim-box" hidden>
+                        <div class="lm3-box-titel">{{ $lmDe ? 'Netzwerk' : 'Network' }}</div>
                         <div id="vatsim-content">
-                        <div class="map-network-toggle-row">
-                            <button id="btnNetVatsim" type="button"
-                                    class="map-network-toggle-btn map-network-toggle-btn-vatsim"
-                                    title="VATSIM an/aus">
-                                <span id="vatsimNetDot" class="map-network-dot"></span>
-                                VATSIM
-                            </button>
-                            <button id="btnNetIvao" type="button"
-                                    class="map-network-toggle-btn map-network-toggle-btn-ivao"
-                                    title="IVAO an/aus">
-                                <span id="ivaoNetDot" class="map-network-dot"></span>
-                                IVAO
-                            </button>
-                        </div>
-
-                        <div class="map-vatsim-buttons">
-                            <button id="btnVatsimPilots" type="button" class="vatsim-btn" title="Piloten anzeigen">
-                                <i class="fas fa-plane"></i><span>Pilots</span>
-                            </button>
-                            <button id="btnVatsimCtrl" type="button" class="vatsim-btn active" title="Controller anzeigen">
-                                <i class="fas fa-headset"></i><span>Controllers</span>
-                            </button>
-                            <button id="btnVatsimSectors" type="button" class="vatsim-btn vatsim-btn-full">
-                                <i class="fas fa-draw-polygon"></i><span>FIR Sectors</span>
-                            </button>
-                            <button id="btnFollowFlight" type="button" class="vatsim-btn active vatsim-btn-full vatsim-btn-follow">
-                                <i class="fas fa-crosshairs"></i><span>Follow Flight</span>
-                            </button>
-                        </div>
-
-                        <div class="map-network-stats-row">
-                            <div id="vatsimStats" class="map-network-stat map-network-stat-vatsim">—</div>
-                            <div id="ivaoStats" class="map-network-stat map-network-stat-ivao">...</div>
-                        </div>
-
-                        <div class="map-network-legend">
-                            <div class="map-network-legend-item">
-                                <span class="map-network-legend-badge map-network-legend-badge-delivery">D</span>
-                                <span class="map-network-legend-label">Delivery</span>
+                            <div class="lm3-reihe">
+                                <button id="btnNetVatsim" type="button" class="lm3-schalter map-network-toggle-btn map-network-toggle-btn-vatsim">
+                                    <span id="vatsimNetDot" class="map-network-dot"></span> VATSIM
+                                </button>
+                                <button id="btnNetIvao" type="button" class="lm3-schalter map-network-toggle-btn map-network-toggle-btn-ivao">
+                                    <span id="ivaoNetDot" class="map-network-dot"></span> IVAO
+                                </button>
                             </div>
-                            <div class="map-network-legend-item">
-                                <span class="map-network-legend-badge map-network-legend-badge-ground">G</span>
-                                <span class="map-network-legend-label">Ground</span>
+                            <div class="lm3-raster">
+                                <button id="btnVatsimPilots" type="button" class="lm3-schalter vatsim-btn">{{ $lmDe ? 'Piloten' : 'Pilots' }}</button>
+                                <button id="btnVatsimCtrl" type="button" class="lm3-schalter vatsim-btn">{{ $lmDe ? 'Lotsen' : 'Controllers' }}</button>
+                                <button id="btnVatsimSectors" type="button" class="lm3-schalter vatsim-btn lm3-breit">{{ $lmDe ? 'FIR-Sektoren' : 'FIR sectors' }}</button>
                             </div>
-                            <div class="map-network-legend-item">
-                                <span class="map-network-legend-badge map-network-legend-badge-tower">T</span>
-                                <span class="map-network-legend-label">Tower</span>
+                            <div class="lm3-statistik">
+                                <div id="vatsimStats" class="map-network-stat map-network-stat-vatsim">—</div>
+                                <div id="ivaoStats" class="map-network-stat map-network-stat-ivao">…</div>
                             </div>
-                            <div class="map-network-legend-item">
-                                <span class="map-network-legend-badge map-network-legend-badge-appatis">A<span class="map-network-legend-ai-suffix">i</span></span>
-                                <span class="map-network-legend-label">App / ATIS</span>
-                            </div>
-                            <div class="map-network-legend-item">
-                                <span class="map-network-legend-badge map-network-legend-badge-center">C</span>
-                                <span class="map-network-legend-label">Center</span>
-                            </div>
-                            <div class="map-network-legend-item">
-                                <span class="map-network-legend-badge map-network-legend-badge-atis">i</span>
-                                <span class="map-network-legend-label">ATIS only</span>
+                            <div class="map-network-legend">
+                                <div class="map-network-legend-item"><span class="map-network-legend-badge map-network-legend-badge-delivery">D</span><span class="map-network-legend-label">Delivery</span></div>
+                                <div class="map-network-legend-item"><span class="map-network-legend-badge map-network-legend-badge-ground">G</span><span class="map-network-legend-label">Ground</span></div>
+                                <div class="map-network-legend-item"><span class="map-network-legend-badge map-network-legend-badge-tower">T</span><span class="map-network-legend-label">Tower</span></div>
+                                <div class="map-network-legend-item"><span class="map-network-legend-badge map-network-legend-badge-appatis">A<span class="map-network-legend-ai-suffix">i</span></span><span class="map-network-legend-label">App / ATIS</span></div>
+                                <div class="map-network-legend-item"><span class="map-network-legend-badge map-network-legend-badge-center">C</span><span class="map-network-legend-label">Center</span></div>
+                                <div class="map-network-legend-item"><span class="map-network-legend-badge map-network-legend-badge-atis">i</span><span class="map-network-legend-label">ATIS only</span></div>
                             </div>
                         </div>
-                    </div><!-- end vatsim-content -->
-                    </div><!-- end vatsim-box -->
+                    </div>
 
+                    {{-- ══ Grundkarte ══ --}}
+                    <div class="lm3-box" id="lm3-karte-box" hidden>
+                        <div class="lm3-box-titel">{{ $lmDe ? 'Grundkarte' : 'Base map' }}</div>
+                        <div class="lm3-raster" id="lm3-karten-liste"></div>
+                    </div>
+
+                    {{-- ══ Wetter ══ --}}
+                    <div class="lm3-box map-weather-box-left" id="weather-box" hidden>
+                        <div class="lm3-box-titel">{{ $lmDe ? 'Wetter' : 'Weather' }}</div>
+                        <div id="weather-content">
+                            <div class="lm3-raster map-weather-buttons">
+                                <button id="btnClouds" type="button" class="lm3-schalter weather-btn">{{ $lmDe ? 'Wolken' : 'Clouds' }}</button>
+                                <button id="btnRadar" type="button" class="lm3-schalter weather-btn">{{ $lmDe ? 'Niederschlag' : 'Radar' }}</button>
+                                <button id="btnStorms" type="button" class="lm3-schalter weather-btn">{{ $lmDe ? 'Luftdruck' : 'Pressure' }}</button>
+                                <button id="btnWind" type="button" class="lm3-schalter weather-btn">Wind</button>
+                                <button id="btnTemp" type="button" class="lm3-schalter weather-btn">{{ $lmDe ? 'Temperatur' : 'Temp' }}</button>
+                                <button id="btnCombined" type="button" class="lm3-schalter weather-btn">{{ $lmDe ? 'Kombiniert' : 'Combo' }}</button>
+                                <button id="btnDarkMap" type="button" class="lm3-schalter weather-btn lm3-breit">{{ $lmDe ? 'Karte abdunkeln' : 'Dim map' }}</button>
+                            </div>
+                            <div class="weather-slider-wrapper lm3-regler">
+                                <label for="weatherOpacity">{{ $lmDe ? 'Deckkraft' : 'Opacity' }}</label>
+                                <input type="range" id="weatherOpacity" min="0.2" max="1" step="0.05" value="1">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-
-
+<!-- lm3:ende -->
 @if($lmScriptsView)
     @include($lmScriptsView)
 @endif
-
-
-

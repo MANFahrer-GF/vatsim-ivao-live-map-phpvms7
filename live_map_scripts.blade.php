@@ -1,5 +1,6 @@
 @section('scripts')
     @parent
+    <!-- lm3:skripte-anfang -->
 
     <script>
         // Defensive: force any L.TileLayer URL — including ones created by other
@@ -108,113 +109,170 @@
             window.addEventListener('load', function () { patch(window.L); });
         })();
         @endif
+    </script>
 
+    {{-- Reine Hilfsfunktionen der Live-Karte (ohne DOM, ohne Leaflet).
+         Zwischen den Markierungen <lm3-rein> steht Code, den die Tests in
+         tests/widget.test.mjs herausschneiden und ohne Browser ausfuehren —
+         dort also nichts einsetzen, was Blade oder ein Fenster braucht. --}}
+    <script>
+    /* <lm3-rein> */
+    (function (wurzel) {
+        'use strict';
+
+        // ── Phasen: Reihenfolge, Farben und Namen wie die Admin-Webapp auf live
+        //    (webapp/src/data/phaseColors.ts). Der Test vergleicht beides Zeichen
+        //    fuer Zeichen mit einer Abschrift dieser Datei.
+        var PHASE_COLOR = {
+            PREFLIGHT: '#94a3b8', BOARDING: '#cbd5e1', PUSHBACK: '#14b8a6', TAXI_OUT: '#fbbf24',
+            TAKEOFF_ROLL: '#fb923c', TAKEOFF: '#f97316', CLIMB: '#22d3ee', CRUISE: '#10b981',
+            LEVEL: '#38bdf8', HOLDING: '#c084fc', DESCENT: '#3b82f6', APPROACH: '#f59e0b',
+            FINAL: '#ef4444', LANDING: '#dc2626', TAXI_IN: '#94a3b8', BLOCKS_ON: '#64748b',
+            ON_BLOCK: '#64748b', ARRIVED: '#475569', PIREP_SUBMITTED: '#334155'
+        };
+        var PHASE_LIST = [
+            'PREFLIGHT', 'BOARDING', 'PUSHBACK', 'TAXI_OUT', 'TAKEOFF_ROLL', 'TAKEOFF',
+            'CLIMB', 'CRUISE', 'HOLDING', 'DESCENT', 'APPROACH', 'FINAL', 'LANDING',
+            'TAXI_IN', 'BLOCKS_ON', 'ARRIVED', 'PIREP_SUBMITTED'
+        ];
+        var PHASE_LABEL = {
+            PREFLIGHT: 'Preflight', BOARDING: 'Boarding', PUSHBACK: 'Pushback', TAXI_OUT: 'Taxi Out',
+            TAKEOFF_ROLL: 'T/O Roll', TAKEOFF: 'Takeoff', CLIMB: 'Climb', CRUISE: 'Cruise',
+            LEVEL: 'Level', HOLDING: 'Holding', DESCENT: 'Descent', APPROACH: 'Approach',
+            FINAL: 'Final', LANDING: 'Landing', TAXI_IN: 'Taxi In', BLOCKS_ON: 'Blocks On',
+            ON_BLOCK: 'Blocks On', ARRIVED: 'Arrived', PIREP_SUBMITTED: 'Pirep eingereicht'
+        };
+        var PHASE_FALLBACK_FARBE = '#94a3b8';
+
+        function phaseColor(phase) {
+            return Object.prototype.hasOwnProperty.call(PHASE_COLOR, phase || '') ? PHASE_COLOR[phase] : PHASE_FALLBACK_FARBE;
+        }
+        function phaseLabel(phase) {
+            if (!phase) return '—';
+            if (Object.prototype.hasOwnProperty.call(PHASE_LABEL, phase)) return PHASE_LABEL[phase];
+            return String(phase).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+        }
+        // Anzeige-Phase wie `phaseForDisplay`: „Level" nur im Steig-/Sinkflug,
+        // wenn die Phasen-Engine ein Level-Segment meldet. Filter und Zoom
+        // nehmen weiter die rohe Phase.
+        function phaseForDisplay(currentPhase, shadowSegment) {
+            var p = String(currentPhase || '').toUpperCase();
+            if ((p === 'CLIMB' || p === 'DESCENT') && String(shadowSegment || '').toLowerCase() === 'level') return 'LEVEL';
+            return currentPhase == null ? '—' : currentPhase;
+        }
+
+        // ── Formate wie in der Webapp ──
+        function formatSimLabel(raw) {
+            var s = String(raw == null ? '' : raw).trim();
+            if (!s) return '';
+            var k = s.toUpperCase().replace(/[\s._-]/g, '');
+            if (k.indexOf('MSFS2024') !== -1 || k.indexOf('FS2024') !== -1) return 'MSFS 2024';
+            if (k.indexOf('MSFS2020') !== -1 || k.indexOf('FS2020') !== -1) return 'MSFS 2020';
+            if (k.indexOf('MSFS') !== -1 || k.indexOf('MICROSOFTFLIGHT') !== -1) return 'MSFS';
+            if (k.indexOf('XPLANE12') !== -1 || k === 'XP12') return 'X-Plane 12';
+            if (k.indexOf('XPLANE11') !== -1 || k === 'XP11') return 'X-Plane 11';
+            if (k.indexOf('XPLANE') !== -1 || k.indexOf('XP') === 0) return 'X-Plane';
+            if (k.indexOf('PREPAR3D') !== -1 || k === 'P3D') return 'P3D';
+            if (k === 'OTHER') return 'Other';
+            return s.replace(/_/g, ' ');
+        }
+        function fmtQnhBoth(hpa) {
+            return Math.round(hpa) + ' hPa / ' + (hpa * 0.0295299830714).toFixed(2) + ' inHg';
+        }
+        function ageString(ts, jetzt) {
+            var sec = Math.round(((jetzt == null ? Date.now() : jetzt) - ts) / 1000);
+            if (sec < 60) return sec + 's';
+            if (sec < 3600) return Math.round(sec / 60) + 'm';
+            return Math.round(sec / 3600) + 'h';
+        }
+        function zahl(n, sprache) {
+            if (n == null || !isFinite(n)) return '—';
+            return Math.round(n).toLocaleString(sprache === 'de' ? 'de-DE' : 'en-US');
+        }
+        function vsText(vs) {
+            if (vs == null || !isFinite(vs)) return '—';
+            var pfeil = vs > 100 ? ' ↑' : vs < -100 ? ' ↓' : ' →';
+            return (vs > 0 ? '+' : '') + Math.round(vs) + pfeil;
+        }
+        function apFlags(pos) {
+            if (!pos) return '';
+            return [pos.ap_master && 'AP', pos.ap_hdg && 'HDG', pos.ap_alt && 'ALT', pos.ap_nav && 'NAV', pos.ap_app && 'APP']
+                .filter(Boolean).join(' ');
+        }
+        function tonnen(kg, stellen) {
+            return kg == null || !isFinite(kg) ? null : (kg / 1000).toFixed(stellen == null ? 1 : stellen);
+        }
+
+        // ── Datumsgrenze ──
+        // Leaflet verbindet zwei Punkte auf dem kurzen Weg in LAENGENGRADEN:
+        // 179° O → 179° W wird eine Linie quer ueber die Welt. Darum die
+        // Laengen fortlaufend weiterzaehlen (181° statt −179°). Leaflet zeichnet
+        // Laengen ausserhalb ±180 in der Nachbarkopie der Welt weiter.
+        function neben(lon, bezug) {
+            return lon + 360 * Math.round((bezug - lon) / 360);
+        }
+        function fortlaufend(punkte) {
+            var aus = [];
+            for (var i = 0; i < (punkte || []).length; i++) {
+                var p = punkte[i];
+                if (!p || !isFinite(p[0]) || !isFinite(p[1])) continue;
+                var lon = aus.length ? neben(p[1], aus[aus.length - 1][1]) : p[1];
+                aus.push([p[0], lon].concat(p.slice(2)));
+            }
+            return aus;
+        }
+        // Ganze Punktfolge um volle 360° so verschieben, dass ihr LETZTER Punkt
+        // (die aktuelle Position) neben `bezugLon` liegt — Form bleibt gleich.
+        function verschiebeNahe(punkte, bezugLon) {
+            if (!punkte || !punkte.length || !isFinite(bezugLon)) return punkte || [];
+            var letzter = punkte[punkte.length - 1][1];
+            var d = neben(letzter, bezugLon) - letzter;
+            if (!d) return punkte;
+            return punkte.map(function (p) { return [p[0], p[1] + d].concat(p.slice(2)); });
+        }
+
+        // ── Listen ──
+        function filterNachPhase(fluege, phase) {
+            if (!phase || phase === 'ALL') return fluege.slice();
+            return fluege.filter(function (f) { return f.phase === phase; });
+        }
+        // Geplante Fluege (phpVMS-Buchungen) ohne die, die schon live fliegen.
+        function geplanteOhneAktive(buchungen, aktive) {
+            var fliegt = {};
+            aktive.forEach(function (f) { if (f.callsign) fliegt[String(f.callsign).toUpperCase()] = true; });
+            return buchungen.filter(function (b) {
+                var cs = String(b.callsign || '').toUpperCase();
+                return !cs || !fliegt[cs];
+            });
+        }
+        function sortiere(fluege) {
+            return fluege.slice().sort(function (a, b) {
+                var off = (a.status === 'offline') - (b.status === 'offline');
+                if (off) return off;
+                return String(a.callsign || a.id).localeCompare(String(b.callsign || b.id));
+            });
+        }
+
+        wurzel.LM3 = {
+            PHASE_COLOR: PHASE_COLOR, PHASE_LIST: PHASE_LIST, PHASE_LABEL: PHASE_LABEL,
+            phaseColor: phaseColor, phaseLabel: phaseLabel, phaseForDisplay: phaseForDisplay,
+            formatSimLabel: formatSimLabel, fmtQnhBoth: fmtQnhBoth, ageString: ageString, zahl: zahl,
+            vsText: vsText, apFlags: apFlags, tonnen: tonnen,
+            neben: neben, fortlaufend: fortlaufend, verschiebeNahe: verschiebeNahe,
+            filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiere: sortiere
+        };
+    })(typeof window !== 'undefined' ? window : globalThis);
+    /* </lm3-rein> */
+    </script>
+
+    <script>
         document.addEventListener('DOMContentLoaded', function () {
             var LIVE_MAP_UI = @json($liveMapUiConfig);
             window.LIVE_MAP_UI = LIVE_MAP_UI || {};
-            var MOBILE_BTN_INACTIVE = String(window.LIVE_MAP_UI.mobileButtonInactive || 'rgba(26,42,74,0.92)');
-            var MOBILE_BTN_ACTIVE = String(window.LIVE_MAP_UI.mobileButtonActive || 'rgba(26,188,156,0.92)');
 
-            function setMobileBtnState(el, isActive) {
-                if (!el) return;
-                el.classList.toggle('lm-mobile-active', !!isActive);
-                el.style.background = isActive ? MOBILE_BTN_ACTIVE : MOBILE_BTN_INACTIVE;
-                el.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-                el.textContent = isActive ? '✈ Flights ▲' : '✈ Flights ▼';
-            }
-
-            // UI-Setup from phpVMS settings (Admin side)
-            var _flightsPanel = document.getElementById('va-flights-panel');
-            var _mobFlightsBtn = document.getElementById('mob-toggle-panel');
-            var _weatherBox = document.getElementById('weather-box');
-            var _networkBox = document.getElementById('vatsim-box');
-
-            if (_flightsPanel && !window.LIVE_MAP_UI.showTopFlightsPanel) {
-                _flightsPanel.classList.add('lm-hidden');
-                if (_mobFlightsBtn) _mobFlightsBtn.classList.add('lm-hidden');
-            }
-            if (_weatherBox && !window.LIVE_MAP_UI.showWeatherBox) {
-                _weatherBox.classList.add('lm-hidden');
-            }
-            if (_networkBox && !window.LIVE_MAP_UI.showNetworkBox) {
-                _networkBox.classList.add('lm-hidden');
-            }
-
-            var _isMobile = window.innerWidth <= 768;
-            if (_mobFlightsBtn && !window.LIVE_MAP_UI.mobileShowFlightsButton) {
-                _mobFlightsBtn.classList.add('lm-hidden');
-            }
-            setMobileBtnState(_mobFlightsBtn, false);
-
-            // Flight focus lock: prevents global multi-flight auto-fit from overriding a selected flight
+            // Flight focus lock (von aelteren Erweiterungen gelesen)
             window._liveMapFlightFocusLock = !!window._liveMapFlightFocusLock;
-            window._liveMapSelectedCallsign = window._liveMapSelectedCallsign || null;
 
-            // ────────────────────────────────────────────────────────
-            // Rivets formatters
-            // ────────────────────────────────────────────────────────
-            if (typeof rivets !== 'undefined') {
-                window.liveMapProgress = { initialRemaining: null };
-
-                function nm(val) {
-                    if (val == null) return NaN;
-                    if (typeof val === 'object' && 'nmi' in val) {
-                        var n = parseFloat(val.nmi);
-                        return isNaN(n) ? NaN : n;
-                    }
-                    var n2 = parseFloat(val);
-                    return isNaN(n2) ? NaN : n2;
-                }
-
-                function progressFraction(remaining, total) {
-                    var rem = nm(remaining);
-                    var tot = nm(total);
-                    if (!rem || rem < 0 || isNaN(rem)) return 0;
-                    if (tot && tot > 0 && !isNaN(tot)) {
-                        var done = (tot - rem) / tot;
-                        if (!isFinite(done)) done = 0;
-                        return Math.max(0, Math.min(1, done));
-                    }
-                    var store = window.liveMapProgress;
-                    if (!store.initialRemaining || rem > store.initialRemaining) store.initialRemaining = rem;
-                    var initial = store.initialRemaining;
-                    var done2 = (initial - rem) / initial;
-                    if (!isFinite(done2)) done2 = 0;
-                    return Math.max(0, Math.min(1, done2));
-                }
-
-                rivets.formatters.to_go = function (remaining) {
-                    var rem = nm(remaining);
-                    if (!rem || rem < 0 || isNaN(rem)) return '—';
-                    return Math.round(rem) + ' nmi';
-                };
-                rivets.formatters.progress_from_remaining = function (remaining, total) {
-                    return Math.round(progressFraction(remaining, total) * 100) + '%';
-                };
-                rivets.formatters.progress_bar_style = function (remaining, total) {
-                    var pct = Math.round(progressFraction(remaining, total) * 100);
-                    var color = pct < 30 ? '#e74c3c' : pct < 60 ? '#f39c12' : pct < 85 ? '#f1c40f' : '#2ecc71';
-                    return 'width:' + pct + '%; background:' + color + ';';
-                };
-                rivets.formatters.progress_circle_style = function (remaining, total) {
-                    var pct = Math.round(progressFraction(remaining, total) * 100);
-                    var color = pct < 30 ? '#e74c3c' : pct < 60 ? '#f39c12' : pct < 85 ? '#f1c40f' : '#2ecc71';
-                    return 'background: conic-gradient(' + color + ' 0 ' + pct + '%, #e5e5e5 ' + pct + '% 100%);';
-                };
-                rivets.formatters.rem_time_from_remaining = function (remaining, gs) {
-                    var rem = nm(remaining); var speed = parseFloat(gs);
-                    if (!rem || rem <= 0 || !speed || speed <= 0) return '—';
-                    var mins = Math.round((rem / speed) * 60);
-                    var h = Math.floor(mins / 60), m = mins % 60;
-                    return h <= 0 ? m + 'm' : h + 'h ' + (m < 10 ? '0' + m : m) + 'm';
-                };
-                rivets.formatters.eta_from_remaining = function (remaining, gs) {
-                    var rem = nm(remaining); var speed = parseFloat(gs);
-                    if (!rem || rem <= 0 || !speed || speed <= 0) return '—';
-                    var eta = new Date(Date.now() + (rem / speed) * 3600000);
-                    return eta.getHours().toString().padStart(2,'0') + ':' + eta.getMinutes().toString().padStart(2,'0');
-                };
-            }
 
             // ────────────────────────────────────────────────────────
             // Weather
@@ -561,471 +619,6 @@
             }
             window.lmStripNullIslandFromGeoJson = lmStripNullIslandFromGeoJson;
 
-            // ════════════════════════════════════════════════════════════
-            //  VA FLIGHTS PANEL — neues Design mit Tabs + Scroll
-            //  Active = ACARS-Flüge in der Luft/rollend
-            //  Planned = ACARS-Flüge in Boarding/Pre-flight-Zustand
-            // ════════════════════════════════════════════════════════════
-            (function () {
-                var VA_API        = window.location.origin + '/api/acars';
-                var VA_REFRESH_MS = ({{ setting('acars.update_interval', 60) }} * 1000) || 60000;
-                var panelOpen     = false;
-                var activeCallsign = null;
-                var currentTab    = 'active'; // 'active' | 'planned'
-                var vaFetchInFlight = false;
-                var vaPollTimer = null;
-
-                // DOM-Refs
-                var headerCollapsed  = document.getElementById('va-header-collapsed');
-                var headerExpanded   = document.getElementById('va-header-expanded');
-                var panelBody        = document.getElementById('va-flights-body');
-                var tabBtnActive     = document.getElementById('va-tab-btn-active');
-                var tabBtnPlanned    = document.getElementById('va-tab-btn-planned');
-                var tabPanelActive   = document.getElementById('va-tab-active');
-                var tabPanelPlanned  = document.getElementById('va-tab-planned');
-                var rowsActive       = document.getElementById('va-rows-active');
-                var rowsPlanned      = document.getElementById('va-rows-planned');
-                var scrollWrapActive = document.getElementById('va-scroll-active');
-                var scrollWrapPlan   = document.getElementById('va-scroll-planned');
-
-                // Zähler in beiden Headern + Tabs synchronisieren
-                function setCount(activeN, plannedN) {
-                    ['va-count-active-hdr','va-count-active-exp','va-tab-count-active'].forEach(function(id){
-                        var el = document.getElementById(id); if(el) el.textContent = activeN;
-                    });
-                    ['va-count-planned-hdr','va-count-planned-exp','va-tab-count-planned'].forEach(function(id){
-                        var el = document.getElementById(id); if(el) el.textContent = plannedN;
-                    });
-                }
-
-                // Toggle öffnen/schließen
-                function togglePanel() {
-                    // Pass schließen wenn Panel getoggelt
-                    var card = document.getElementById('va-boarding-pass');
-                    if(card) card.classList.remove('bp-visible');
-                    window._liveMapFlightFocusLock = false;
-                    window._liveMapSelectedCallsign = null;
-                    setTimeout(adjustPanelHeight, 360); // nach Transition
-                    panelOpen = !panelOpen;
-                    if (panelOpen) {
-                        headerCollapsed.style.display = 'none';
-                        panelBody.classList.add('open');
-                    } else {
-                        panelBody.classList.remove('open');
-                        // collapsed nach Ende der Transition wieder einblenden
-                        setTimeout(function(){ headerCollapsed.style.display = ''; }, 350);
-                    }
-                }
-                if (headerCollapsed) headerCollapsed.addEventListener('click', togglePanel);
-                if (headerExpanded)  headerExpanded.addEventListener('click', togglePanel);
-
-                // Tab-Wechsel
-                function switchTab(tab) {
-                    currentTab = tab;
-                    setTimeout(adjustPanelHeight, 30);
-                    tabBtnActive.classList.toggle('active',  tab === 'active');
-                    tabBtnPlanned.classList.toggle('active', tab === 'planned');
-                    tabPanelActive.classList.toggle('active',  tab === 'active');
-                    tabPanelPlanned.classList.toggle('active', tab === 'planned');
-                }
-                if (tabBtnActive)  tabBtnActive.addEventListener('click',  function(){
-                    switchTab('active');
-                    var card = document.getElementById('va-boarding-pass');
-                    if(card) card.classList.remove('bp-visible');
-                    window._liveMapFlightFocusLock = false;
-                });
-                if (tabBtnPlanned) tabBtnPlanned.addEventListener('click', function(){
-                    switchTab('planned');
-                    var card = document.getElementById('va-boarding-pass');
-                    if(card) card.classList.remove('bp-visible');
-                    window._liveMapFlightFocusLock = false;
-                });
-
-                // Scroll-Fade: nur anzeigen wenn Inhalt wirklich überläuft
-                function updateScrollFade(wrap, scrollEl) {
-                    if (!wrap || !scrollEl) return;
-                    var scrollable = scrollEl.scrollHeight > scrollEl.clientHeight + 4;
-                    wrap.classList.toggle('no-scroll', !scrollable);
-                    // Bei Scrollen bis unten Fade ausblenden
-                    scrollEl.onscroll = function() {
-                        var atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 8;
-                        wrap.classList.toggle('no-scroll', atBottom || !scrollable);
-                    };
-                }
-
-                // Deutsche Status-Texte → Englisch
-                var STATUS_DE_EN = {
-                    'unterwegs':'En Route','im flug':'En Route','in der luft':'En Route',
-                    'geplant':'Planned','boarding':'Boarding','rollt':'Taxiing','rollen':'Taxiing',
-                    'starten':'Taking Off','steigen':'Climbing','reiseflug':'Cruise',
-                    'sinken':'Descending','anflug':'Approach','landung':'Landing',
-                    'gelandet':'Landed','abgeschlossen':'Completed','abgebrochen':'Cancelled','pausiert':'Paused',
-                };
-                function translateStatus(s) {
-                    if (!s) return s;
-                    return STATUS_DE_EN[s.toLowerCase().trim()] || s;
-                }
-                window.translateStatus = translateStatus;
-
-                // Status → CSS-Klasse (Panel-intern)
-                function panelStatusClass(s) {
-                    if (!s) return 'va-st-other';
-                    var sl = s.toLowerCase();
-                    if (sl.includes('en route') || sl.includes('unterwegs') || sl.includes('cruise') ||
-                        sl.includes('climb') || sl.includes('airborne') || sl.includes('enroute')) return 'va-st-fly';
-                    if (sl.includes('taxi') || sl.includes('rollt') || sl.includes('push') ||
-                        sl.includes('taking') || sl.includes('starten')) return 'va-st-taxi';
-                    if (sl.includes('board') || sl.includes('planned') || sl.includes('geplant') ||
-                        sl.includes('sched') || sl.includes('preflight')) return 'va-st-board';
-                    if (sl.includes('descent') || sl.includes('approach') || sl.includes('sinken') ||
-                        sl.includes('anflug') || sl.includes('landing')) return 'va-st-desc';
-                    return 'va-st-other';
-                }
-
-                // Ist ein Flug "aktiv" (in der Luft/rollt) oder "geplant/boarding"?
-                function isActiveFlight(f) {
-                    if (f._isBid) return false;
-                    var stat = translateStatus(f.status_text || f.status || '').toLowerCase();
-                    // Hat Position mit Bewegung → aktiv
-                    if (f.position && f.position.gs && parseFloat(f.position.gs) > 5) return true;
-                    if (f.position && f.position.altitude && parseFloat(f.position.altitude) > 200) return true;
-                    // Status-basiert
-                    var activeWords = ['enroute','en route','unterwegs','cruise','climb','descent',
-                                       'approach','airborne','takeoff','landing','taxi','rollt','push'];
-                    for (var i = 0; i < activeWords.length; i++) {
-                        if (stat.includes(activeWords[i])) return true;
-                    }
-                    return false;
-                }
-
-                // Airline-Logo URL aus AIRLINE_LOGOS (wird weiter unten definiert)
-                function getLogoUrl(airline) {
-                    if (!airline) return '';
-                    var icao = (airline.icao || '').toUpperCase();
-                    if (!icao) return '';
-                    if (typeof AIRLINE_LOGOS !== 'undefined' && AIRLINE_LOGOS[icao]) return AIRLINE_LOGOS[icao];
-                    return airline.logo || '';
-                }
-
-                // Logo-HTML für Zeilen
-                function rowLogoHtml(airline) {
-                    var url = safeAssetUrl(getLogoUrl(airline));
-                    if (!url) return '<span class="va-logo-box"></span>';
-                    return '<span class="va-logo-box"><img src="' +
-                        h(url) +
-                        '" onerror="this.parentElement.innerHTML=\'\'"></span>';
-                }
-
-                // Pilot-Name aus Flug-Objekt
-                function pilotName(f) {
-                    if (f.user) {
-                        return f.user.name ||
-                            (f.user.first_name ? f.user.first_name + (f.user.last_name ? ' ' + f.user.last_name.charAt(0) + '.' : '') : '') || '—';
-                    }
-                    if (f.pilot) return f.pilot.name || f.pilot.first_name || '—';
-                    return '—';
-                }
-
-                // "Thomas Kant" -> "Thomas K."
-                function shortPilotName(name) {
-                    var raw = (name == null ? '' : String(name)).trim().replace(/\s+/g, ' ');
-                    if (!raw) return '—';
-                    var parts = raw.split(' ');
-                    if (parts.length < 2) return parts[0];
-                    var first = parts[0];
-                    var last = parts[parts.length - 1];
-                    var initial = last ? last.charAt(0).toUpperCase() : '';
-                    return initial ? (first + ' ' + initial + '.') : first;
-                }
-
-                // Pilot-Rank (aus phpVMS-Daten wenn vorhanden)
-                function pilotRank(f) {
-                    if (f.user && f.user.rank && f.user.rank.name) return f.user.rank.name;
-                    if (f.pilot && f.pilot.rank) return f.pilot.rank;
-                    return '';
-                }
-
-                // Zeile für Active-Tab bauen
-                function buildActiveRow(f) {
-                    var callsign = (f.airline && f.airline.icao ? f.airline.icao : '') + (f.flight_number || f.callsign || '');
-                    var dep  = (f.dpt_airport && (f.dpt_airport.icao || f.dpt_airport.id)) || '—';
-                    var arr  = (f.arr_airport  && (f.arr_airport.icao  || f.arr_airport.id))  || '—';
-                    var reg  = (f.aircraft && f.aircraft.registration) || '';
-                    var ac   = (f.aircraft && f.aircraft.icao) || '';
-                    var acStr = reg ? reg + (ac ? ' (' + ac + ')' : '') : (ac || '—');
-                    var alt  = (f.position && f.position.altitude)
-                                ? (parseFloat(f.position.altitude) > 1000
-                                    ? 'FL' + Math.round(parseFloat(f.position.altitude) / 100)
-                                    : Math.round(parseFloat(f.position.altitude)) + ' ft')
-                                : '—';
-                    var spd  = (f.position && f.position.gs) ? f.position.gs + ' kt' : '—';
-                    var stat = translateStatus(f.status_text || f.status || '—');
-                    var sCls = panelStatusClass(stat);
-
-                    var distFlown   = (f.position && f.position.distance && f.position.distance.nmi != null)
-                                        ? Math.round(parseFloat(f.position.distance.nmi)) : null;
-                    var distPlanned = (f.planned_distance && f.planned_distance.nmi != null)
-                                        ? Math.round(parseFloat(f.planned_distance.nmi)) : null;
-                    var dist = distFlown !== null && distPlanned !== null
-                                ? distFlown + ' / ' + distPlanned
-                                : distFlown !== null ? distFlown + ' nmi'
-                                : distPlanned !== null ? '— / ' + distPlanned
-                                : '—';
-
-                    // Sim kennt die Position noch nicht (0/0) — Zelle sagt warum
-                    var noPosTitle = f._lmNoPosition ? ' title="No position reported by the simulator yet"' : '';
-
-                    var pName = pilotName(f);
-                    var pRank = pilotRank(f);
-                    var callsignHtml = h(callsign || '—');
-                    var depHtml = h(dep);
-                    var arrHtml = h(arr);
-                    var altHtml = h(alt);
-                    var spdHtml = h(spd);
-                    var distHtml = h(dist);
-                    var statHtml = h(stat);
-                    var pRankHtml = h(pRank);
-                    var lat   = f.position && f.position.lat ? parseFloat(f.position.lat) : null;
-                    var lng   = f.position && f.position.lon ? parseFloat(f.position.lon)
-                              : f.position && f.position.lng ? parseFloat(f.position.lng) : null;
-
-                    var row = document.createElement('div');
-                    row.className = 'va-row va-g-act va-row-live' + (callsign === activeCallsign ? ' active-flight' : '');
-                    row.setAttribute('data-callsign', callsign);
-                    row.innerHTML =
-                        '<div class="va-c-flight">' + rowLogoHtml(f.airline) + '<span>' + callsignHtml + '</span></div>' +
-                        '<div class="va-c-route"><span class="va-icao">' + depHtml + '</span><span class="va-arr">›</span><span class="va-icao">' + arrHtml + '</span></div>' +
-                        '<div class="va-c-alt"' + noPosTitle + '>' + altHtml + '</div>' +
-                        '<div class="va-c-spd"' + noPosTitle + '>' + spdHtml + '</div>' +
-                        '<div class="va-c-dist"' + noPosTitle + '>' + distHtml + '</div>' +
-                        '<div style="text-align:center"><span class="va-st ' + sCls + '">' + statHtml + '</span></div>' +
-                        '<div><div class="va-c-pilot-name" title="' + h(pName) + '">' + h(pName) + '</div>' +
-                        (pRank ? '<div class="va-c-pilot-rank">' + pRankHtml + '</div>' : '') + '</div>';
-
-                    row.addEventListener('click', function () {
-                        document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
-                            .forEach(function(r){ r.classList.remove('active-flight'); });
-                        row.classList.add('active-flight');
-                        activeCallsign = callsign;
-                        window._liveMapSelectedCallsign = callsign || null;
-                        window._liveMapFlightFocusLock = true;
-                        if (typeof window.vaInfoCardOpen === 'function') window.vaInfoCardOpen(f, lat, lng);
-                    });
-                    return row;
-                }
-
-                // Zeile für Planned-Tab bauen
-                function buildPlannedRow(f) {
-                    var callsign = (f.airline && f.airline.icao ? f.airline.icao : '') + (f.flight_number || f.callsign || '');
-                    var dep      = (f.dpt_airport && (f.dpt_airport.icao || f.dpt_airport.id)) || f.dpt_airport_id || '—';
-                    var arr      = (f.arr_airport  && (f.arr_airport.icao  || f.arr_airport.id))  || f.arr_airport_id || '—';
-                    var depName  = (f.dpt_airport && f.dpt_airport.name) || '';
-                    var arrName  = (f.arr_airport  && f.arr_airport.name)  || '';
-                    var depShort = depName ? depName.split(/[\/,(\-]/)[0].trim() : '';
-                    var arrShort = arrName ? arrName.split(/[\/,(\-]/)[0].trim() : '';
-
-                    var bidBadge = f._isBid
-                        ? '<span style="display:inline-block;font-size:9px;font-weight:700;background:#e3f2fd;color:#1565c0;padding:1px 5px;border-radius:3px;margin-left:5px;vertical-align:middle">BOOKED</span>'
-                        : '';
-
-                    var pName = f._isBid ? shortPilotName(pilotName(f)) : pilotName(f);
-                    var pRank = pilotRank(f);
-                    var callsignHtml = h(callsign || '—');
-                    var depHtml = h(dep);
-                    var arrHtml = h(arr);
-                    var depShortHtml = h(depShort);
-                    var arrShortHtml = h(arrShort);
-                    var pRankHtml = h(pRank);
-
-                    var row = document.createElement('div');
-                    row.className = 'va-row va-g-plan' + (callsign === activeCallsign ? ' active-flight' : '');
-                    row.setAttribute('data-callsign', callsign);
-                    row.innerHTML =
-                        // Spalte 1: Logo + Callsign + Badge + Route darunter
-                        '<div>' +
-                            '<div class="va-c-flight">' + rowLogoHtml(f.airline) +
-                                '<span>' + callsignHtml + '</span>' + bidBadge +
-                            '</div>' +
-                            '<div style="margin-top:3px;font-size:11px;font-weight:500;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
-                                '<span style="font-weight:800;color:#1a3a6b;letter-spacing:.3px">' + depHtml + '</span>' +
-                                (depShort ? '<span class="va-route-airport-name" style="color:#999"> ' + depShortHtml + '</span>' : '') +
-                                '<span style="color:#3498db;font-weight:700;margin:0 6px">›</span>' +
-                                '<span style="font-weight:800;color:#1a3a6b;letter-spacing:.3px">' + arrHtml + '</span>' +
-                                (arrShort ? '<span class="va-route-airport-name" style="color:#999"> ' + arrShortHtml + '</span>' : '') +
-                            '</div>' +
-                        '</div>' +
-                        // Spalte 2: Pilot
-                        '<div style="text-align:right"><div class="va-c-pilot-name" title="' + h(pName) + '">' + h(pName) + '</div>' +
-                        (pRank ? '<div class="va-c-pilot-rank">' + pRankHtml + '</div>' : '') + '</div>';
-
-                    row.addEventListener('click', function () {
-                        document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
-                            .forEach(function(r){ r.classList.remove('active-flight'); });
-                        row.classList.add('active-flight');
-                        activeCallsign = callsign;
-                        window._liveMapSelectedCallsign = callsign || null;
-                        window._liveMapFlightFocusLock = false;
-                        // Keine Info-Kachel bei Planned — nur Karte zentrieren
-                        var depIcao = dep !== '—' ? dep : null;
-                        if (depIcao && typeof staticAirportPos !== 'undefined' && staticAirportPos[depIcao] && typeof map !== 'undefined' && map._loaded) {
-                            map.setView(staticAirportPos[depIcao], Math.max(map.getZoom(), 6), { animate: true, _lmUserFocus: true });
-                        }
-                        var card = document.getElementById('va-boarding-pass');
-                        if (card) {
-                            card.classList.remove('bp-visible');
-                            card.style.removeProperty('display');
-                        }
-                    });
-                    return row;
-                }
-
-                function adjustPanelHeight() {
-                    var body = document.getElementById('va-flights-body');
-                    if (!body || !body.classList.contains('open')) return;
-                    // Kurz auf auto setzen um echte Höhe zu messen
-                    body.style.maxHeight = 'none';
-                    var h = body.scrollHeight;
-                    body.style.maxHeight = Math.min(h, window.innerHeight * 0.7) + 'px';
-                }
-                window._liveMapAdjustPanelHeight = adjustPanelHeight;
-
-                function renderFlights(flights) {
-                    if (!rowsActive || !rowsPlanned) return;
-
-                    // 0/0-Positionen entwerten, BEVOR sie in Zeile, Pass oder Auto-Zoom landen
-                    flights.forEach(function(f){ lmSanitizeFlightPosition(f); });
-
-                    var activeList  = [];
-                    var plannedList = [];
-
-                    flights.forEach(function(f) {
-                        if (f._isBid) plannedList.push(f);
-                        else          activeList.push(f);
-                    });
-
-                    // Cache für Marker-Klick
-                    window._vaActiveFlights = activeList;
-
-                    // Keep selection coherent: if selected callsign is gone, release focus lock
-                    if (window._liveMapSelectedCallsign) {
-                        var selectedStillActive = activeList.some(function(f) {
-                            var cs = (f.airline && f.airline.icao ? f.airline.icao : '') + (f.flight_number || f.callsign || '');
-                            return cs === window._liveMapSelectedCallsign;
-                        });
-                        if (!selectedStillActive) {
-                            window._liveMapSelectedCallsign = null;
-                            window._liveMapFlightFocusLock = false;
-                            activeCallsign = null;
-                        } else if (!activeCallsign) {
-                            activeCallsign = window._liveMapSelectedCallsign;
-                        }
-                    }
-
-                    setCount(activeList.length, plannedList.length);
-                    setTimeout(adjustPanelHeight, 50);
-
-                    // Active
-                    rowsActive.innerHTML = '';
-                    if (activeList.length === 0) {
-                        rowsActive.innerHTML = '<div class="va-table-info">No active flights</div>';
-                    } else {
-                        activeList.forEach(function(f){ rowsActive.appendChild(buildActiveRow(f)); });
-                    }
-                    setTimeout(function(){ updateScrollFade(scrollWrapActive, rowsActive); }, 50);
-
-                    // Planned
-                    rowsPlanned.innerHTML = '';
-                    if (plannedList.length === 0) {
-                        rowsPlanned.innerHTML = '<div class="va-table-info">No planned flights</div>';
-                    } else {
-                        plannedList.forEach(function(f){ rowsPlanned.appendChild(buildPlannedRow(f)); });
-                    }
-                    setTimeout(function(){ updateScrollFade(scrollWrapPlan, rowsPlanned); }, 50);
-
-                    // Keep all active aircraft in view when follow mode is enabled
-                    if (typeof window._liveMapFitToActiveFlights === 'function') {
-                        setTimeout(function(){ window._liveMapFitToActiveFlights({ animate: false }); }, 80);
-                    }
-                }
-
-                function loadVaFlights() {
-                    if (vaFetchInFlight) return Promise.resolve(false);
-                    vaFetchInFlight = true;
-                    return fetch(VA_API)
-                        .then(function(r){ return r.json(); })
-                        .then(function(resp){
-                            var acarsFlights = Array.isArray(resp) ? resp
-                                            : (resp.data && Array.isArray(resp.data)) ? resp.data : [];
-                            var activeFlightKeys = {};
-                            function normId(v) { return (v == null) ? '' : String(v).trim(); }
-                            function activeUserId(f) {
-                                if (!f) return '';
-                                if (f.user_id != null) return normId(f.user_id);
-                                if (f.user && f.user.id != null) return normId(f.user.id);
-                                if (f.pilot_id != null) return normId(f.pilot_id);
-                                if (f.pilot && f.pilot.id != null) return normId(f.pilot.id);
-                                return '';
-                            }
-                            acarsFlights.forEach(function(f){
-                                var flightId = normId(f && f.flight_id);
-                                if (!flightId) return;
-                                var userId = activeUserId(f);
-                                if (userId) activeFlightKeys[userId + ':' + flightId] = true;
-                                activeFlightKeys['*:' + flightId] = true;
-                            });
-                            var bids = (typeof VA_USER_BIDS !== 'undefined' ? VA_USER_BIDS : [])
-                                .filter(function(b){
-                                    var bidFlightId = normId(b && b.flight_id);
-                                    if (!bidFlightId) return true;
-                                    var bidUserId = normId(b && b._bidUserId);
-                                    if (bidUserId) return !activeFlightKeys[bidUserId + ':' + bidFlightId];
-                                    return !activeFlightKeys['*:' + bidFlightId];
-                                });
-                            renderFlights(acarsFlights.concat(bids));
-                            return true;
-                        })
-                        .catch(function(){
-                            setCount('!', '!');
-                            if (rowsActive)  rowsActive.innerHTML  = '<div class="va-table-info">⚠ Unavailable</div>';
-                            if (rowsPlanned) rowsPlanned.innerHTML = '<div class="va-table-info">⚠ Unavailable</div>';
-                            return false;
-                        })
-                        .finally(function() {
-                            vaFetchInFlight = false;
-                        });
-                }
-
-                function getVaPollDelay() {
-                    return document.hidden ? Math.max(VA_REFRESH_MS * 3, 120000) : VA_REFRESH_MS;
-                }
-                function scheduleVaPoll(delayMs) {
-                    if (vaPollTimer) clearTimeout(vaPollTimer);
-                    vaPollTimer = setTimeout(function() {
-                        loadVaFlights().finally(function() {
-                            scheduleVaPoll(getVaPollDelay());
-                        });
-                    }, typeof delayMs === 'number' ? delayMs : getVaPollDelay());
-                }
-                loadVaFlights().finally(function() {
-                    scheduleVaPoll(getVaPollDelay());
-                });
-                document.addEventListener('visibilitychange', function() {
-                    if (!document.hidden) {
-                        scheduleVaPoll(500);
-                    }
-                });
-
-                // Dark-Map → Panel abdunkeln
-                var wrapper = document.querySelector('.live-map-wrapper');
-                var mapEl   = document.getElementById('map');
-                if (mapEl && wrapper) {
-                    new MutationObserver(function(){
-                        wrapper.classList.toggle('dark-map-panel', mapEl.classList.contains('dark-map'));
-                    }).observe(mapEl, { attributes: true, attributeFilter: ['class'] });
-                }
-            })();
-
-            // ════════════════════════════════════════════════════════════
             //  VATSIM LIVE INTEGRATION
             // ════════════════════════════════════════════════════════════
 
@@ -1467,10 +1060,13 @@
                 var z=map.getZoom();
                 document.querySelectorAll('.vatsim-airport-marker, .ivao-airport-marker').forEach(function(el){
                     var label=el.querySelector('div:first-child');
-                    var parent = el.parentElement;
-                    if (!parent) return;
-                    if(z<3){parent.style.display='none';}
-                    else{parent.style.display='';if(label) label.style.display=z>=5?'':'none';}
+                    // Ist die Klasse am Marker selbst (divIcon className), waere
+                    // `parentElement` die GANZE Marker-Ebene — unter Zoom 3
+                    // verschwanden dann alle Flugzeuge mit (gemessen 30.10.2026).
+                    var ziel = el.classList.contains('leaflet-marker-icon') ? el : el.parentElement;
+                    if (!ziel || ziel.classList.contains('leaflet-pane')) return;
+                    if(z<3){ziel.style.display='none';}
+                    else{ziel.style.display='';if(label) label.style.display=z>=5?'':'none';}
                 });
             }
 
@@ -1733,698 +1329,732 @@
                 });
             }
 
-            // ── Leaflet-Hooks (registrieren VOR render_live_map) ──
-            if (typeof L !== 'undefined' && L.Map && typeof L.Map.addInitHook === 'function') {
+            // ════════════════════════════════════════════════════════════
+            //  LIVE-FLUEGE (v5) — Quelle laut Einstellung, immer ueber das
+            //  Modul (/livemap/api/fluege). Felder und Phasen wie die
+            //  Admin-Webapp auf live: Liste = Flugtafel, Karte = Flugdetail.
+            // ════════════════════════════════════════════════════════════
+            var LM_SPRACHE = (window.LIVE_MAP_UI && window.LIVE_MAP_UI.sprache === 'de') ? 'de' : 'en';
+            var LM_T = ({
+                de: {
+                    keine: 'Gerade ist niemand unterwegs.', keineFilter: 'Kein Flug in dieser Phase.',
+                    keineGeplant: 'Keine geplanten Flüge.', laden: 'Flüge werden geladen …',
+                    folgen: 'Folgen', folgt: 'Folgt', frei: 'Frei', alle: 'Alle Phasen', zuletzt: 'vor',
+                    schliessen: 'Schließen', stand: 'Stand', offline: 'offline', abflug: 'Abflug',
+                    pilot: 'Pilot', fehler: {
+                        kein_schluessel: 'Für AeroACARS Live ist kein Lese-Schlüssel hinterlegt.',
+                        abgelehnt: 'AeroACARS Live hat den Lese-Schlüssel abgelehnt.',
+                        nicht_erreichbar: 'AeroACARS Live ist gerade nicht erreichbar.',
+                        adresse: 'Die Adresse von AeroACARS Live ist ungültig.',
+                        ungueltig: 'Unerwartete Antwort vom Server.',
+                        netz: 'Flugdaten konnten nicht geladen werden.'
+                    }
+                },
+                en: {
+                    keine: 'No one is flying right now.', keineFilter: 'No flight in this phase.',
+                    keineGeplant: 'No planned flights.', laden: 'Loading flights …',
+                    folgen: 'Follow', folgt: 'Following', frei: 'Free', alle: 'All phases', zuletzt: 'ago',
+                    schliessen: 'Close', stand: 'Stand', offline: 'offline', abflug: 'Departure',
+                    pilot: 'Pilot', fehler: {
+                        kein_schluessel: 'No read key is stored for AeroACARS Live.',
+                        abgelehnt: 'AeroACARS Live rejected the read key.',
+                        nicht_erreichbar: 'AeroACARS Live cannot be reached right now.',
+                        adresse: 'The AeroACARS Live address is invalid.',
+                        ungueltig: 'Unexpected answer from the server.',
+                        netz: 'Flight data could not be loaded.'
+                    }
+                }
+            })[LM_SPRACHE];
 
-                // Beim Klick auf einen Flug zeichnet der KERN die geflogene Spur
-                // (`L.Geodesic.fromGeoJson`). Steht auch nur EIN 0/0-Punkt im Flugweg,
-                // laeuft die Spur bis in den Golf von Guinea und zurueck. Am Bestand
-                // nachgemessen: ein einziger Punkt unter 13 reicht dafuer.
-                // Der Kern setzt die Punkte erst NACH `addTo(map)` — ueber `layeradd`
-                // waere die Linie zu diesem Zeitpunkt noch leer. Deshalb an der Methode.
-                if (L.Geodesic && L.Geodesic.prototype
-                    && typeof L.Geodesic.prototype.fromGeoJson === 'function'
-                    && !L.Geodesic.prototype._lmNullIslandFiltered) {
-                    var lmOrigFromGeoJson = L.Geodesic.prototype.fromGeoJson;
-                    L.Geodesic.prototype.fromGeoJson = function (geojson) {
-                        var cleaned = geojson;
-                        try { cleaned = lmStripNullIslandFromGeoJson(geojson); }
-                        catch (e) { cleaned = geojson; }
-                        return lmOrigFromGeoJson.call(this, cleaned);
-                    };
-                    L.Geodesic.prototype._lmNullIslandFiltered = true;
+            function lmEsc(s) {
+                return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+            function lmKurzname(name) {
+                var teile = String(name == null ? '' : name).trim().split(/\s+/).filter(Boolean);
+                if (!teile.length) return '—';
+                if (teile.length === 1) return teile[0];
+                return teile[0] + ' ' + teile[teile.length - 1].charAt(0).toUpperCase() + '.';
+            }
+
+            var LM_FLIEGER_SVG = '<svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">' +
+                '<path d="M16 2.5c1.1 0 1.9 1.3 1.9 3.2v7.1l10.6 6.2v2.6l-10.6-3.1v6.4l3.1 2.4v2.1L16 27.9l-5 1.5v-2.1l3.1-2.4v-6.4L3.5 21.6V19l10.6-6.2V5.7c0-1.9.8-3.2 1.9-3.2z"/></svg>';
+
+            function starteVaFluege(map) {
+                var cfg = window.LIVE_MAP_UI || {};
+                var zustand = {
+                    fluege: [], geplant: [], auswahl: null, phase: 'ALL', tab: 'aktiv',
+                    folgen: !!cfg.defaultFollowFlight, ersteAnsicht: true, fehler: null, geladen: false
+                };
+                var marker = {};            // id → L.marker
+                var flugEbene = L.layerGroup().addTo(map);
+                var spurEbene = L.layerGroup().addTo(map);
+                var spurDaten = { id: null, spur: [], route: [] };
+                var abrufLaeuft = false, abrufTimer = null, spurTimer = null;
+
+                var el = {
+                    wrap: document.getElementById('lm3'),
+                    panel: document.getElementById('lm3-panel'),
+                    liste: document.getElementById('lm3-liste'),
+                    meldung: document.getElementById('lm3-meldung'),
+                    zahl: document.getElementById('lm3-zahl'),
+                    nAktiv: document.getElementById('lm3-n-aktiv'),
+                    nGeplant: document.getElementById('lm3-n-geplant'),
+                    tabAktiv: document.getElementById('lm3-tab-aktiv'),
+                    tabGeplant: document.getElementById('lm3-tab-geplant'),
+                    phase: document.getElementById('lm3-phase'),
+                    filterZeile: document.getElementById('lm3-filter'),
+                    detail: document.getElementById('lm3-detail'),
+                    punkt: document.getElementById('lm3-status-punkt'),
+                    folgen: document.getElementById('btnFollowFlight')
+                };
+
+                // ── Phasenfilter: Reihenfolge wie die Webapp ──
+                if (el.phase) {
+                    var opt = document.createElement('option');
+                    opt.value = 'ALL'; opt.textContent = LM_T.alle; el.phase.appendChild(opt);
+                    LM3.PHASE_LIST.forEach(function (p) {
+                        var o = document.createElement('option');
+                        o.value = p; o.textContent = LM3.phaseLabel(p); el.phase.appendChild(o);
+                    });
+                    el.phase.addEventListener('change', function () { zustand.phase = el.phase.value; zeichneListe(); zeichneMarker(); });
+                }
+                function setzeTab(tab) {
+                    zustand.tab = tab;
+                    if (el.tabAktiv) el.tabAktiv.setAttribute('aria-selected', tab === 'aktiv' ? 'true' : 'false');
+                    if (el.tabGeplant) el.tabGeplant.setAttribute('aria-selected', tab === 'geplant' ? 'true' : 'false');
+                    if (el.filterZeile) el.filterZeile.hidden = tab !== 'aktiv';
+                    zeichneListe();
+                }
+                if (el.tabAktiv) el.tabAktiv.addEventListener('click', function () { setzeTab('aktiv'); });
+                if (el.tabGeplant) el.tabGeplant.addEventListener('click', function () { setzeTab('geplant'); });
+
+                // ── Geplante Fluege: phpVMS-Buchungen (wie bisher) ──
+                function geplanteAusBuchungen() {
+                    var roh = (typeof VA_USER_BIDS !== 'undefined' && Array.isArray(VA_USER_BIDS)) ? VA_USER_BIDS : [];
+                    return roh.map(function (b) {
+                        return {
+                            callsign: ((b.airline && b.airline.icao) || '') + (b.flight_number || ''),
+                            dep: (b.dpt_airport && (b.dpt_airport.icao || b.dpt_airport.id)) || b.dpt_airport_id || null,
+                            arr: (b.arr_airport && (b.arr_airport.icao || b.arr_airport.id)) || b.arr_airport_id || null,
+                            pilot: lmKurzname(b.user && b.user.name),
+                            zeit: b.dep_time || ''
+                        };
+                    });
                 }
 
-                L.Map.addInitHook(function () {
-                    attachWeatherToMap(this);
+                // ── Abruf ──
+                function holeFluege() {
+                    if (abrufLaeuft) return Promise.resolve();
+                    abrufLaeuft = true;
+                    return fetch(cfg.flightsApi, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                        .then(function (r) { return r.json().catch(function () { return { ok: false, fehler: 'ungueltig' }; }); })
+                        .then(function (d) {
+                            zustand.geladen = true;
+                            if (!d || d.ok !== true || !Array.isArray(d.fluege)) {
+                                zustand.fehler = (d && d.fehler) || 'ungueltig';
+                                zustand.fluege = [];
+                            } else {
+                                zustand.fehler = null;
+                                zustand.fluege = LM3.sortiere(d.fluege);
+                            }
+                        })
+                        .catch(function () { zustand.geladen = true; zustand.fehler = 'netz'; })
+                        .then(function () {
+                            abrufLaeuft = false;
+                            zustand.geplant = LM3.geplanteOhneAktive(geplanteAusBuchungen(), zustand.fluege);
+                            if (zustand.auswahl && !findeFlug(zustand.auswahl)) schliesseDetail();
+                            zeichneAlles();
+                        });
+                }
+                function planeAbruf(ms) {
+                    if (abrufTimer) clearTimeout(abrufTimer);
+                    abrufTimer = setTimeout(function () {
+                        holeFluege().then(function () { planeAbruf(); });
+                    }, ms != null ? ms : (document.hidden ? 60000 : (cfg.refreshMs || 10000)));
+                }
+                document.addEventListener('visibilitychange', function () { if (!document.hidden) planeAbruf(300); });
+
+                function findeFlug(id) {
+                    for (var i = 0; i < zustand.fluege.length; i++) if (zustand.fluege[i].id === id) return zustand.fluege[i];
+                    return null;
+                }
+                function sichtbareFluege() { return LM3.filterNachPhase(zustand.fluege, zustand.phase); }
+
+                // ── Zeichnen ──
+                function zeichneAlles() { zeichneKopf(); zeichneListe(); zeichneMarker(); zeichneDetail(); folge(); }
+
+                function zeichneKopf() {
+                    var n = zustand.fluege.length;
+                    if (el.zahl) el.zahl.textContent = zustand.fehler ? '!' : String(n);
+                    if (el.nAktiv) el.nAktiv.textContent = String(n);
+                    if (el.nGeplant) el.nGeplant.textContent = String(zustand.geplant.length);
+                    if (el.punkt) el.punkt.className = 'lm3-punkt ' + (zustand.fehler ? 'ist-fehler' : (n ? 'ist-live' : ''));
+                    if (el.meldung) {
+                        if (zustand.fehler) {
+                            el.meldung.hidden = false;
+                            el.meldung.textContent = LM_T.fehler[zustand.fehler] || LM_T.fehler.netz;
+                        } else {
+                            el.meldung.hidden = true;
+                            el.meldung.textContent = '';
+                        }
+                    }
+                }
+
+                function leer(text) {
+                    var d = document.createElement('p');
+                    d.className = 'lm3-leer';
+                    d.textContent = text;
+                    return d;
+                }
+
+                function zeichneListe() {
+                    if (!el.liste) return;
+                    el.liste.textContent = '';
+                    if (!zustand.geladen) { el.liste.appendChild(leer(LM_T.laden)); return; }
+                    if (zustand.tab === 'geplant') {
+                        if (!zustand.geplant.length) { el.liste.appendChild(leer(LM_T.keineGeplant)); return; }
+                        zustand.geplant.forEach(function (g) { el.liste.appendChild(zeileGeplant(g)); });
+                        return;
+                    }
+                    if (zustand.fehler) return;
+                    var liste = sichtbareFluege();
+                    if (!liste.length) { el.liste.appendChild(leer(zustand.fluege.length ? LM_T.keineFilter : LM_T.keine)); return; }
+                    liste.forEach(function (f) { el.liste.appendChild(zeileAktiv(f)); });
+                }
+
+                function zeileAktiv(f) {
+                    var pos = f.pos || {};
+                    var phase = LM3.phaseForDisplay(f.phase, f.shadow_segment);
+                    var b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'lm3-zeile' + (zustand.auswahl === f.id ? ' ist-gewaehlt' : '') + (f.status === 'offline' ? ' ist-offline' : '');
+                    b.setAttribute('role', 'listitem');
+                    b.style.setProperty('--ph', LM3.phaseColor(phase));
+                    var flugzeug = [f.aircraft_icao, f.registration].filter(Boolean).join(' · ') || '—';
+                    var fuel = LM3.tonnen(pos.fuel_total_kg);
+                    var ap = LM3.apFlags(pos);
+                    b.innerHTML =
+                        '<span class="lm3-z1"><strong class="lm3-cs">' + lmEsc(f.callsign || (LM_T.pilot + ' ' + f.pilot)) + '</strong>' +
+                        '<span class="lm3-pille">' + lmEsc(LM3.phaseLabel(phase)) + '</span>' +
+                        '<span class="lm3-alter" title="Last">' + (f.last_seen ? lmEsc(LM3.ageString(f.last_seen)) : '—') + '</span></span>' +
+                        '<span class="lm3-z2">' + lmEsc(f.dep || '?') + ' <span class="lm3-pfeil">→</span> ' + lmEsc(f.arr || '?') +
+                        '<span class="lm3-trenner">·</span>' + lmEsc(flugzeug) + '</span>' +
+                        '<span class="lm3-z3">' + lmEsc(f.pilot_name || (f.va + '/' + f.pilot)) +
+                        (f.status === 'offline' ? ' <em class="lm3-off">' + lmEsc(LM_T.offline) + '</em>' : '') + '</span>' +
+                        '<span class="lm3-werte">' +
+                        wert('ALT', pos.alt_ft != null ? LM3.zahl(pos.alt_ft, LM_SPRACHE) : '—') +
+                        wert('IAS', pos.ias_kt != null ? Math.round(pos.ias_kt) : '—') +
+                        wert('GS', pos.gs_kt != null ? Math.round(pos.gs_kt) : '—') +
+                        wert('V/S', LM3.vsText(pos.vs_fpm), pos.vs_fpm != null && Math.abs(pos.vs_fpm) > 2000) +
+                        wert('HDG', pos.hdg_true != null ? Math.round(pos.hdg_true) + '°' : '—') +
+                        wert('Fuel', fuel != null ? fuel + 't' : '—') +
+                        wert('AP', ap || '—', false, 'lm3-wert-ap') +
+                        '</span>';
+                    b.addEventListener('click', function () { waehle(f.id, true); });
+                    return b;
+                }
+                function wert(name, w, warn, extra) {
+                    return '<span class="lm3-wert' + (warn ? ' ist-warn' : '') + (extra ? ' ' + extra : '') + '"><span>' + lmEsc(name) + '</span><b>' + lmEsc(w) + '</b></span>';
+                }
+                function zeileGeplant(g) {
+                    var d = document.createElement('div');
+                    d.className = 'lm3-zeile lm3-zeile-geplant';
+                    d.setAttribute('role', 'listitem');
+                    d.innerHTML =
+                        '<span class="lm3-z1"><strong class="lm3-cs">' + lmEsc(g.callsign || '—') + '</strong>' +
+                        (g.zeit ? '<span class="lm3-alter">' + lmEsc(g.zeit) + '</span>' : '') + '</span>' +
+                        '<span class="lm3-z2">' + lmEsc(g.dep || '?') + ' <span class="lm3-pfeil">→</span> ' + lmEsc(g.arr || '?') + '</span>' +
+                        '<span class="lm3-z3">' + lmEsc(g.pilot) + '</span>';
+                    return d;
+                }
+
+                // ── Marker ──
+                function lageFuer(f) {
+                    if (!f.pos) return null;
+                    var lon = f.pos.lon;
+                    // Gewaehlter Flug: Marker in dieselbe Weltkopie wie seine Spur.
+                    // Alle anderen: in die Weltkopie, in der die Karte gerade steht.
+                    if (spurDaten.id === f.id && spurDaten.spur.length) lon = LM3.neben(lon, spurDaten.spur[spurDaten.spur.length - 1][1]);
+                    else lon = LM3.neben(lon, map.getCenter().lng);
+                    return [f.pos.lat, lon];
+                }
+                function icon(f, gewaehlt) {
+                    var phase = LM3.phaseForDisplay(f.phase, f.shadow_segment);
+                    var hdg = f.pos && f.pos.hdg_true != null ? Math.round(f.pos.hdg_true) : 0;
+                    var label = gewaehlt ? '<span class="lm3-mlabel">' + lmEsc(f.callsign || f.pilot) + '</span>' : '';
+                    return L.divIcon({
+                        className: 'lm3-marker' + (gewaehlt ? ' ist-gewaehlt' : '') + (f.status === 'offline' ? ' ist-offline' : ''),
+                        html: '<span class="lm3-flieger" style="--ph:' + LM3.phaseColor(phase) + ';transform:rotate(' + hdg + 'deg)">' + LM_FLIEGER_SVG + '</span>' + label,
+                        iconSize: [34, 34], iconAnchor: [17, 17]
+                    });
+                }
+                function zeichneMarker() {
+                    var sichtbar = {};
+                    sichtbareFluege().forEach(function (f) {
+                        var lage = lageFuer(f);
+                        if (!lage) return;
+                        sichtbar[f.id] = true;
+                        var gew = zustand.auswahl === f.id;
+                        var m = marker[f.id];
+                        if (!m) {
+                            m = L.marker(lage, { icon: icon(f, gew), keyboard: true, title: f.callsign || f.id, riseOnHover: true });
+                            m.on('click', function (ev) { L.DomEvent.stopPropagation(ev); waehle(f.id, false); });
+                            m.addTo(flugEbene);
+                            marker[f.id] = m;
+                        } else {
+                            m.setLatLng(lage);
+                            m.setIcon(icon(f, gew));
+                        }
+                        m.setZIndexOffset(gew ? 1000 : 0);
+                    });
+                    Object.keys(marker).forEach(function (id) {
+                        if (!sichtbar[id]) { flugEbene.removeLayer(marker[id]); delete marker[id]; }
+                    });
+                }
+
+                // ── Auswahl, Spur, Route ──
+                function waehle(id, ausListe) {
+                    zustand.auswahl = id;
+                    var f = findeFlug(id);
+                    if (el.wrap) el.wrap.classList.add('hat-detail');
+                    spurDaten = { id: id, spur: [], route: [] };
+                    spurEbene.clearLayers();
+                    if (typeof routeLineLayer !== 'undefined') routeLineLayer.clearLayers();
+                    zeichneListe(); zeichneMarker(); zeichneDetail();
+                    if (f && f.pos) {
+                        // Aus der Weltansicht heranholen, damit Spur und Lage lesbar sind.
+                        if (map.getZoom() < 5) map.setView(lageFuer(f), 5, { animate: false });
+                        zentriere(lageFuer(f), true);
+                    }
+                    holeSpur(id);
+                    if (spurTimer) clearInterval(spurTimer);
+                    spurTimer = setInterval(function () { if (!document.hidden) holeSpur(id); }, 30000);
+                    if (ausListe && el.wrap && el.wrap.classList.contains('lm3--schmal')) setzePanel(false);
+                }
+                function schliesseDetail() {
+                    zustand.auswahl = null;
+                    spurDaten = { id: null, spur: [], route: [] };
+                    spurEbene.clearLayers();
+                    if (typeof routeLineLayer !== 'undefined') routeLineLayer.clearLayers();
+                    if (spurTimer) { clearInterval(spurTimer); spurTimer = null; }
+                    if (el.wrap) el.wrap.classList.remove('hat-detail');
+                    zeichneListe(); zeichneMarker(); zeichneDetail();
+                }
+                window.vaInfoCardClose = schliesseDetail;
+
+                function holeSpur(id) {
+                    var f = findeFlug(id);
+                    if (!f) return;
+                    var basis = cfg.flightsApi + '/' + encodeURIComponent(f.va) + '/' + encodeURIComponent(f.pilot);
+                    Promise.all([
+                        fetch(basis + '/spur', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return null; }),
+                        fetch(basis + '/route', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return null; })
+                    ]).then(function (a) {
+                        if (zustand.auswahl !== id) return;
+                        var spur = a[0] && Array.isArray(a[0].punkte) ? a[0].punkte : [];
+                        var route = a[1] && Array.isArray(a[1].punkte) ? a[1].punkte : [];
+                        zeichneSpur(f, spur, route);
+                    });
+                }
+                function zeichneSpur(f, spurRoh, routeRoh) {
+                    var spur = LM3.fortlaufend(spurRoh);
+                    var akt = findeFlug(f.id) || f;
+                    if (akt.pos) {
+                        var bezug = spur.length ? spur[spur.length - 1][1] : akt.pos.lon;
+                        spur.push([akt.pos.lat, LM3.neben(akt.pos.lon, bezug)]);
+                    }
+                    // Die ganze Spur in die Weltkopie legen, in der die Karte gerade
+                    // steht — sonst liegt sie nach 180° in der Nachbarkopie und
+                    // Leaflet schneidet sie weg (JAL7 PANC→RJAA, gemessen 30.10.).
+                    spur = LM3.verschiebeNahe(spur, map.getCenter().lng);
+                    var route = LM3.fortlaufend(routeRoh);
+                    if (route.length && spur.length) {
+                        var schub = LM3.neben(route[0][1], spur[0][1]) - route[0][1];
+                        route = route.map(function (p) { return [p[0], p[1] + schub, p[2]]; });
+                    }
+                    spurDaten = { id: f.id, spur: spur, route: route };
+                    spurEbene.clearLayers();
+                    if (typeof routeLineLayer !== 'undefined') routeLineLayer.clearLayers();
+                    if (route.length > 1) {
+                        L.polyline(route.map(function (p) { return [p[0], p[1]]; }), { className: 'lm3-route', weight: 2, dashArray: '6 6', interactive: false }).addTo(spurEbene);
+                    } else if (akt.pos && akt.arr && typeof showRouteLine === 'function') {
+                        // Ohne OFP: rote Ziel-Linie wie bisher (staticAirportPos aus VATSpy).
+                        showRouteLine(map, lageFuer(akt), akt.arr);
+                    }
+                    if (spur.length > 1) {
+                        L.polyline(spur.map(function (p) { return [p[0], p[1]]; }), { className: 'lm3-spur-schatten', weight: 6, interactive: false }).addTo(spurEbene);
+                        L.polyline(spur.map(function (p) { return [p[0], p[1]]; }), { className: 'lm3-spur', weight: 3, interactive: false }).addTo(spurEbene);
+                    }
+                    zeichneMarker();
+                }
+
+                // ── Flugdetail (Felder wie PilotDetail der Webapp) ──
+                function zeichneDetail() {
+                    if (!el.detail) return;
+                    var f = zustand.auswahl ? findeFlug(zustand.auswahl) : null;
+                    if (!f) { el.detail.hidden = true; el.detail.innerHTML = ''; return; }
+                    var pos = f.pos || {};
+                    var phase = LM3.phaseForDisplay(f.phase, f.shadow_segment);
+                    var stand = '';
+                    if (f.dep_gate && f.arr_gate) stand = LM_T.stand + ' ' + f.dep_gate + ' → ' + f.arr_gate;
+                    else if (f.dep_gate) stand = LM_T.stand + ' ' + f.dep_gate;
+                    else if (f.arr_gate) stand = LM_T.stand + ' → ' + f.arr_gate;
+                    var meta = [f.aircraft_icao || f.registration || '—'];
+                    if (f.registration && f.aircraft_icao) meta.push(f.registration);
+                    if (f.sim) meta.push(LM3.formatSimLabel(f.sim));
+                    meta.push('ACARS: ' + (f.acars || 'AeroACARS'));
+                    var warn = '';
+                    if (pos.stall_warning) warn += '<span class="lm3-flag">⚠ STALL</span>';
+                    if (pos.overspeed_warning) warn += '<span class="lm3-flag">⚠ OVERSPEED</span>';
+                    var kv = [];
+                    kv.push(['HDG', pos.hdg_true != null ? Math.round(pos.hdg_true) + '° T' : '—']);
+                    if (pos.agl_ft != null && pos.agl_ft < 5000) kv.push(['AGL', LM3.zahl(pos.agl_ft, LM_SPRACHE) + ' ft']);
+                    if (pos.mach != null && pos.mach > 0.4) kv.push(['Mach', Number(pos.mach).toFixed(3)]);
+                    kv.push(['Wind', pos.wind_dir_deg != null ? Math.round(pos.wind_dir_deg) + '° / ' + Math.round(pos.wind_speed_kt || 0) + ' kt' : '—']);
+                    kv.push(['QNH', pos.qnh_hpa != null ? LM3.fmtQnhBoth(pos.qnh_hpa) : '—', pos.qnh_hpa != null && pos.altimeter_hpa != null ? 'Set ' + LM3.fmtQnhBoth(pos.altimeter_hpa) : null]);
+                    kv.push(['OAT', pos.oat_c != null ? Math.round(pos.oat_c) + '°C' : '—']);
+                    kv.push(['Fuel', pos.fuel_total_kg != null ? LM3.tonnen(pos.fuel_total_kg) + ' t' + (pos.fuel_flow_kg_h ? ' · ' + LM3.tonnen(pos.fuel_flow_kg_h, 2) + ' t/h' : '') : '—']);
+                    kv.push(['TOW', pos.total_weight_kg != null ? LM3.tonnen(pos.total_weight_kg) + ' t' : '—']);
+                    var badge = function (text, an, unbekannt) {
+                        return '<span class="lm3-badge' + (an ? ' ist-an' : '') + (unbekannt ? ' ist-unbekannt' : '') + '">' + lmEsc(text) + '</span>';
+                    };
+                    var flaps = Math.round((pos.flaps_position || 0) * 100);
+                    var config = badge('Gear DN', (pos.gear_position || 0) > 0.5) +
+                        badge('Flaps ' + flaps + '%', (pos.flaps_position || 0) > 0) +
+                        badge(pos.spoilers_armed == null ? 'SPL armed ?' : 'SPL armed', pos.spoilers_armed === true, f.pos != null && pos.spoilers_armed == null) +
+                        badge('Park brk', pos.parking_brake === true) +
+                        badge('ENG ' + (pos.engines_running || 0), (pos.engines_running || 0) > 0);
+                    var apZeile = (pos.ap_master || pos.ap_hdg || pos.ap_alt || pos.ap_nav || pos.ap_app)
+                        ? '<div class="lm3-badges">' + badge('AP', !!pos.ap_master) + badge('HDG', !!pos.ap_hdg) + badge('ALT', !!pos.ap_alt) + badge('NAV', !!pos.ap_nav) + badge('APP', !!pos.ap_app) + '</div>'
+                        : '';
+                    var kachel = function (name, w, einheit, warnTon) {
+                        return '<div class="lm3-kachel' + (warnTon ? ' ist-warn' : '') + '"><span>' + lmEsc(name) + '</span><b>' + lmEsc(w) + '</b><small>' + lmEsc(einheit) + '</small></div>';
+                    };
+
+                    el.detail.style.setProperty('--ph', LM3.phaseColor(phase));
+                    el.detail.innerHTML =
+                        '<header class="lm3-d-kopf">' +
+                          '<div><div class="lm3-d-cs">' + lmEsc(f.callsign || (LM_T.pilot + ' ' + f.pilot)) + '</div>' +
+                          '<div class="lm3-d-route">' + lmEsc(f.dep || '?') + ' <span class="lm3-pfeil">→</span> ' + lmEsc(f.arr || '?') + '</div>' +
+                          (stand ? '<div class="lm3-d-stand">' + lmEsc(stand) + '</div>' : '') + '</div>' +
+                          '<div class="lm3-d-rechts"><span class="lm3-d-phase">' + lmEsc(LM3.phaseLabel(phase)) + '</span>' +
+                          '<button type="button" class="lm3-zu" data-lm3-zu aria-label="' + lmEsc(LM_T.schliessen) + '">×</button></div>' +
+                        '</header>' +
+                        '<div class="lm3-d-meta">' + lmEsc(meta.join(' · ')) + '<span class="lm3-d-pilot">' + lmEsc(f.pilot_name || (f.va + '/' + f.pilot)) + '</span>' +
+                          (f.status === 'offline' ? ' <em class="lm3-off">' + lmEsc(LM_T.offline) + '</em>' : '') + '</div>' +
+                        (warn ? '<div class="lm3-flags">' + warn + '</div>' : '') +
+                        '<div class="lm3-kacheln">' +
+                          kachel('ALT', pos.alt_ft != null ? LM3.zahl(pos.alt_ft, LM_SPRACHE) : '—', 'ft') +
+                          kachel('IAS', pos.ias_kt != null ? String(Math.round(pos.ias_kt)) : '—', 'kt') +
+                          kachel('GS', pos.gs_kt != null ? String(Math.round(pos.gs_kt)) : '—', 'kt') +
+                          kachel('V/S', pos.vs_fpm != null ? (pos.vs_fpm > 0 ? '+' : '') + Math.round(pos.vs_fpm) : '—', 'fpm', pos.vs_fpm != null && Math.abs(pos.vs_fpm) > 2000) +
+                        '</div>' +
+                        '<dl class="lm3-kv">' + kv.map(function (p) { return '<dt>' + lmEsc(p[0]) + '</dt><dd>' + lmEsc(p[1]) + (p[2] ? '<small>' + lmEsc(p[2]) + '</small>' : '') + '</dd>'; }).join('') + '</dl>' +
+                        '<div class="lm3-badges">' + config + '</div>' + apZeile +
+                        '<div class="lm3-d-fuss"><span>' + (f.last_seen ? lmEsc(LM3.ageString(f.last_seen)) + ' ' + lmEsc(LM_T.zuletzt) : '') + '</span>' +
+                        '<button type="button" class="lm3-knopf" data-lm3-folgen>' + lmEsc(zustand.folgen ? LM_T.folgt : LM_T.folgen) + '</button></div>';
+                    el.detail.hidden = false;
+                    var zu = el.detail.querySelector('[data-lm3-zu]');
+                    if (zu) zu.addEventListener('click', schliesseDetail);
+                    var fo = el.detail.querySelector('[data-lm3-folgen]');
+                    if (fo) fo.addEventListener('click', function () { setzeFolgen(!zustand.folgen); });
+                }
+
+                // ── Folgen: gewaehlter Flug in der Mitte, sonst alle im Blick ──
+                function setzeFolgen(an) {
+                    zustand.folgen = !!an;
+                    syncFolgenKnopf();
+                    zeichneDetail();
+                    if (zustand.folgen) folge(true);
+                }
+                function syncFolgenKnopf() {
+                    if (!el.folgen) return;
+                    el.folgen.classList.toggle('active', zustand.folgen);
+                    el.folgen.setAttribute('aria-pressed', zustand.folgen ? 'true' : 'false');
+                    var s = el.folgen.querySelector('span');
+                    if (s) s.textContent = zustand.folgen ? LM_T.folgen : LM_T.frei;
+                }
+                if (el.folgen) el.folgen.addEventListener('click', function () { setzeFolgen(!zustand.folgen); });
+                syncFolgenKnopf();
+                // Wer die Karte selbst bewegt, uebernimmt — Folgen geht aus.
+                map.on('dragstart', function () { if (zustand.folgen) setzeFolgen(false); });
+                // Nach jedem Verschieben die Marker in die sichtbare Weltkopie holen.
+                map.on('moveend', function () { zeichneMarker(); });
+
+                function folge(sofort) {
+                    if (!zustand.folgen && !zustand.ersteAnsicht) return;
+                    var gew = zustand.auswahl ? findeFlug(zustand.auswahl) : null;
+                    if (gew && gew.pos) { zentriere(lageFuer(gew), !sofort); return; }
+                    var punkte = [];
+                    sichtbareFluege().forEach(function (f) { if (f.pos && f.status !== 'offline') punkte.push(lageFuer(f)); });
+                    if (!punkte.length) return;
+                    // Ueber die Datumsgrenze: alle Laengen neben die erste legen.
+                    var bezug = punkte[0][1];
+                    punkte = punkte.map(function (p) { return [p[0], LM3.neben(p[1], bezug)]; });
+                    zustand.ersteAnsicht = false;
+                    if (punkte.length === 1) { map.setView(punkte[0], Math.max(map.getZoom(), 6), { animate: !sofort }); return; }
+                    var opt = freiraum();
+                    opt.maxZoom = 7;
+                    opt.animate = !sofort;
+                    map.fitBounds(L.latLngBounds(punkte), opt);
+                }
+                // Platz, den Liste und Detail ueber der Karte belegen.
+                function freiraum() {
+                    var links = 40, rechts = 40, oben = 60, unten = 40;
+                    if (el.wrap && !el.wrap.classList.contains('lm3--schmal')) {
+                        if (el.panel && !el.panel.classList.contains('ist-zu') && !el.panel.hidden) links = el.panel.offsetWidth + 40;
+                        if (el.detail && !el.detail.hidden) rechts = el.detail.offsetWidth + 40;
+                    } else if (el.detail && !el.detail.hidden) {
+                        unten = el.detail.offsetHeight + 30;
+                    } else if (el.panel && el.panel.classList.contains('ist-offen')) {
+                        unten = el.panel.offsetHeight + 30;
+                    }
+                    return { paddingTopLeft: [links, oben], paddingBottomRight: [rechts, unten] };
+                }
+                // Punkt in die Mitte der FREIEN Kartenflaeche legen (nicht unter
+                // Liste, Detail oder das Blatt von unten).
+                function zentriere(lage, animiert) {
+                    var fr = freiraum(), groesse = map.getSize();
+                    var ziel = L.point(
+                        (fr.paddingTopLeft[0] + groesse.x - fr.paddingBottomRight[0]) / 2,
+                        (fr.paddingTopLeft[1] + groesse.y - fr.paddingBottomRight[1]) / 2
+                    );
+                    var mitte = map.latLngToContainerPoint(map.getCenter());
+                    var punkt = map.latLngToContainerPoint(lage);
+                    map.panTo(map.containerPointToLatLng(mitte.add(punkt.subtract(ziel))), { animate: !!animiert });
+                }
+                map.on('click', function () { if (zustand.auswahl) schliesseDetail(); });
+
+                // ── Panel auf/zu (schmal: unten als Blatt) ──
+                function setzePanel(offen) {
+                    if (!el.panel) return;
+                    el.panel.classList.toggle('ist-offen', !!offen);
+                    el.panel.classList.toggle('ist-zu', !offen);
+                    var knopf = document.getElementById('mob-toggle-panel');
+                    if (knopf) knopf.setAttribute('aria-pressed', offen ? 'true' : 'false');
+                    var zu = document.getElementById('lm3-panel-zu');
+                    if (zu) zu.setAttribute('aria-expanded', offen ? 'true' : 'false');
+                    // Das Blatt von unten verdeckt die Haelfte der Karte — neu einpassen.
+                    if (zustand.folgen && el.wrap && el.wrap.classList.contains('lm3--schmal')) setTimeout(function () { folge(true); }, 0);
+                }
+                var panelZu = document.getElementById('lm3-panel-zu');
+                if (panelZu) panelZu.addEventListener('click', function () { setzePanel(el.panel.classList.contains('ist-zu')); });
+                var mobKnopf = document.getElementById('mob-toggle-panel');
+                if (mobKnopf) mobKnopf.addEventListener('click', function () {
+                    var offen = !el.panel.classList.contains('ist-offen');
+                    if (offen && zustand.auswahl) schliesseDetail();
+                    setzePanel(offen);
                 });
 
-                L.Map.addInitHook(function () {
-                    var map = this;
-                    window._liveMapInstance = map;
+                setzeTab('aktiv');
+                zeichneKopf();
+                holeFluege().then(function () { planeAbruf(); });
 
-                    (function setupBasemapControl() {
-                        var cfg = window.LIVE_MAP_UI || {};
-                        var allowSatellite = !!cfg.enableSatelliteBasemap;
-                        var showSwitcher = !!cfg.showBasemapSwitcher;
+                return { setzePanel: setzePanel, zustand: zustand };
+            }
 
-                        var basemapDefs = {
-                            positron: {
-                                label: 'Carto Light',
-                                url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                                options: { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
-                            },
-                            osm: {
-                                label: 'OpenStreetMap',
-                                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                options: { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' },
-                            },
-                            dark: {
-                                label: 'Carto Dark',
-                                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                                options: { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' },
-                            },
-                            satellite: {
-                                label: 'Satellite',
-                                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                                options: { maxZoom: 18, attribution: 'Tiles &copy; Esri' },
-                            },
-                        };
+            // ════════════════════════════════════════════════════════════
+            //  KARTE — eigener Leaflet-Aufbau statt `render_live_map`.
+            //  Der Kern wuerde sonst selbst /api/acars abfragen und eigene
+            //  VA-Flieger zeichnen (doppelt zu den Live-Fluegen) und eine
+            //  zweite Grundebene ohne CARTO-Schluessel bauen (v4.7.4).
+            // ════════════════════════════════════════════════════════════
+            var lm3Karte = null;
 
-                        var enabledKeys = ['positron', 'osm', 'dark'];
-                        if (allowSatellite) enabledKeys.push('satellite');
+            function applyLayerVisibility() {
+                var map = lm3Karte;
+                if (!map) return;
+                if(vatsimShowPilots&&showVatsim){if(!map.hasLayer(vatsimPilotsLayer))vatsimPilotsLayer.addTo(map);}else map.removeLayer(vatsimPilotsLayer);
+                if(vatsimShowPilots&&showIvao){if(!map.hasLayer(ivaoPilotsLayer))ivaoPilotsLayer.addTo(map);}else map.removeLayer(ivaoPilotsLayer);
+                if(vatsimShowCtrl&&showVatsim){if(!map.hasLayer(vatsimCtrlLayer))vatsimCtrlLayer.addTo(map);}else map.removeLayer(vatsimCtrlLayer);
+                if(vatsimShowCtrl&&showIvao){if(!map.hasLayer(ivaoCtrlLayer))ivaoCtrlLayer.addTo(map);}else map.removeLayer(ivaoCtrlLayer);
+                if(vatsimShowSectors&&showVatsim){if(!map.hasLayer(vatsimSectorLayer))vatsimSectorLayer.addTo(map);}else map.removeLayer(vatsimSectorLayer);
+                if(vatsimShowSectors&&showIvao){if(!map.hasLayer(ivaoSectorLayer))ivaoSectorLayer.addTo(map);}else map.removeLayer(ivaoSectorLayer);
+            }
 
-                        // Den CARTO-Schluessel an die Adresse haengen — an EINER
-                        // Stelle, nicht an jedem Eintrag.
-                        //
-                        // CARTO verlangt ihn seit dem 26.08.2026 fuer seine
-                        // Rasterkacheln; ohne ihn liegt "API KEY REQUIRED" quer
-                        // ueber der Karte. Betroffen sind hier "Carto Light" und
-                        // "Carto Dark" — OpenStreetMap und Esri nicht.
-                        //
-                        // Weil hier und nicht an den Eintraegen: Wer spaeter einen
-                        // weiteren CARTO-Stil ergaenzt, bekommt den Schluessel
-                        // automatisch mit und muss nicht daran denken.
-                        var cartoKey = String(cfg.cartoApiKey || '');
-                        var mitCartoKey = function (url) {
-                            if (!cartoKey || String(url).indexOf('cartocdn.com') === -1) return url;
-                            if (/[?&]key=/.test(url)) return url;
-                            return url + (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(cartoKey);
-                        };
+            (function lm3Start() {
+                var cfg = window.LIVE_MAP_UI || {};
+                var mapEl = document.getElementById('map');
+                var wrap = document.getElementById('lm3');
+                if (!window.L || !L.map || !mapEl) {
+                    console.error('[LiveMap] Leaflet nicht geladen — Karte kann nicht starten');
+                    return;
+                }
 
-                        var mapLayers = {};
-                        enabledKeys.forEach(function(key) {
-                            var def = basemapDefs[key];
-                            if (!def) return;
-                            var layer = L.tileLayer(mitCartoKey(def.url), def.options || {});
-                            layer._lmBasemapKey = key;
-                            mapLayers[key] = layer;
-                        });
+                // Breite des Widgets (nicht des Fensters!) bestimmt den Aufbau:
+                // im GSG-Rahmen nimmt die Seitenleiste ~250 px weg.
+                function messeBreite() {
+                    if (!wrap) return;
+                    var b = wrap.getBoundingClientRect().width;
+                    wrap.classList.toggle('lm3--schmal', b < 760);
+                    wrap.classList.toggle('lm3--mittel', b >= 760 && b < 1100);
+                }
+                messeBreite();
 
-                        function clearCurrentBaseLayers() {
-                            map.eachLayer(function(layer) {
-                                if (!(layer instanceof L.TileLayer)) return;
-                                var pane = (layer.options && layer.options.pane) || 'tilePane';
-                                if (pane !== 'weatherPane') map.removeLayer(layer);
-                            });
-                        }
-
-                        var preferred = String(cfg.defaultBasemap || 'positron').toLowerCase();
-                        var saved = '';
-                        try { saved = String(localStorage.getItem('livemap_basemap') || '').toLowerCase(); } catch (e) {}
-
-                        var selectedKey = saved && mapLayers[saved] ? saved : preferred;
-                        if (!mapLayers[selectedKey]) selectedKey = 'positron';
-                        if (!mapLayers[selectedKey]) selectedKey = Object.keys(mapLayers)[0];
-                        if (!selectedKey) return;
-
-                        clearCurrentBaseLayers();
-                        mapLayers[selectedKey].addTo(map);
-
-                        // Die Grundebene des Kerns nachtraeglich entfernen.
-                        //
-                        // # Warum sie ueberhaupt da ist
-                        //
-                        // Die Seite reicht `providers: {'CartoDB.Positron': {}}`
-                        // an `render_live_map` durch, und der Kern baut daraus
-                        // eine eigene Kachelebene. Sie WEGZULASSEN geht nicht:
-                        // Bei leerer Liste setzt der Kern von sich aus
-                        // `Esri.WorldStreetMap` ein.
-                        //
-                        // `clearCurrentBaseLayers()` oben erwischt sie nicht,
-                        // weil der Kern sie erst danach hinzufuegt. Am
-                        // 27.08.2026 auf der laufenden Karte nachgesehen: Es
-                        // lagen ZWEI Grundebenen uebereinander.
-                        //
-                        // # Was das kostet
-                        //
-                        // Jede Kachel wurde doppelt geholt — doppeltes
-                        // CARTO-Kontingent (frei sind 5 Mio. im Monat), und die
-                        // obere trug kein `?key=`, also das Wasserzeichen. Das
-                        // ist ProAvias Befund vom 27.08.: beim Laden bestempelt,
-                        // nach dem Umschalten sauber (weil das Umschalten die
-                        // Fremdebene mitnimmt).
-                        //
-                        // # Vorsichtig
-                        //
-                        // Entfernt werden NUR CARTO-Ebenen ohne unsere Marke.
-                        // Wer eine eigene Grundkarte dazulegt, behaelt sie.
-                        var fremdeCartoEbenenWeg = function () {
-                            map.eachLayer(function (layer) {
-                                if (!(layer instanceof L.TileLayer)) return;
-                                if (layer._lmBasemapKey) return;
-                                var pane = (layer.options && layer.options.pane) || 'tilePane';
-                                if (pane === 'weatherPane') return;
-                                if (String(layer._url || '').indexOf('cartocdn.com') === -1) return;
-                                map.removeLayer(layer);
-                            });
-                        };
-                        map.whenReady(fremdeCartoEbenenWeg);
-                        // Und einmal nach dem aktuellen Durchlauf: `whenReady`
-                        // feuert sofort, wenn die Karte schon bereit ist — dann
-                        // waere die Ebene des Kerns womoeglich noch nicht da.
-                        setTimeout(fremdeCartoEbenenWeg, 0);
-
-                        if (showSwitcher && Object.keys(mapLayers).length > 1) {
-                            var controlLayers = {};
-                            Object.keys(mapLayers).forEach(function(key) {
-                                controlLayers[basemapDefs[key].label] = mapLayers[key];
-                            });
-                            L.control.layers(controlLayers, null, { position: 'topleft', collapsed: true }).addTo(map);
-                            map.on('baselayerchange', function(evt) {
-                                var key = evt && evt.layer && evt.layer._lmBasemapKey ? evt.layer._lmBasemapKey : '';
-                                if (key) {
-                                    try { localStorage.setItem('livemap_basemap', key); } catch (e) {}
-                                }
-                            });
-                        }
-                    })();
-
-                    routeLineLayer.addTo(map);
-
-                    var vatsimPollTimer = null;
-                    var ivaoPollTimer = null;
-                    function getVatsimPollDelay() {
-                        return document.hidden ? Math.max(VATSIM_REFRESH_MS * 3, 120000) : VATSIM_REFRESH_MS;
-                    }
-                    function getIvaoPollDelay() {
-                        return document.hidden ? Math.max(IVAO_REFRESH_MS * 4, 90000) : IVAO_REFRESH_MS;
-                    }
-                    function scheduleVatsimPoll(delayMs) {
-                        if (vatsimPollTimer) clearTimeout(vatsimPollTimer);
-                        vatsimPollTimer = setTimeout(function() {
-                            loadVatsim(map).finally(function() {
-                                scheduleVatsimPoll(getVatsimPollDelay());
-                            });
-                        }, typeof delayMs === 'number' ? delayMs : getVatsimPollDelay());
-                    }
-                    function scheduleIvaoPoll(delayMs) {
-                        if (ivaoPollTimer) clearTimeout(ivaoPollTimer);
-                        ivaoPollTimer = setTimeout(function() {
-                            loadIvao(map).finally(function() {
-                                scheduleIvaoPoll(getIvaoPollDelay());
-                            });
-                        }, typeof delayMs === 'number' ? delayMs : getIvaoPollDelay());
-                    }
-
-                    var timeout = new Promise(function(res){ setTimeout(res, 3000); });
-                    Promise.race([logosReady, timeout]).then(function(){
-                        loadVatsim(map).finally(function() { scheduleVatsimPoll(getVatsimPollDelay()); });
-                        loadIvao(map).finally(function() { scheduleIvaoPoll(getIvaoPollDelay()); });
-                        document.addEventListener('visibilitychange', function() {
-                            if (!document.hidden) {
-                                scheduleVatsimPoll(500);
-                                scheduleIvaoPoll(500);
-                            }
-                        });
-                    });
-
-                    map.on('zoomend', function(){ updateCtrlZoom(map); });
-
-                    map.on('click', function(){
-                        drawSeq++;
-                        routeLineLayer.clearLayers();
-                        lastDrawnArr = null;
-                        var vc = document.getElementById('va-boarding-pass');
-                        if (vc && vc.classList.contains('bp-visible')) {
-                            vc.classList.remove('bp-visible');
-                            document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
-                                .forEach(function(r){ r.classList.remove('active-flight'); });
-                        }
-                        window._liveMapFlightFocusLock = false;
-                        window._liveMapSelectedCallsign = null;
-                    });
-
-                    function makeVaIcon() {
-                        var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="38" height="38"><ellipse cx="20" cy="20" rx="3.5" ry="13" fill="#ffffff" stroke="#1a3a6b" stroke-width="1.8"/><rect x="17.5" y="14" width="5" height="12" rx="1.5" fill="#e74c3c" opacity="0.85"/><polygon points="20,17 2,25 2,28 20,23 38,28 38,25" fill="#ffffff" stroke="#1a3a6b" stroke-width="1.5"/><polygon points="20,31 11,38 11,39.5 20,36 29,39.5 29,38" fill="#ffffff" stroke="#1a3a6b" stroke-width="1.3"/><ellipse cx="20" cy="10" rx="2" ry="3.5" fill="rgba(100,160,255,0.7)"/></svg>';
-                        return L.divIcon({ html:'<div style="filter:drop-shadow(0 2px 5px rgba(0,0,0,0.8));width:38px;height:38px"><img src="data:image/svg+xml;base64,' + btoa(svg) + '" width="38" height="38" style="display:block"></div>', className:'', iconSize:[38,38], iconAnchor:[19,19] });
-                    }
-
-                    var infoBox  = document.getElementById('map-info-box');
-                    var drawSeq  = 0;
-                    var vaMarkerCache = {};
-
-                    window.vaInfoCardClose = function() {
-                        var card = document.getElementById('va-boarding-pass');
-                        if (card) card.classList.remove('bp-visible');
-                        drawSeq++;
-                        routeLineLayer.clearLayers();
-                        lastDrawnArr = null;
-                        document.querySelectorAll('#va-rows-active .active-flight, #va-rows-planned .active-flight')
-                            .forEach(function(r){ r.classList.remove('active-flight'); });
-                        window._liveMapFlightFocusLock = false;
-                        window._liveMapSelectedCallsign = null;
-                    };
-
-                    window.vaInfoCardOpen = function(flight, lat, lng) {
-                        // Pass kurz zurücksetzen für saubere Anzeige
-                        var _card = document.getElementById('va-boarding-pass');
-                        if(_card) _card.classList.remove('bp-visible');
-                        // Mobil: Tabelle schließen wenn Pass geöffnet wird
-                        if(window.innerWidth <= 768) {
-                            var panel = document.getElementById('va-flights-panel');
-                            if(panel) panel.classList.remove('mobile-visible');
-                            var btn = document.getElementById('mob-toggle-panel');
-                            setMobileBtnState(btn, false);
-                        }
-                        var dep     = (flight.dpt_airport&&(flight.dpt_airport.icao||flight.dpt_airport.id))||flight.dpt_airport_id||'—';
-                        var arr     = (flight.arr_airport &&(flight.arr_airport.icao ||flight.arr_airport.id))||flight.arr_airport_id||'—';
-                        var depName = (flight.dpt_airport&&flight.dpt_airport.name)||'';
-                        var arrName = (flight.arr_airport&&flight.arr_airport.name)||'';
-                        var cs      = (flight.airline&&flight.airline.icao?flight.airline.icao:'')+(flight.flight_number||flight.callsign||'');
-                        var reg     = (flight.aircraft&&flight.aircraft.registration)||'';
-                        var ac      = (flight.aircraft&&flight.aircraft.icao)||'';
-                        var acStr   = reg?(reg+(ac?' · '+ac:'')):(ac||'—');
-                        var alt     = (flight.position&&flight.position.altitude)
-                                        ? (parseFloat(flight.position.altitude)>1000
-                                            ? 'FL'+Math.round(parseFloat(flight.position.altitude)/100)
-                                            : Math.round(parseFloat(flight.position.altitude))+' ft')
-                                        : '—';
-                        var spd     = (flight.position&&flight.position.gs)?flight.position.gs+' kt':'—';
-                        var hdg     = (flight.position&&flight.position.heading!=null)?flight.position.heading+'°':'—';
-                        var stat    = (window.translateStatus||function(s){return s;})(flight.status_text||flight.status||'—');
-                        var distFlown   = flight.position&&flight.position.distance&&flight.position.distance.nmi!=null?Math.round(parseFloat(flight.position.distance.nmi)):null;
-                        var distPlanned = flight.planned_distance&&flight.planned_distance.nmi!=null?Math.round(parseFloat(flight.planned_distance.nmi)):null;
-                        var prog = '—';
-                        if(flight._lmNoPosition){
-                            // Sim meldet noch keine Position — jede Fortschrittsangabe waere erfunden
-                            prog = (distPlanned!==null&&distPlanned>0) ? 'No position yet · '+distPlanned+' nm total' : 'No position yet';
-                        } else if(distFlown!==null&&distPlanned!==null&&distPlanned>0){
-                            prog = Math.min(100,Math.round((distFlown/distPlanned)*100))+'%  ('+distFlown+' / '+distPlanned+' nm)';
-                        } else if(distPlanned!==null){ prog = distPlanned+' nm total'; }
-                        var pilot='—';
-                        if(flight.user){pilot=flight.user.name||(flight.user.first_name?flight.user.first_name+(flight.user.last_name?' '+flight.user.last_name.charAt(0)+'.':''):'')||'—';}
-                        else if(flight.pilot){pilot=flight.pilot.name||flight.pilot.first_name||'—';}
-
-                        var set=function(id,val){var el=document.getElementById(id);if(el)el.textContent=val;};
-                        window._liveMapFlightFocusLock = true;
-                        if (cs) window._liveMapSelectedCallsign = cs;
-                        set('bp-dep',      dep);
-                        set('bp-dep-name', depName);
-                        set('bp-arr',      arr);
-                        set('bp-arr-name', arrName);
-                        set('bp-callsign', cs||'—');
-                        set('bp-pilot',    pilot);
-                        set('bp-aircraft', acStr);
-                        set('bp-alt',      alt);
-                        set('bp-spd',      spd);
-                        set('bp-hdg',      hdg);
-                        set('bp-progress', prog);
-                        var barEl = document.getElementById('bp-progress-bar');
-                        if(barEl){
-                            var pct = (distFlown!==null&&distPlanned!==null&&distPlanned>0)
-                                ? Math.min(100,Math.round((distFlown/distPlanned)*100)) : 0;
-                            barEl.style.width = pct + '%';
-                        }
-                        set('bp-dist',     distPlanned?distPlanned+' nm':'');
-
-                        var badge=document.getElementById('bp-status');
-                        if(badge){badge.textContent=stat;badge.setAttribute('data-status',stat);}
-
-                        var logoWrap=document.getElementById('bp-logo-wrap');
-                        var logoImg=document.getElementById('bp-logo');
-                        if(logoImg&&flight.airline&&flight.airline.logo){
-                            logoImg.src=flight.airline.logo.replace(/^http:\/\//i,'https://');
-                            logoImg.style.display='block';
-                            if(logoWrap)logoWrap.classList.remove('no-logo');
-                        } else {
-                            if(logoImg)logoImg.style.display='none';
-                            if(logoWrap){logoWrap.classList.add('no-logo');logoWrap.textContent=(flight.airline&&flight.airline.icao)||cs.substring(0,3)||'';}
-                        }
-
-                        // Unbrauchbare Position (0/0) nie anfliegen und keine Linie dorthin ziehen
-                        var posOk = lat!==null&&lng!==null&&window.lmUsableLatLng(lat,lng);
-                        if(posOk)map.setView([lat,lng],Math.max(map.getZoom(),7),{ animate:true, _lmUserFocus:true });
-                        if(posOk&&arr&&arr!=='—'){
-                            drawSeq++;routeLineLayer.clearLayers();lastDrawnArr=null;
-                            showRouteLine(map,L.latLng(lat,lng),arr);
-                        } else {
-                            // Ohne Position KEINE Linie stehen lassen: sonst behaelt die Karte
-                            // die Linie des zuvor angeklickten Fluges, waehrend der Pass schon
-                            // den neuen zeigt — sie sieht dann aus, als gehoere sie zu diesem.
-                            drawSeq++;routeLineLayer.clearLayers();lastDrawnArr=null;
-                        }
-
-                        var rivCard=document.getElementById('map-info-box');
-                        if(rivCard)rivCard.style.display='none';
-                        // CSS-Klasse statt style.display — verhindert Flicker
-                        var card=document.getElementById('va-boarding-pass');
-                        if(card)card.classList.add('bp-visible');
-                    };
-
-                    (function(){
-                        var rivCard=document.getElementById('map-info-box');
-                        if(!rivCard) return;
-                        // Immer versteckt halten — wir nutzen nur den Boarding-Pass
-                        new MutationObserver(function(){
-                            var isVisible = rivCard.style.display!=='none' && getComputedStyle(rivCard).display!=='none';
-                            if(isVisible) rivCard.style.display = 'none';
-                        }).observe(rivCard,{attributes:true,attributeFilter:['style','class']});
-                    })();
-
-                    var nullIslandSeen = 0;
-
-                    map.on('layeradd', function(e) {
-                        var layer=e.layer;
-                        if(!layer) return;
-
-                        // Die Flug-Gruppe des Kerns: 0/0-Marker muessen AUS DER GRUPPE raus.
-                        // `map.removeLayer()` allein genuegt nicht — der Kern zentriert die
-                        // Karte ueber `layerFlights.getBounds()`, und die Gruppe kennt das
-                        // Kind sonst weiter. Genau das zog die Ansicht auf die halbe Welt.
-                        // Leaflet feuert `layeradd` erst fuer die Kinder, dann fuer die
-                        // Gruppe — die Markierung unten ist hier also schon gesetzt.
-                        if(!layer.getIcon){
-                            if(!nullIslandSeen||typeof layer.eachLayer!=='function'||typeof layer.removeLayer!=='function') return;
-                            var doomed=[];
-                            layer.eachLayer(function(child){ if(child&&child._lmNullIsland) doomed.push(child); });
-                            for(var d=0;d<doomed.length;d++){ try{ layer.removeLayer(doomed[d]); }catch(err0){} }
-                            return;
-                        }
-                        try {
-                            var icon=layer.getIcon(), url=(icon&&icon.options&&icon.options.iconUrl)||'';
-                            if(url.indexOf('aircraft.png')===-1) return;
-
-                            // 0/0 heisst "der Sim weiss noch nicht, wo die Maschine steht" —
-                            // nicht zeichnen, statt sie in den Golf von Guinea zu setzen.
-                            var mll = layer.getLatLng ? layer.getLatLng() : null;
-                            if(mll && !window.lmUsableLatLng(mll.lat, mll.lng)){
-                                layer._lmNullIsland = true;
-                                nullIslandSeen++;
-                                var deadCs=(layer.options&&layer.options.title)||'';
-                                if(deadCs && vaMarkerCache[deadCs]) delete vaMarkerCache[deadCs];
-                                try{ map.removeLayer(layer); }catch(err1){}
-                                return;
-                            }
-
-                            layer.setIcon(makeVaIcon());
-                            layer.setZIndexOffset(10000);
-                            var cs=(layer.options&&layer.options.title)||'';
-                            if(cs) vaMarkerCache[cs]=layer;
-
-                            layer.on('click', function(ev){
-                                if(ev&&ev.originalEvent) L.DomEvent.stopPropagation(ev);
-
-                                var pos      = layer.getLatLng();
-                                var callsign = (layer.options&&layer.options.title)||'';
-                                var lat      = pos.lat;
-                                var lng      = pos.lng;
-
-                                function openPass(){
-                                    var flights = window._vaActiveFlights || [];
-                                    var flight  = null;
-
-                                    // 1) Callsign-Match (wenn vorhanden)
-                                    if(callsign) {
-                                        for(var i=0;i<flights.length;i++){
-                                            var f   = flights[i];
-                                            var fcs = (f.airline&&f.airline.icao?f.airline.icao:'')+(f.flight_number||f.callsign||'');
-                                            if(fcs===callsign||f.callsign===callsign){ flight=f; break; }
-                                        }
-                                    }
-
-                                    // 2) Fallback: nächster Flug zur Marker-Position
-                                    if(!flight && flights.length>0) {
-                                        var bestDist = Infinity;
-                                        for(var j=0;j<flights.length;j++){
-                                            var fj = flights[j];
-                                            if(!fj.position||fj.position.lat==null) continue;
-                                            var dlat = parseFloat(fj.position.lat)-lat;
-                                            var dlng = parseFloat(fj.position.lon||fj.position.lng||0)-lng;
-                                            var dist = dlat*dlat+dlng*dlng;
-                                            if(dist<bestDist){ bestDist=dist; flight=fj; }
-                                        }
-                                        // Nur akzeptieren wenn wirklich nah (< ~0.1 Grad)
-                                        if(bestDist > 0.01) flight = null;
-                                    }
-
-                                    if(!flight) return false;
-                                    document.querySelectorAll('#va-rows-active .active-flight')
-                                        .forEach(function(r){ r.classList.remove('active-flight'); });
-                                    var safeCs = safeCallsign(callsign); var row = safeCs ? document.querySelector('#va-rows-active [data-callsign="'+safeCs+'"]') : null;
-                                    if(row) row.classList.add('active-flight');
-                                    if (callsign) window._liveMapSelectedCallsign = callsign;
-                                    window._liveMapFlightFocusLock = true;
-                                    window.vaInfoCardOpen(flight, lat, lng);
-                                    return true;
-                                }
-
-                                // Sofort versuchen (Cache schon befüllt)
-                                if(!openPass()){
-                                    // Cache noch leer — kurz warten bis renderFlights durchläuft
-                                    var tries = 0;
-                                    var iv = setInterval(function(){
-                                        if(openPass() || ++tries > 10) clearInterval(iv);
-                                    }, 100);
-                                }
-                            });
-                        } catch(err){}
-                    });
-
-                    var logoImg=document.getElementById('map-airline-logo');
-                    if(logoImg){
-                        new MutationObserver(function(){
-                            var src=logoImg.getAttribute('src')||'';
-                            if(src&&src!==logoImg._lastSrc){logoImg._lastSrc=src;logoImg.src=src.replace(/^http:\/\//,'https://');}
-                        }).observe(logoImg,{attributes:true,attributeFilter:['src']});
-                    }
-
-                    var followEnabled = !!(window.LIVE_MAP_UI && window.LIVE_MAP_UI.defaultFollowFlight);
-                    var _origPanTo=map.panTo.bind(map), _origSetView=map.setView.bind(map);
-                    var _origFlyTo=map.flyTo?map.flyTo.bind(map):null;
-                    var _origFitBounds=map.fitBounds?map.fitBounds.bind(map):null;
-                    var isApplyingAutoFit = false;
-                    var lastAutoFitSignature = '';
-                    var lastAutoFitAt = 0;
-
-                    function withAutoFitGuard(fn) {
-                        isApplyingAutoFit = true;
-                        try { return fn(); }
-                        finally { isApplyingAutoFit = false; }
-                    }
-
-                    function collectActiveFlightPoints() {
-                        var flights = window._vaActiveFlights || [];
-                        var points = [];
-                        for (var i = 0; i < flights.length; i++) {
-                            var pos = flights[i] && flights[i].position;
-                            if (!pos) continue;
-                            var lat = parseFloat(pos.lat);
-                            var lng = (pos.lon != null) ? parseFloat(pos.lon) : parseFloat(pos.lng);
-                            if (!isFinite(lat) || !isFinite(lng)) continue;
-                            points.push([lat, lng]);
-                        }
-                        return points;
-                    }
-
-                    function pointsSignature(points) {
-                        return points
-                            .map(function(p){ return p[0].toFixed(2) + ',' + p[1].toFixed(2); })
-                            .sort()
-                            .join('|');
-                    }
-
-                    function hasSelectedFlightRow() {
-                        if (window._liveMapFlightFocusLock) return true;
-                        return !!document.querySelector('#va-rows-active .active-flight, #va-rows-planned .active-flight');
-                    }
-
-                    function shouldUseMultiFollow() {
-                        if (!followEnabled || isApplyingAutoFit) return false;
-                        if (hasSelectedFlightRow()) return false;
-                        return collectActiveFlightPoints().length > 1;
-                    }
-
-                    function fitToActiveFlights(options) {
-                        options = options || {};
-                        if (!map || !map._loaded) return false;
-                        if (!followEnabled && !options.force) return false;
-                        if (!options.force && hasSelectedFlightRow()) return false;
-
-                        var points = collectActiveFlightPoints();
-                        if (points.length === 0) return false;
-
-                        if (points.length === 1) {
-                            return withAutoFitGuard(function(){
-                                _origSetView(points[0], Math.max(map.getZoom(), 7), { animate: options.animate !== false });
-                                return true;
-                            });
-                        }
-
-                        if (!_origFitBounds) return false;
-
-                        var sig = pointsSignature(points);
-                        var now = Date.now();
-                        if (!options.force && sig === lastAutoFitSignature && (now - lastAutoFitAt) < 5000) return false;
-                        lastAutoFitSignature = sig;
-                        lastAutoFitAt = now;
-
-                        var bounds = L.latLngBounds(points);
-                        if (!bounds.isValid()) return false;
-
-                        var isMobile = window.innerWidth <= 768;
-                        return withAutoFitGuard(function(){
-                            _origFitBounds(bounds, {
-                                animate: options.animate !== false,
-                                paddingTopLeft: isMobile ? [20, 20] : [36, 36],
-                                paddingBottomRight: isMobile ? [20, 20] : [36, 36],
-                                maxZoom: isMobile ? 7 : 8
-                            });
-                            return true;
-                        });
-                    }
-
-                    window._liveMapFitToActiveFlights = fitToActiveFlights;
-                    window._liveMapFollowEnabled = function(){ return followEnabled; };
-
-                    // Keep manual map interactions responsive; auto-follow runs via periodic fit only.
-                    map.panTo=function(latlng,options){
-                        return _origPanTo(latlng, options || {});
-                    };
-                    map.setView=function(center,zoom,options){
-                        return _origSetView(center, zoom, options || {});
-                    };
-                    if(_origFlyTo) map.flyTo=function(latlng,zoom,options){
-                        return _origFlyTo(latlng, zoom, options || {});
-                    };
-
-                    function applyLayerVisibility() {
-                        if(vatsimShowPilots&&showVatsim){if(!map.hasLayer(vatsimPilotsLayer))vatsimPilotsLayer.addTo(map);}else map.removeLayer(vatsimPilotsLayer);
-                        if(vatsimShowPilots&&showIvao){if(!map.hasLayer(ivaoPilotsLayer))ivaoPilotsLayer.addTo(map);}else map.removeLayer(ivaoPilotsLayer);
-                        if(vatsimShowCtrl&&showVatsim){if(!map.hasLayer(vatsimCtrlLayer))vatsimCtrlLayer.addTo(map);}else map.removeLayer(vatsimCtrlLayer);
-                        if(vatsimShowCtrl&&showIvao){if(!map.hasLayer(ivaoCtrlLayer))ivaoCtrlLayer.addTo(map);}else map.removeLayer(ivaoCtrlLayer);
-                        if(vatsimShowSectors&&showVatsim){if(!map.hasLayer(vatsimSectorLayer))vatsimSectorLayer.addTo(map);}else map.removeLayer(vatsimSectorLayer);
-                        if(vatsimShowSectors&&showIvao){if(!map.hasLayer(ivaoSectorLayer))ivaoSectorLayer.addTo(map);}else map.removeLayer(ivaoSectorLayer);
-                    }
-
-                    var btnNetVatsim=document.getElementById('btnNetVatsim'), btnNetIvao=document.getElementById('btnNetIvao');
-                    if(btnNetVatsim){btnNetVatsim.style.opacity=showVatsim?'1':'.45';btnNetVatsim.addEventListener('click',function(){showVatsim=!showVatsim;btnNetVatsim.style.opacity=showVatsim?'1':'.45';if(!showVatsim){map.removeLayer(vatsimPilotsLayer);map.removeLayer(vatsimCtrlLayer);map.removeLayer(vatsimSectorLayer);}else{loadVatsim(map);applyLayerVisibility();}});}
-                    if(btnNetIvao){btnNetIvao.style.opacity=showIvao?'1':'.45';btnNetIvao.addEventListener('click',function(){showIvao=!showIvao;btnNetIvao.style.opacity=showIvao?'1':'.45';if(!showIvao){map.removeLayer(ivaoPilotsLayer);map.removeLayer(ivaoCtrlLayer);map.removeLayer(ivaoSectorLayer);}else{loadIvao(map);applyLayerVisibility();}});}
-
-                    var btnPilots=document.getElementById('btnVatsimPilots'), btnCtrl=document.getElementById('btnVatsimCtrl');
-                    var btnSectors=document.getElementById('btnVatsimSectors'), btnFollow=document.getElementById('btnFollowFlight');
-                    if(btnPilots){btnPilots.classList.toggle('active',vatsimShowPilots);btnPilots.addEventListener('click',function(){vatsimShowPilots=!vatsimShowPilots;btnPilots.classList.toggle('active',vatsimShowPilots);applyLayerVisibility();});}
-                    if(btnCtrl){btnCtrl.classList.toggle('active',vatsimShowCtrl);btnCtrl.addEventListener('click',function(){vatsimShowCtrl=!vatsimShowCtrl;btnCtrl.classList.toggle('active',vatsimShowCtrl);applyLayerVisibility();});}
-                    if(btnSectors){btnSectors.classList.toggle('active',vatsimShowSectors);btnSectors.addEventListener('click',function(){vatsimShowSectors=!vatsimShowSectors;btnSectors.classList.toggle('active',vatsimShowSectors);applyLayerVisibility();});}
-                    if(btnFollow){
-                        var syncFollowBtn = function() {
-                            btnFollow.classList.toggle('active',followEnabled);
-                            var span=btnFollow.querySelector('span'),icon=btnFollow.querySelector('i');
-                            if(span)span.textContent=followEnabled?'Follow Flight':'Free Scroll';
-                            if(icon)icon.className=followEnabled?'fas fa-crosshairs':'fas fa-lock-open';
-                        };
-                        syncFollowBtn();
-                        btnFollow.addEventListener('click',function(){
-                            followEnabled=!followEnabled;
-                            syncFollowBtn();
-                            if(followEnabled) setTimeout(function(){ fitToActiveFlights({ force:true, animate:true }); }, 50);
-                        });
-                    }
-                    setTimeout(function(){ fitToActiveFlights({ animate:false }); }, 250);
-                    applyLayerVisibility();
+                var map = L.map(mapEl, {
+                    center: cfg.center || [50, 10],
+                    zoom: cfg.zoom || 5,
+                    minZoom: 2,
+                    maxZoom: 18,
+                    worldCopyJump: true,
+                    zoomControl: false,
+                    scrollWheelZoom: true
                 });
-
-            } else {
-                console.error('[LiveMap] Leaflet nicht geladen, Hooks konnten nicht registriert werden');
-            }
-
-            // ── render_live_map ──
-            if (!window.phpvms || !phpvms.map || typeof phpvms.map.render_live_map !== 'function') {
-                console.error('[LiveMap] phpvms.map helper not available; cannot init live map');
-                return;
-            }
-
-            // ── Mobile Toggle Funktionen ──
-            window.mobTogglePanel = function() {
-                var panel = document.getElementById('va-flights-panel');
-                if (!panel) return;
-                var isVisible = panel.classList.contains('mobile-visible');
-                panel.classList.toggle('mobile-visible', !isVisible);
-                if (!isVisible) {
-                    // Panel öffnen + Tabelle aufklappen
-                    var body = document.getElementById('va-flights-body');
-                    if (body && !body.classList.contains('open')) body.classList.add('open');
-                    setTimeout(function(){
-                        if (typeof window._liveMapAdjustPanelHeight === 'function') {
-                            window._liveMapAdjustPanelHeight();
-                        }
-                    }, 60);
-                }
-                var btn = document.getElementById('mob-toggle-panel');
-                setMobileBtnState(btn, !isVisible);
-            };
-
-            window.mobToggleWeather = function() {
-                var wc = document.getElementById('weather-content');
-                var ch = document.getElementById('weather-chevron');
-                if (!wc) return;
-                var isMobile = window.innerWidth <= 768;
-                if (isMobile) {
-                    wc.classList.toggle('mob-expanded');
-                    if (ch) ch.textContent = wc.classList.contains('mob-expanded') ? '▼' : '▶';
-                } else {
-                    wc.classList.toggle('collapsed');
-                    if (ch) ch.textContent = wc.classList.contains('collapsed') ? '▶' : '▼';
-                }
-            };
-
-            // Vatsim Content toggle (Titel-Klick)
-            window.mobToggleVatsimContent = function() {
-                var vc = document.getElementById('vatsim-content');
-                var ch = document.getElementById('vatsim-chevron');
-                if (!vc) return;
-                var isMobile = window.innerWidth <= 768;
-                if (isMobile) {
-                    vc.classList.toggle('mob-expanded');
-                    if (ch) ch.textContent = vc.classList.contains('mob-expanded') ? '▼' : '▶';
-                } else {
-                    vc.classList.toggle('collapsed');
-                    if (ch) ch.textContent = vc.classList.contains('collapsed') ? '▶' : '▼';
-                }
-            };
-
-            // Mobile default states from admin settings
-            if (window.innerWidth <= 768) {
-                var mobileCfg = window.LIVE_MAP_UI || {};
-
-                var panel = document.getElementById('va-flights-panel');
-                var panelBodyMob = document.getElementById('va-flights-body');
-                var panelBtn = document.getElementById('mob-toggle-panel');
-                var flightsShouldOpen = !!mobileCfg.mobileFlightsOpen && !!mobileCfg.showTopFlightsPanel;
-
-                if (panelBodyMob) panelBodyMob.classList.toggle('open', flightsShouldOpen);
-                if (panel) panel.classList.toggle('mobile-visible', flightsShouldOpen);
-                setMobileBtnState(panelBtn, flightsShouldOpen);
-
-                var weatherContent = document.getElementById('weather-content');
-                var weatherChevron = document.getElementById('weather-chevron');
-                var weatherShouldOpen = !!mobileCfg.mobileWeatherOpen;
-                if (weatherContent) weatherContent.classList.toggle('mob-expanded', weatherShouldOpen);
-                if (weatherChevron) weatherChevron.textContent = weatherShouldOpen ? '▼' : '▶';
-
-                var networkContent = document.getElementById('vatsim-content');
-                var networkChevron = document.getElementById('vatsim-chevron');
-                var networkShouldOpen = !!mobileCfg.mobileNetworkOpen;
-                if (networkContent) networkContent.classList.toggle('mob-expanded', networkShouldOpen);
-                if (networkChevron) networkChevron.textContent = networkShouldOpen ? '▼' : '▶';
-            }
-
-            phpvms.map.render_live_map({
-                center: [parseFloat('{{ $center[0] }}') || 50.0, parseFloat('{{ $center[1] }}') || 10.0],
-                zoom: parseInt('{{ $zoom }}') || 6,
-                aircraft_icon: '{!! public_asset('/assets/img/acars/aircraft.png') !!}',
-                refresh_interval: {{ setting('acars.update_interval', 60) }},
-                units: '{{ setting('units.distance') }}',
-                flown_route_color: '#db2433',
-                leafletOptions: {
-                    scrollWheelZoom: true,
-                    providers: {
-                        'CartoDB.Positron': {},
+                lm3Karte = map;
+                window._liveMapInstance = map;
+                // Bringt die Seite keine Leaflet-Stile mit, liegen Kacheln als
+                // Bilder untereinander statt als Karte. Dann den Rueckfall-Block
+                // aus live_map_styles einschalten.
+                (function leafletStileSicherstellen() {
+                    var pane = mapEl.querySelector('.leaflet-pane');
+                    var rueckfall = document.getElementById('lm3-leaflet-css');
+                    if (pane && rueckfall && getComputedStyle(pane).position !== 'absolute') {
+                        rueckfall.media = 'all';
+                        map.invalidateSize();
                     }
-                }
-            });
+                })();
+                L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+                // ── Grundkarte (wie bisher, ohne die Grundebene des Kerns) ──
+                (function grundkarte() {
+                    var allowSatellite = !!cfg.enableSatelliteBasemap;
+                    var showSwitcher = !!cfg.showBasemapSwitcher;
+                    var defs = {
+                        positron: { label: 'Carto Light', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', options: { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' } },
+                        osm: { label: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', options: { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' } },
+                        dark: { label: 'Carto Dark', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', options: { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' } },
+                        satellite: { label: 'Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', options: { maxZoom: 18, attribution: 'Tiles &copy; Esri' } }
+                    };
+                    var keys = ['positron', 'osm', 'dark'];
+                    if (allowSatellite) keys.push('satellite');
+                    // CARTO verlangt seit dem 26.08.2026 einen Schluessel (sonst Wasserzeichen).
+                    var cartoKey = String(cfg.cartoApiKey || '');
+                    var mitKey = function (url) {
+                        if (!cartoKey || url.indexOf('cartocdn.com') === -1 || /[?&]key=/.test(url)) return url;
+                        return url + (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(cartoKey);
+                    };
+                    var ebenen = {};
+                    keys.forEach(function (k) {
+                        var l = L.tileLayer(mitKey(defs[k].url), defs[k].options);
+                        l._lmBasemapKey = k;
+                        ebenen[k] = l;
+                    });
+                    var gespeichert = '';
+                    try { gespeichert = String(localStorage.getItem('livemap_basemap') || '').toLowerCase(); } catch (e) {}
+                    var wahl = gespeichert && ebenen[gespeichert] ? gespeichert : String(cfg.defaultBasemap || 'positron').toLowerCase();
+                    if (!ebenen[wahl]) wahl = 'positron';
+                    ebenen[wahl].addTo(map);
+                    if (wrap) wrap.setAttribute('data-grundkarte', wahl);
+                    // Umschalter als Aufklapper in der Werkzeugleiste (statt der
+                    // Leaflet-Ebenensteuerung unten rechts — die nahm dem Flugdetail
+                    // bei 720 px Fensterhoehe den Platz).
+                    var kartenKnopf = document.getElementById('lm3-btn-karte');
+                    var kartenListe = document.getElementById('lm3-karten-liste');
+                    if (showSwitcher && keys.length > 1 && kartenListe) {
+                        var waehleGrundkarte = function (k) {
+                            if (!ebenen[k] || k === wahl) return;
+                            map.removeLayer(ebenen[wahl]);
+                            ebenen[k].addTo(map);
+                            wahl = k;
+                            if (wrap) wrap.setAttribute('data-grundkarte', k);
+                            try { localStorage.setItem('livemap_basemap', k); } catch (e) {}
+                            [].forEach.call(kartenListe.children, function (b) { b.classList.toggle('active', b.getAttribute('data-grundkarte') === k); });
+                        };
+                        keys.forEach(function (k) {
+                            var b = document.createElement('button');
+                            b.type = 'button';
+                            b.className = 'lm3-schalter' + (k === wahl ? ' active' : '');
+                            b.setAttribute('data-grundkarte', k);
+                            b.textContent = defs[k].label;
+                            b.addEventListener('click', function () { waehleGrundkarte(k); });
+                            kartenListe.appendChild(b);
+                        });
+                    } else if (kartenKnopf) {
+                        kartenKnopf.hidden = true;
+                    }
+                })();
+
+                attachWeatherToMap(map);
+                routeLineLayer.addTo(map);
+
+                // ── VATSIM / IVAO (unveraendert) ──
+                var vatsimPollTimer = null, ivaoPollTimer = null;
+                function vatsimPause() { return document.hidden ? Math.max(VATSIM_REFRESH_MS * 3, 120000) : VATSIM_REFRESH_MS; }
+                function ivaoPause() { return document.hidden ? Math.max(IVAO_REFRESH_MS * 4, 90000) : IVAO_REFRESH_MS; }
+                function planeVatsim(ms) {
+                    if (vatsimPollTimer) clearTimeout(vatsimPollTimer);
+                    vatsimPollTimer = setTimeout(function () { loadVatsim(map).finally(function () { planeVatsim(vatsimPause()); }); }, ms != null ? ms : vatsimPause());
+                }
+                function planeIvao(ms) {
+                    if (ivaoPollTimer) clearTimeout(ivaoPollTimer);
+                    ivaoPollTimer = setTimeout(function () { loadIvao(map).finally(function () { planeIvao(ivaoPause()); }); }, ms != null ? ms : ivaoPause());
+                }
+                Promise.race([logosReady, new Promise(function (r) { setTimeout(r, 3000); })]).then(function () {
+                    loadVatsim(map).finally(function () { planeVatsim(vatsimPause()); });
+                    loadIvao(map).finally(function () { planeIvao(ivaoPause()); });
+                    document.addEventListener('visibilitychange', function () {
+                        if (!document.hidden) { planeVatsim(500); planeIvao(500); }
+                    });
+                });
+                map.on('zoomend', function () { updateCtrlZoom(map); });
+
+                var va = starteVaFluege(map);
+
+                // ── Netz-Schalter (wie bisher) ──
+                var btnNetVatsim = document.getElementById('btnNetVatsim'), btnNetIvao = document.getElementById('btnNetIvao');
+                if (btnNetVatsim) { btnNetVatsim.classList.toggle('active', showVatsim); btnNetVatsim.addEventListener('click', function () { showVatsim = !showVatsim; btnNetVatsim.classList.toggle('active', showVatsim); if (!showVatsim) { map.removeLayer(vatsimPilotsLayer); map.removeLayer(vatsimCtrlLayer); map.removeLayer(vatsimSectorLayer); } else { loadVatsim(map); applyLayerVisibility(); } }); }
+                if (btnNetIvao) { btnNetIvao.classList.toggle('active', showIvao); btnNetIvao.addEventListener('click', function () { showIvao = !showIvao; btnNetIvao.classList.toggle('active', showIvao); if (!showIvao) { map.removeLayer(ivaoPilotsLayer); map.removeLayer(ivaoCtrlLayer); map.removeLayer(ivaoSectorLayer); } else { loadIvao(map); applyLayerVisibility(); } }); }
+                var btnPilots = document.getElementById('btnVatsimPilots'), btnCtrl = document.getElementById('btnVatsimCtrl'), btnSectors = document.getElementById('btnVatsimSectors');
+                if (btnPilots) { btnPilots.classList.toggle('active', vatsimShowPilots); btnPilots.addEventListener('click', function () { vatsimShowPilots = !vatsimShowPilots; btnPilots.classList.toggle('active', vatsimShowPilots); applyLayerVisibility(); }); }
+                if (btnCtrl) { btnCtrl.classList.toggle('active', vatsimShowCtrl); btnCtrl.addEventListener('click', function () { vatsimShowCtrl = !vatsimShowCtrl; btnCtrl.classList.toggle('active', vatsimShowCtrl); applyLayerVisibility(); }); }
+                if (btnSectors) { btnSectors.classList.toggle('active', vatsimShowSectors); btnSectors.addEventListener('click', function () { vatsimShowSectors = !vatsimShowSectors; btnSectors.classList.toggle('active', vatsimShowSectors); applyLayerVisibility(); }); }
+                applyLayerVisibility();
+
+                // ── Werkzeugleiste: Netz / Wetter als Aufklapper, nie gleichzeitig ──
+                var aufklapper = [
+                    { knopf: document.getElementById('lm3-btn-netz'), box: document.getElementById('vatsim-box'), an: cfg.showNetworkBox !== false },
+                    { knopf: document.getElementById('lm3-btn-wetter'), box: document.getElementById('weather-box'), an: cfg.showWeatherBox !== false },
+                    { knopf: document.getElementById('lm3-btn-karte'), box: document.getElementById('lm3-karte-box'), an: !document.getElementById('lm3-btn-karte') || !document.getElementById('lm3-btn-karte').hidden }
+                ];
+                aufklapper.forEach(function (a) {
+                    if (!a.knopf || !a.box) return;
+                    if (!a.an) { a.knopf.hidden = true; a.box.hidden = true; return; }
+                    a.knopf.addEventListener('click', function () {
+                        var offen = a.box.hidden;
+                        aufklapper.forEach(function (b) { if (b.box) b.box.hidden = true; if (b.knopf) b.knopf.setAttribute('aria-expanded', 'false'); });
+                        a.box.hidden = !offen;
+                        a.knopf.setAttribute('aria-expanded', offen ? 'true' : 'false');
+                        if (wrap) wrap.classList.toggle('hat-aufklapper', offen);
+                    });
+                });
+                if (cfg.showTopFlightsPanel === false) {
+                    var p = document.getElementById('lm3-panel');
+                    var m = document.getElementById('mob-toggle-panel');
+                    if (p) p.hidden = true;
+                    if (m) m.hidden = true;
+                }
+
+                // Startzustand der Liste: breit offen, schmal nach Einstellung.
+                function startPanel() {
+                    if (!va) return;
+                    var schmal = wrap && wrap.classList.contains('lm3--schmal');
+                    va.setzePanel(schmal ? !!cfg.mobileFlightsOpen : true);
+                }
+                startPanel();
+
+                var letzteSchmal = wrap && wrap.classList.contains('lm3--schmal');
+                var neuMessen = function () {
+                    messeBreite();
+                    var schmal = wrap && wrap.classList.contains('lm3--schmal');
+                    if (schmal !== letzteSchmal) { letzteSchmal = schmal; startPanel(); }
+                    map.invalidateSize();
+                };
+                if (window.ResizeObserver && wrap) new ResizeObserver(neuMessen).observe(wrap);
+                else window.addEventListener('resize', neuMessen);
+            })();
         });
     </script>
+    <!-- lm3:skripte-ende -->
 @endsection
-

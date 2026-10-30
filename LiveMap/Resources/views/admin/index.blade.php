@@ -131,6 +131,36 @@
         </div>
 
         <hr style="margin:32px 0 24px;">
+        <h5>Flight data source</h5>
+        <p class="help-block" style="margin:0 0 18px;">
+          Where the flights on the map come from. <strong>phpVMS</strong> shows the running PIREPs of this site.
+          <strong>AeroACARS Live</strong> shows the same flights, phases and fields as the AeroACARS Live web app;
+          it needs a read key, which stays on this server.
+        </p>
+        @php($lmQuelle = old('flight_source', $lmS('acars.livemap_quelle', 'phpvms')))
+        <div class="form-group">
+          <label for="flight_source">Source</label>
+          <select id="flight_source" name="flight_source" class="form-control">
+            <option value="phpvms" {{ $lmQuelle === 'phpvms' ? 'selected' : '' }}>phpVMS (running PIREPs)</option>
+            <option value="aeroacars" {{ $lmQuelle === 'aeroacars' ? 'selected' : '' }}>AeroACARS Live</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="live_url">AeroACARS Live address</label>
+          <input type="text" id="live_url" name="live_url" class="form-control" autocomplete="off"
+                 value="{{ old('live_url', $lmS('acars.livemap_live_url', \Modules\LiveMap\Http\Controllers\LiveFlightsController::STANDARD_BASIS)) }}">
+          @error('live_url')<p class="text-danger" style="margin-top:6px">{{ $message }}</p>@enderror
+        </div>
+        <div class="form-group">
+          <label for="live_key">AeroACARS Live read key</label>
+          <input type="password" id="live_key" name="live_key" class="form-control" autocomplete="new-password" value=""
+                 placeholder="{{ trim((string) $lmS('acars.livemap_live_key', '')) !== '' ? 'Stored — leave empty to keep it' : 'Not set' }}">
+          <div class="checkbox" style="margin-top:6px">
+            <label><input type="checkbox" name="live_key_clear" value="1"> Remove stored key</label>
+          </div>
+        </div>
+
+        <hr style="margin:32px 0 24px;">
         <h5>Basemap</h5>
         <p class="help-block" style="margin:0 0 18px;">
           The tiles the map is drawn on. Only the two CARTO styles need a key —
