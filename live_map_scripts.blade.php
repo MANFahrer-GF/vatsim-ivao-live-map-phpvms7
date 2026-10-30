@@ -231,6 +231,12 @@
             return punkte.map(function (p) { return [p[0], p[1] + d].concat(p.slice(2)); });
         }
 
+        // Fehler, bei denen der letzte gute Stand stehen bleiben darf (kurze
+        // Stoerung). Schluessel/Adresse falsch: nicht — dort waere er irrefuehrend.
+        function fehlerIstVoruebergehend(code) {
+            return code === 'nicht_erreichbar' || code === 'netz' || code === 'ungueltig' || code === 'phpvms';
+        }
+
         // ── Listen ──
         function filterNachPhase(fluege, phase) {
             if (!phase || phase === 'ALL') return fluege.slice();
@@ -259,7 +265,7 @@
             formatSimLabel: formatSimLabel, fmtQnhBoth: fmtQnhBoth, ageString: ageString, zahl: zahl,
             vsText: vsText, apFlags: apFlags, tonnen: tonnen,
             neben: neben, fortlaufend: fortlaufend, verschiebeNahe: verschiebeNahe,
-            filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiere: sortiere
+            fehlerIstVoruebergehend: fehlerIstVoruebergehend, filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiere: sortiere
         };
     })(typeof window !== 'undefined' ? window : globalThis);
     /* </lm3-rein> */
@@ -1341,7 +1347,9 @@
                     keineGeplant: 'Keine geplanten Flüge.', laden: 'Flüge werden geladen …',
                     folgen: 'Folgen', folgt: 'Folgt', frei: 'Frei', alle: 'Alle Phasen', zuletzt: 'vor',
                     schliessen: 'Schließen', stand: 'Stand', offline: 'offline', abflug: 'Abflug',
-                    pilot: 'Pilot', fehler: {
+                    pilot: 'Pilot', veraltet: 'Angezeigt wird der letzte bekannte Stand.', nochmal: 'Erneut versuchen',
+                    fehler: {
+                        phpvms: 'Die laufenden Flüge konnten nicht gelesen werden.',
                         kein_schluessel: 'Für AeroACARS Live ist kein Lese-Schlüssel hinterlegt.',
                         abgelehnt: 'AeroACARS Live hat den Lese-Schlüssel abgelehnt.',
                         nicht_erreichbar: 'AeroACARS Live ist gerade nicht erreichbar.',
@@ -1355,7 +1363,9 @@
                     keineGeplant: 'No planned flights.', laden: 'Loading flights …',
                     folgen: 'Follow', folgt: 'Following', frei: 'Free', alle: 'All phases', zuletzt: 'ago',
                     schliessen: 'Close', stand: 'Stand', offline: 'offline', abflug: 'Departure',
-                    pilot: 'Pilot', fehler: {
+                    pilot: 'Pilot', veraltet: 'Showing the last known state.', nochmal: 'Try again',
+                    fehler: {
+                        phpvms: 'Running flights could not be read.',
                         kein_schluessel: 'No read key is stored for AeroACARS Live.',
                         abgelehnt: 'AeroACARS Live rejected the read key.',
                         nicht_erreichbar: 'AeroACARS Live cannot be reached right now.',
@@ -1454,7 +1464,9 @@
                             zustand.geladen = true;
                             if (!d || d.ok !== true || !Array.isArray(d.fluege)) {
                                 zustand.fehler = (d && d.fehler) || 'ungueltig';
-                                zustand.fluege = [];
+                                // Kurze Stoerung: letzten guten Stand stehen lassen (als
+                                // veraltet markiert). Schluessel/Adresse falsch: leeren.
+                                if (!LM3.fehlerIstVoruebergehend(zustand.fehler)) zustand.fluege = [];
                             } else {
                                 zustand.fehler = null;
                                 zustand.fluege = LM3.sortiere(d.fluege);
@@ -1494,7 +1506,14 @@
                     if (el.meldung) {
                         if (zustand.fehler) {
                             el.meldung.hidden = false;
-                            el.meldung.textContent = LM_T.fehler[zustand.fehler] || LM_T.fehler.netz;
+                            el.meldung.textContent = (LM_T.fehler[zustand.fehler] || LM_T.fehler.netz) +
+                                (zustand.fluege.length ? ' ' + LM_T.veraltet : '');
+                            var nochmal = document.createElement('button');
+                            nochmal.type = 'button';
+                            nochmal.className = 'lm3-nochmal';
+                            nochmal.textContent = LM_T.nochmal;
+                            nochmal.addEventListener('click', function () { planeAbruf(0); });
+                            el.meldung.appendChild(nochmal);
                         } else {
                             el.meldung.hidden = true;
                             el.meldung.textContent = '';
@@ -1518,7 +1537,7 @@
                         zustand.geplant.forEach(function (g) { el.liste.appendChild(zeileGeplant(g)); });
                         return;
                     }
-                    if (zustand.fehler) return;
+                    if (zustand.fehler && !zustand.fluege.length) return;
                     var liste = sichtbareFluege();
                     if (!liste.length) { el.liste.appendChild(leer(zustand.fluege.length ? LM_T.keineFilter : LM_T.keine)); return; }
                     liste.forEach(function (f) { el.liste.appendChild(zeileAktiv(f)); });
@@ -1903,6 +1922,8 @@
                     scrollWheelZoom: true
                 });
                 lm3Karte = map;
+                // Schmal passt die Welt erst ab Zoom 1 hinein (Fluege EU + Pazifik).
+                if (wrap && wrap.classList.contains('lm3--schmal')) map.setMinZoom(1);
                 window._liveMapInstance = map;
                 // Bringt die Seite keine Leaflet-Stile mit, liegen Kacheln als
                 // Bilder untereinander statt als Karte. Dann den Rueckfall-Block
@@ -2048,7 +2069,7 @@
                 var neuMessen = function () {
                     messeBreite();
                     var schmal = wrap && wrap.classList.contains('lm3--schmal');
-                    if (schmal !== letzteSchmal) { letzteSchmal = schmal; startPanel(); }
+                    if (schmal !== letzteSchmal) { letzteSchmal = schmal; map.setMinZoom(schmal ? 1 : 2); startPanel(); }
                     map.invalidateSize();
                 };
                 if (window.ResizeObserver && wrap) new ResizeObserver(neuMessen).observe(wrap);

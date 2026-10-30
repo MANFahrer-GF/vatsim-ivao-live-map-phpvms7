@@ -118,3 +118,8 @@ test('Sortierung: offline nach unten, sonst nach Rufzeichen', () => {
   const s = LM3.sortiere([{ callsign: 'B', status: 'offline' }, { callsign: 'C', status: 'online' }, { callsign: 'A', status: 'online' }]);
   assert.deepEqual(klar(s.map((x) => x.callsign)), ['A', 'C', 'B']);
 });
+
+test('Kurze Stoerung haelt den letzten Stand, falscher Schluessel nicht', () => {
+  for (const c of ['nicht_erreichbar', 'netz', 'ungueltig', 'phpvms']) assert.equal(LM3.fehlerIstVoruebergehend(c), true, c);
+  for (const c of ['abgelehnt', 'kein_schluessel', 'adresse']) assert.equal(LM3.fehlerIstVoruebergehend(c), false, c);
+});

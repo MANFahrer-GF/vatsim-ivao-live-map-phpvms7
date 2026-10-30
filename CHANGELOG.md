@@ -29,7 +29,16 @@ AeroACARS 3.0, Pflichtenheft P-11.11 (A-75, N-12, F-020).
 - Phasen, Farben, Namen, Reihenfolge und „Level"-Anzeige wie die Webapp
   (Test vergleicht mit einer Abschrift von `phaseColors.ts`).
 
+### Security / Sicherheit
+- Der Lese-Schlüssel geht nur an `https://live.kant.ovh` (außerhalb der
+  Produktion zusätzlich an einen Prüfserver auf 127.0.0.1/localhost); keine
+  Weiterleitungen, Puffer an Adresse und Schlüssel gebunden.
+  *The read key is only ever sent to live.kant.ovh; no redirects.*
+
 ### Fixed / Behoben
+- Kurze Störungen der Quelle lassen den letzten guten Stand stehen
+  (als veraltet markiert, mit „Erneut versuchen"); falscher Schlüssel leert.
+- Kartenhöhe folgt dem Fenster (440–1400 px) statt fest 800 px.
 - Unter Zoom 3 verschwand die ganze Marker-Ebene (Flughafen-Lotsen-Logik
   blendete das Elternelement aus — das war die Ebene selbst).
   *Below zoom 3 the whole marker pane was hidden.*

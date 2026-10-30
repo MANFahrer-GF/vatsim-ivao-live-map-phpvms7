@@ -83,6 +83,41 @@ final class FlugNormalisierer
         return !(abs($lat) < self::NULL_INSEL_GRAD && abs($lon) < self::NULL_INSEL_GRAD);
     }
 
+    /** Der einzige Host, an den der Lese-Schluessel gehen darf. */
+    public const LIVE_HOST = 'live.kant.ovh';
+
+    /**
+     * Pruefung der eingestellten Adresse von AeroACARS Live.
+     *
+     * Erlaubt ist nur https://live.kant.ovh (ohne Pfad, Nutzer, Abfrage).
+     * Ausserhalb der Produktion zusaetzlich http://127.0.0.1 bzw. localhost
+     * mit Port fuer einen Pruefserver. Alles andere → null: Der Schluessel
+     * ginge sonst an eine beliebige — auch interne — Adresse (SSRF).
+     */
+    public static function liveBasis(string $roh, bool $lokalErlaubt): ?string
+    {
+        $roh = rtrim(trim($roh), '/');
+        if ($roh === '') {
+            $roh = 'https://'.self::LIVE_HOST;
+        }
+        $teile = parse_url($roh);
+        if (!is_array($teile) || empty($teile['host']) || isset($teile['user']) || isset($teile['pass'])
+            || isset($teile['query']) || isset($teile['fragment']) || (isset($teile['path']) && $teile['path'] !== '')) {
+            return null;
+        }
+        $schema = strtolower((string) ($teile['scheme'] ?? ''));
+        $host = strtolower((string) $teile['host']);
+        $port = isset($teile['port']) ? ':'.(int) $teile['port'] : '';
+        if ($schema === 'https' && $host === self::LIVE_HOST && ($port === '' || $port === ':443')) {
+            return 'https://'.self::LIVE_HOST;
+        }
+        if ($lokalErlaubt && $schema === 'http' && in_array($host, ['127.0.0.1', 'localhost'], true)) {
+            return 'http://'.$host.$port;
+        }
+
+        return null;
+    }
+
     /** Kennung, wie sie in der Adresse steht: nur Buchstaben, Ziffern, `_-.`, hoechstens 40 Zeichen. */
     public static function kennungGueltig(string $wert): bool
     {

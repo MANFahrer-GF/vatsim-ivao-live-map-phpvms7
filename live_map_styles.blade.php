@@ -25,10 +25,11 @@
                         --lm-schatten: 0 10px 28px rgba(11, 31, 58, 0.22), 0 2px 6px rgba(11, 31, 58, 0.12);
                         --lm-rand: 12px;
                         --lm-radius: 12px;
-                        --lm3-hoehe-max: {{ $config['height'] ?? '800px' }};
                         position: relative;
                         width: 100%;
-                        height: clamp(440px, calc(100vh - 200px), max(440px, var(--lm3-hoehe-max)));
+                        /* Fuellt das Fenster unter dem Seitenkopf; die Hoehe aus dem Widget-Aufruf
+                           (Standard 800px) liess auf 1440er-Schirmen ein Drittel leer. */
+                        height: clamp(440px, calc(100vh - 200px), 1400px);
                         overflow: hidden;
                         border-radius: inherit;
                         color: var(--lm-text);
@@ -133,6 +134,7 @@
                         background: rgba(208,23,34,.08); border: 1px solid rgba(208,23,34,.35); color: var(--lm-text);
                     }
                     .lm3-meldung[hidden] { display: none; }
+                    .lm3-nochmal { display: block; margin-top: 8px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--lm-primary); background: transparent; color: var(--lm-text); font-size: 12px; font-weight: 700; cursor: pointer; }
                     .lm3-liste { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 8px 10px; }
                     .lm3-leer { margin: 18px 8px; font-size: 13px; color: var(--lm-text-2); text-align: center; }
 
@@ -182,6 +184,9 @@
                         padding: 0 0 12px;
                     }
                     .lm3-detail[hidden], .lm3.hat-aufklapper .lm3-detail { display: none; }
+                    /* Hinweis, dass das Detail weiterscrollt: weicher Abschluss unten */
+                    .lm3-detail::after { content: ""; position: sticky; display: block; bottom: -12px; height: 22px; margin-top: -10px;
+                        background: linear-gradient(to bottom, transparent, var(--lm-flaeche)); pointer-events: none; }
                     .lm3-d-kopf { display: flex; justify-content: space-between; gap: 10px; padding: 14px 14px 10px 16px; }
                     .lm3-d-cs { font-size: 20px; font-weight: 800; line-height: 1.1; letter-spacing: .02em; }
                     .lm3-d-route { margin-top: 4px; font-size: 14px; font-weight: 700; }
@@ -298,14 +303,16 @@
                     .lm3--schmal { --lm-rand: 8px; height: clamp(440px, calc(100svh - 180px), 900px); }
                     .lm3--schmal .lm3-werkzeuge { left: var(--lm-rand); right: var(--lm-rand); }
                     .lm3--schmal .lm3-wz-fluege { display: inline-flex; margin-right: auto; }
-                    .lm3--schmal .lm3-wz:not(.lm3-wz-fluege) { width: 38px; padding: 0; justify-content: center; }
+                    .lm3--schmal .lm3-wz { height: 44px; }
+                    .lm3--schmal .lm3-wz:not(.lm3-wz-fluege) { width: 44px; padding: 0; justify-content: center; }
+                    .lm3--schmal .lm3-zu { width: 44px; height: 44px; }
                     .lm3--schmal .lm3-wz:not(.lm3-wz-fluege) span:not(.vatsim-dot) { display: none; }
                     .lm3--schmal .lm3-wz-fluege[aria-pressed="true"] { background: var(--lm-primary); border-color: var(--lm-primary); color: #fff; }
                     .lm3--schmal .lm3-panel,
                     .lm3--schmal .lm3-detail {
-                        top: auto; left: var(--lm-rand); right: auto; bottom: var(--lm-rand);
-                        width: calc(100% - 2 * var(--lm-rand)); max-width: 460px;
-                        max-height: min(62%, calc(100% - 64px));
+                        top: auto; left: var(--lm-rand); right: var(--lm-rand); bottom: var(--lm-rand);
+                        width: auto; max-width: 480px; margin-inline: auto;
+                        max-height: min(72%, calc(100% - 72px));
                     }
                     .lm3--schmal .lm3-panel { height: auto; }
                     .lm3--schmal .lm3-panel.ist-zu { display: none; }
@@ -313,7 +320,7 @@
                     .lm3--schmal.hat-detail .lm3-panel { display: none; }
                     .lm3--schmal .lm3-box { left: var(--lm-rand); right: var(--lm-rand); width: auto; max-height: calc(100% - 60px - 30px); }
                     .lm3--schmal .leaflet-control-zoom { display: none; }
-                    .lm3--schmal .leaflet-bottom.leaflet-right { top: 54px; bottom: auto; margin: 0 var(--lm-rand) 0 0; }
+                    .lm3--schmal .leaflet-bottom.leaflet-right { top: 62px; bottom: auto; margin: 0 var(--lm-rand) 0 0; }
                     .lm3--schmal .lm3-werte { grid-template-columns: repeat(4, minmax(0, 1fr)); }
                     .lm3--schmal .lm3-kacheln { padding-right: 16px; }
 

@@ -110,12 +110,13 @@ class SettingsController extends Controller
         if ($liveUrl === '') {
             $liveUrl = \Modules\LiveMap\Http\Controllers\LiveFlightsController::STANDARD_BASIS;
         }
-        if (!preg_match('#^https://[A-Za-z0-9.\-]+(:[0-9]{1,5})?$#', $liveUrl)
-            && !preg_match('#^http://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?$#', $liveUrl)) {
+        $liveUrlGeprueft = \Modules\LiveMap\Support\FlugNormalisierer::liveBasis($liveUrl, !app()->environment('production'));
+        if ($liveUrlGeprueft === null) {
             return back()->withInput()->withErrors([
-                'live_url' => 'Die Adresse muss mit https:// beginnen und darf keinen Pfad enthalten.',
+                'live_url' => 'Only https://'.\Modules\LiveMap\Support\FlugNormalisierer::LIVE_HOST.' is allowed (the read key is sent there).',
             ]);
         }
+        $liveUrl = $liveUrlGeprueft;
 
         $layoutMode = $validated['layout_mode'];
         $primaryColor = $this->normalizeHexColor($validated['ui_primary_color'] ?? '', '#1A2A4A');

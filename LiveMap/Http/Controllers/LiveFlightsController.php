@@ -55,7 +55,12 @@ class LiveFlightsController extends Controller
     {
         $quelle = $this->quelle();
         if ($quelle === 'phpvms') {
-            return $this->antwort(['ok' => true, 'quelle' => 'phpvms', 'fluege' => $this->phpvmsFluege()]);
+            $fluege = $this->phpvmsFluege();
+            if ($fluege === null) {
+                return $this->antwort(['ok' => false, 'quelle' => 'phpvms', 'fehler' => 'phpvms', 'fluege' => []], 503);
+            }
+
+            return $this->antwort(['ok' => true, 'quelle' => 'phpvms', 'fluege' => $fluege]);
         }
 
         $ergebnis = $this->ausLive('/api/flights', 'livemap:live:fluege', self::PUFFER_LISTE_S);
@@ -123,38 +128,20 @@ class LiveFlightsController extends Controller
     }
 
     /**
-     * Basisadresse von live. Nur https — ausser fuer einen Pruefserver auf
-     * dieser Maschine (127.0.0.1/localhost), sonst ginge der Schluessel
-     * unverschluesselt ueber die Leitung.
+     * Basisadresse von live — nur ein freigegebener Host (siehe
+     * FlugNormalisierer::liveBasis). Der Schluessel geht damit nie an eine
+     * fremde oder interne Adresse, auch wenn die Einstellung manipuliert ist.
      */
     public static function basis(): ?string
     {
-        $roh = rtrim(trim((string) self::einstellung('acars.livemap_live_url', self::STANDARD_BASIS)), '/');
-        if ($roh === '') {
-            $roh = self::STANDARD_BASIS;
-        }
-        $teile = parse_url($roh);
-        if (!is_array($teile) || empty($teile['host']) || !empty($teile['user']) || !empty($teile['query'])) {
-            return null;
-        }
-        $schema = strtolower((string) ($teile['scheme'] ?? ''));
-        $host = strtolower((string) $teile['host']);
-        $lokal = in_array($host, ['127.0.0.1', 'localhost'], true);
-        if ($schema !== 'https' && !($schema === 'http' && $lokal)) {
-            return null;
-        }
+        $roh = (string) self::einstellung('acars.livemap_live_url', self::STANDARD_BASIS);
 
-        return $roh;
+        return FlugNormalisierer::liveBasis($roh, !app()->environment('production'));
     }
 
     /** @return array{ok: bool, fehler?: string, daten?: mixed} */
     private function ausLive(string $pfad, string $pufferSchluessel, int $pufferSekunden): array
     {
-        $gepuffert = Cache::get($pufferSchluessel);
-        if (is_array($gepuffert) && array_key_exists('ok', $gepuffert)) {
-            return $gepuffert;
-        }
-
         $basis = self::basis();
         $schluessel = trim((string) self::einstellung('acars.livemap_live_key', ''));
         if ($basis === null) {
@@ -163,9 +150,17 @@ class LiveFlightsController extends Controller
         if ($schluessel === '') {
             return ['ok' => false, 'fehler' => 'kein_schluessel'];
         }
+        // Puffer gilt nur fuer genau dieses Ziel und diesen Schluessel: nach
+        // einem Wechsel in der Verwaltung kommt sofort die neue Antwort.
+        $pufferSchluessel .= ':'.substr(hash('sha256', $basis."\n".$schluessel), 0, 16);
+        $gepuffert = Cache::get($pufferSchluessel);
+        if (is_array($gepuffert) && array_key_exists('ok', $gepuffert)) {
+            return $gepuffert;
+        }
 
         try {
             $antwort = Http::timeout(self::ZEITLIMIT_S)
+                ->withoutRedirecting()
                 ->acceptJson()
                 ->withToken($schluessel)
                 ->withHeaders(['User-Agent' => 'GSG-LiveMap/5'])
@@ -196,14 +191,21 @@ class LiveFlightsController extends Controller
         return $ergebnis;
     }
 
-    private function phpvmsFluege(): array
+    /** null = Abfrage gescheitert (nicht dasselbe wie "niemand fliegt"). */
+    private function phpvmsFluege(): ?array
     {
-        return Cache::remember('livemap:phpvms:fluege', now()->addSeconds(self::PUFFER_LISTE_S), function () {
+        $gepuffert = Cache::get('livemap:phpvms:fluege');
+        if (is_array($gepuffert)) {
+            return $gepuffert;
+        }
+        $fluege = (function () {
             $fluege = [];
             try {
                 $pireps = app(AcarsRepository::class)->getPositions(setting('acars.live_time', 0));
             } catch (\Throwable $e) {
-                return [];
+                Log::warning('LiveMap: laufende PIREPs nicht lesbar: '.mb_substr($e->getMessage(), 0, 160));
+
+                return null;
             }
             foreach ($pireps as $p) {
                 $pos = $p->position;
@@ -237,7 +239,12 @@ class LiveFlightsController extends Controller
             }
 
             return $fluege;
-        });
+        })();
+        if ($fluege !== null) {
+            Cache::put('livemap:phpvms:fluege', $fluege, now()->addSeconds(self::PUFFER_LISTE_S));
+        }
+
+        return $fluege;
     }
 
     private function phpvmsSpur(string $pirepId): array
@@ -246,6 +253,8 @@ class LiveFlightsController extends Controller
             try {
                 $punkte = app(AcarsRepository::class)->forPirep($pirepId, AcarsType::FLIGHT_PATH);
             } catch (\Throwable $e) {
+                Log::warning('LiveMap: PIREP-Spur nicht lesbar: '.mb_substr($e->getMessage(), 0, 160));
+
                 return [];
             }
 

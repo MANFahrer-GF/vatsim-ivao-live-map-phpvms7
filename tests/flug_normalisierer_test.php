@@ -103,5 +103,22 @@ $p = N::ausPhpvms(['pirep_id' => 'abc123', 'callsign' => 'GSG100', 'status' => '
 pruefe('phpVMS-Flug in derselben Form', $p['id'] === 'phpvms/abc123' && $p['phase'] === 'CRUISE' && $p['pos']['alt_ft'] === 35000
     && array_keys($p) === array_keys($f), $p);
 
+// Adresse von AeroACARS Live: der Schluessel darf nur an live.kant.ovh gehen (SSRF)
+pruefe('Standardadresse', N::liveBasis('', false) === 'https://live.kant.ovh');
+pruefe('live.kant.ovh mit Schraegstrich', N::liveBasis('https://live.kant.ovh/', false) === 'https://live.kant.ovh');
+$verboten = ['https://evil.example', 'https://live.kant.ovh.evil.example', 'https://evil.example/live.kant.ovh',
+    'http://live.kant.ovh', 'https://live.kant.ovh/api', 'https://user@live.kant.ovh', 'https://live.kant.ovh?x=1',
+    'https://live.kant.ovh:8443', 'https://10.0.0.5', 'http://169.254.169.254', 'http://127.0.0.1:8792', 'javascript:alert(1)'];
+$alleAb = true;
+foreach ($verboten as $u) {
+    if (N::liveBasis($u, false) !== null) {
+        $alleAb = false;
+        echo "   durchgelassen: $u\n";
+    }
+}
+pruefe('fremde, interne und unsaubere Adressen abgelehnt (Produktion)', $alleAb);
+pruefe('Pruefserver nur ausserhalb der Produktion', N::liveBasis('http://127.0.0.1:8792', true) === 'http://127.0.0.1:8792'
+    && N::liveBasis('http://10.0.0.5:80', true) === null);
+
 echo "\n$anzahl Pruefungen, $fehler fehlgeschlagen\n";
 exit($fehler === 0 ? 0 : 1);
