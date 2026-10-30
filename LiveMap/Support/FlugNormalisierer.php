@@ -190,7 +190,8 @@ final class FlugNormalisierer
             'va'             => 'phpvms',
             'pilot'          => $id,
             'callsign'       => self::text($p['callsign'] ?? null, 20),
-            'pilot_name'     => self::text($p['pilot_name'] ?? null, 60),
+            // Auch hier gekürzt: Ohne name_private reicht phpVMS den vollen Namen durch.
+            'pilot_name'     => self::kurzname(self::text($p['pilot_name'] ?? null, 60)),
             'aircraft_icao'  => ($i = self::text($p['aircraft_icao'] ?? null, 8)) !== null ? strtoupper($i) : null,
             'registration'   => self::text($p['registration'] ?? null, 12),
             'sim'            => null,

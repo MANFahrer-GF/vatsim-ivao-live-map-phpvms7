@@ -103,6 +103,8 @@ pruefe('phpVMS-Status → Phase', $alle);
 $p = N::ausPhpvms(['pirep_id' => 'abc123', 'callsign' => 'GSG100', 'status' => 'ENR', 'lat' => 50, 'lon' => 8, 'altitude' => 35000, 'pilot_name' => 'Paul N.']);
 pruefe('phpVMS-Flug in derselben Form', $p['id'] === 'phpvms/abc123' && $p['phase'] === 'CRUISE' && $p['pos']['alt_ft'] === 35000
     && array_keys($p) === array_keys($f), $p);
+$voll = N::ausPhpvms(['pirep_id' => 'abc124', 'callsign' => 'GSG101', 'status' => 'ENR', 'lat' => 50, 'lon' => 8, 'pilot_name' => 'Paul Peter Neumann']);
+pruefe('phpVMS ohne name_private: voller Name wird gekürzt', $voll['pilot_name'] === 'Paul N.', $voll['pilot_name']);
 
 // Adresse von AeroACARS Live: der Schluessel darf nur an live.kant.ovh gehen (SSRF)
 pruefe('Standardadresse', N::liveBasis('', false) === 'https://live.kant.ovh');
