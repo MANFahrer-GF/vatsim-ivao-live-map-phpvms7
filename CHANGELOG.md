@@ -26,6 +26,10 @@ AeroACARS 3.0, Pflichtenheft P-11.11 (A-75, N-12, F-020).
   rechts (Netzwerk, Wetter, Karte, Folgen). Unter 760 px Widget-Breite
   Liste und Detail als Blatt von unten.
   *Redesign following the GSG brand rules, responsive by widget width.*
+- Die Farben „Mobile Flights Button" (aktiv/inaktiv) wirken nicht mehr: die
+  Werkzeugleiste nutzt Primär-/Akzentfarbe. Die Höhe aus dem Widget-Aufruf
+  wird nicht mehr benutzt (Karte füllt das Fenster).
+  *Mobile button colours and the widget height argument are no longer used.*
 - Phasen, Farben, Namen, Reihenfolge und „Level"-Anzeige wie die Webapp
   (Test vergleicht mit einer Abschrift von `phaseColors.ts`).
 

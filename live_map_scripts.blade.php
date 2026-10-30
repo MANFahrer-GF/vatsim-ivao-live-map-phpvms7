@@ -1752,6 +1752,8 @@
                         return '<div class="lm3-kachel' + (warnTon ? ' ist-warn' : '') + '"><span>' + lmEsc(name) + '</span><b>' + lmEsc(w) + '</b><small>' + lmEsc(einheit) + '</small></div>';
                     };
 
+                    // Scrollstand halten: das Detail wird bei jedem Abruf neu aufgebaut.
+                    var scrollVorher = el.detail.hidden ? 0 : el.detail.scrollTop;
                     el.detail.style.setProperty('--ph', LM3.phaseColor(phase));
                     el.detail.innerHTML =
                         '<header class="lm3-d-kopf">' +
@@ -1772,9 +1774,10 @@
                         '</div>' +
                         '<dl class="lm3-kv">' + kv.map(function (p) { return '<dt>' + lmEsc(p[0]) + '</dt><dd>' + lmEsc(p[1]) + (p[2] ? '<small>' + lmEsc(p[2]) + '</small>' : '') + '</dd>'; }).join('') + '</dl>' +
                         '<div class="lm3-badges">' + config + '</div>' + apZeile +
-                        '<div class="lm3-d-fuss"><span>' + (f.last_seen ? lmEsc(LM3.ageString(f.last_seen)) + ' ' + lmEsc(LM_T.zuletzt) : '') + '</span>' +
+                        '<div class="lm3-d-fuss"><span>' + (f.last_seen ? lmEsc(LM_SPRACHE === 'de' ? 'vor ' + LM3.ageString(f.last_seen) : LM3.ageString(f.last_seen) + ' ago') : '') + '</span>' +
                         '<button type="button" class="lm3-knopf" data-lm3-folgen>' + lmEsc(zustand.folgen ? LM_T.folgt : LM_T.folgen) + '</button></div>';
                     el.detail.hidden = false;
+                    el.detail.scrollTop = scrollVorher;
                     var zu = el.detail.querySelector('[data-lm3-zu]');
                     if (zu) zu.addEventListener('click', schliesseDetail);
                     var fo = el.detail.querySelector('[data-lm3-folgen]');
@@ -2064,6 +2067,13 @@
                     va.setzePanel(schmal ? !!cfg.mobileFlightsOpen : true);
                 }
                 startPanel();
+                // Admin-Einstellungen „Mobil: Wetter/Netzwerk offen" (4.7.x): schmal
+                // den Aufklapper beim Start oeffnen — nur einen, sie teilen sich den Platz.
+                if (wrap && wrap.classList.contains('lm3--schmal') && !cfg.mobileFlightsOpen) {
+                    var startAuf = cfg.mobileNetworkOpen ? 'lm3-btn-netz' : (cfg.mobileWeatherOpen ? 'lm3-btn-wetter' : null);
+                    var startKnopf = startAuf && document.getElementById(startAuf);
+                    if (startKnopf && !startKnopf.hidden) startKnopf.click();
+                }
 
                 var letzteSchmal = wrap && wrap.classList.contains('lm3--schmal');
                 var neuMessen = function () {

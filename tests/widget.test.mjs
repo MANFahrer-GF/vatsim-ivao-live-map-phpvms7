@@ -1,7 +1,7 @@
 // Tests fuer die reinen Hilfsfunktionen der Live-Karte (live_map_scripts.blade.php,
 // Block zwischen /* <lm3-rein> */ und /* </lm3-rein> */). Ohne Browser, ohne Pakete:
 //
-//     node --test tests/
+//     node --test tests/widget.test.mjs
 //
 // Der Phasen-Test vergleicht mit einer Abschrift der Webapp-Datei
 // (tests/fixtures/phaseColors.webapp.ts) — nicht mit einer eigenen Liste.
