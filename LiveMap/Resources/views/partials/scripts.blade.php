@@ -221,6 +221,104 @@
             });
         }
 
+        // ── VATSIM/IVAO-Lotsen: Regeln nach dem Verfahren von VATSIM Radar ──
+        // (Vorlage aeroacars-live recorder/src/atcKarte.ts; Regeln CC BY-NC 4.0).
+        // Beobachter melden sich auf 199.998; nur 117–137 MHz ist Sprechfunk.
+        function aufSprechfrequenz(f) {
+            var khz = Math.round(parseFloat(f) * 1000);
+            return isFinite(khz) && khz >= 117000 && khz <= 137000;
+        }
+        function erstesWort(t) { return String(t).split(/[_-]/)[0]; }
+        // VATSpy.dat auswerten. Platz-Schluessel: Funk-Praefix vor ICAO, echter
+        // Platz vor Behelf (so loest CLT_GND nach KCLT auf, wie KCLT_ATIS).
+        function vatspyLesen(text) {
+            var plaetze = {}, namen = {}, firNachWort = {}, uirNachWort = {}, firNamen = {}, roh = [], abschnitt = '';
+            String(text || '').split(/\r?\n/).forEach(function (zeile) {
+                zeile = zeile.trim();
+                if (!zeile || zeile.charAt(0) === ';') return;
+                if (zeile.charAt(0) === '[') { abschnitt = zeile.toUpperCase(); return; }
+                var t = zeile.split('|');
+                if (abschnitt === '[AIRPORTS]') {
+                    if (t.length < 4) return;
+                    var icao = t[0].trim().toUpperCase(), lat = parseFloat(t[2]), lon = parseFloat(t[3]);
+                    if (!icao || !isFinite(lat) || !isFinite(lon)) return;
+                    if (t[1] && !namen[icao]) namen[icao] = t[1].trim();
+                    roh.push({ icao: icao, lat: lat, lon: lon, praefix: (t[4] || '').trim().toUpperCase(), behelf: (t[6] || '').trim() === '1' });
+                } else if (abschnitt === '[FIRS]') {
+                    if (t.length < 4) return;
+                    var e = { icao: t[0].trim().toUpperCase(), name: (t[1] || '').trim(), praefix: (t[2] || '').trim().toUpperCase(), grenze: (t[3] || '').trim().toUpperCase() };
+                    if (!e.grenze) return;
+                    if (e.name) { if (!firNamen[e.icao]) firNamen[e.icao] = e.name; if (e.praefix && !firNamen[e.praefix]) firNamen[e.praefix] = e.name; }
+                    var schon = {};
+                    [erstesWort(e.icao), e.praefix ? erstesWort(e.praefix) : ''].forEach(function (k) {
+                        if (!k || schon[k]) return;
+                        schon[k] = 1;
+                        (firNachWort[k] = firNachWort[k] || []).push(e);
+                    });
+                } else if (abschnitt === '[UIRS]') {
+                    if (t.length < 3) return;
+                    var uid = t[0].trim().toUpperCase();
+                    var firs = t[2].toUpperCase().split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+                    if (!uid || !firs.length) return;
+                    (uirNachWort[erstesWort(uid)] = uirNachWort[erstesWort(uid)] || []).push({ icao: uid, name: (t[1] || '').trim(), firs: firs });
+                }
+            });
+            function belege(schluessel, nimm) {
+                roh.forEach(function (p) {
+                    if (!nimm(p)) return;
+                    var k = schluessel(p);
+                    if (k && !plaetze[k]) plaetze[k] = [p.lat, p.lon];
+                });
+            }
+            belege(function (p) { return p.praefix; }, function (p) { return p.praefix && !p.behelf; });
+            belege(function (p) { return p.praefix; }, function (p) { return p.praefix && p.behelf; });
+            belege(function (p) { return p.icao; }, function (p) { return !p.behelf; });
+            belege(function (p) { return p.icao; }, function () { return true; });
+            return { plaetze: plaetze, namen: namen, firNachWort: firNachWort, uirNachWort: uirNachWort, firNamen: firNamen };
+        }
+        // Laengster Eintrag, dessen Kennung am Anfang des Rufzeichens steht; ein
+        // exakter Treffer auf das Rufzeichen ohne letztes Wort schlaegt alles.
+        // Gleich gute Treffer alle (LPPO_CTR: Ozean-FIR und Azoren-Zone).
+        function firTreffer(rufzeichen, firNachWort) {
+            var ruf = String(rufzeichen || '').toUpperCase(), teile = ruf.split(/[_-]/);
+            var mitte = teile.slice(0, -1).join('_'), beste = -1, treffer = [];
+            (firNachWort[teile[0]] || []).forEach(function (e) {
+                var kennung = e.praefix || e.icao;
+                if (ruf.indexOf(kennung) !== 0 && ruf.indexOf(e.icao) !== 0) return;
+                var laenge = (e.praefix === mitte || e.icao === mitte) ? 100 : kennung.length;
+                if (laenge > beste) { beste = laenge; treffer = [e]; }
+                else if (laenge === beste) treffer.push(e);
+            });
+            return treffer;
+        }
+        // Grenz-Kennungen eines Center-/FSS-Lotsen. Sammelposition (GULF, CARI)
+        // vor Einzel-FIR. Kein Frequenzriegel: VATSIM Radar zeigt Sektoren nach
+        // der Rufzeichen-Endung (LPPC_X1_CTR).
+        function grenzenFuerLotse(rufzeichen, firNachWort, uirNachWort) {
+            var ruf = String(rufzeichen || '').toUpperCase(), wort = erstesWort(ruf);
+            // Laengste passende Sammelposition (AFRE_E vor AFRE).
+            var uir = null;
+            (uirNachWort[wort] || []).forEach(function (u) {
+                if (ruf.indexOf(u.icao) === 0 && (!uir || u.icao.length > uir.icao.length)) uir = u;
+            });
+            if (uir) return { kennungen: uir.firs.slice(), name: uir.name, uir: true };
+            var t = firTreffer(ruf, firNachWort);
+            var kennungen = [];
+            t.forEach(function (e) { if (kennungen.indexOf(e.grenze) === -1) kennungen.push(e.grenze); });
+            return { kennungen: kennungen, name: t.length ? t[0].name : '', uir: false };
+        }
+        // Sechs FIRs fuehren zwei Flaechen (kontinental/ozeanisch); _FSS betreut den Ozean.
+        function firFlaeche(liste, rufzeichen) {
+            if (!liste || !liste.length) return null;
+            if (liste.length === 1) return liste[0];
+            var willOzean = /_FSS$/i.test(String(rufzeichen || ''));
+            for (var i = 0; i < liste.length; i++) {
+                var p = liste[i].properties || {};
+                if ((String(p.oceanic == null ? '0' : p.oceanic) === '1') === willOzean) return liste[i];
+            }
+            return liste[0];
+        }
+
         wurzel.LM3 = {
             PHASE_COLOR: PHASE_COLOR, PHASE_LIST: PHASE_LIST, PHASE_LABEL: PHASE_LABEL,
             phaseColor: phaseColor, phaseLabel: phaseLabel, phaseForDisplay: phaseForDisplay,
@@ -229,7 +327,9 @@
             neben: neben, fortlaufend: fortlaufend, verschiebeNahe: verschiebeNahe,
             fehlerIstVoruebergehend: fehlerIstVoruebergehend, filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiere: sortiere,
             rufzeichenSchluessel: rufzeichenSchluessel, hoeheText: hoeheText, distanzNm: distanzNm, fortschritt: fortschritt,
-            KLASSEN: KLASSEN, flugzeugKlasse: flugzeugKlasse, klassenInfo: klassenInfo, amBoden: amBoden
+            KLASSEN: KLASSEN, flugzeugKlasse: flugzeugKlasse, klassenInfo: klassenInfo, amBoden: amBoden,
+            aufSprechfrequenz: aufSprechfrequenz, vatspyLesen: vatspyLesen, firTreffer: firTreffer,
+            grenzenFuerLotse: grenzenFuerLotse, firFlaeche: firFlaeche
         };
     })(typeof window !== 'undefined' ? window : globalThis);
     /* </lm3-rein> */
@@ -603,8 +703,9 @@
             var PHPVMS_BASE       = window.location.origin;   // auto-detect
             var VATSIM_DATA_API   = 'https://data.vatsim.net/v3/vatsim-data.json';
             var VATSIM_TRX_API    = 'https://data.vatsim.net/v3/transceivers-data.json';
-            var VATSPY_BOUNDS_API = 'https://raw.githubusercontent.com/vatsimnetwork/vatspy-data-project/master/Boundaries.geojson';
-            var VATSPY_DAT_API    = 'https://raw.githubusercontent.com/vatsimnetwork/vatspy-data-project/master/VATSpy.dat';
+            // jsDelivr statt raw.githubusercontent.com: Browser-Puffer 7 Tage statt 5 min.
+            var VATSPY_BOUNDS_API = 'https://cdn.jsdelivr.net/gh/vatsimnetwork/vatspy-data-project@master/Boundaries.geojson';
+            var VATSPY_DAT_API    = 'https://cdn.jsdelivr.net/gh/vatsimnetwork/vatspy-data-project@master/VATSpy.dat';
             var IVAO_DATA_API     = 'https://api.ivao.aero/v2/tracker/whazzup';
             var VATSIM_REFRESH_MS = 30000;
             var IVAO_REFRESH_MS   = 15000;
@@ -659,6 +760,8 @@
             var ctrlPosCache     = {};
             var firPrefixMap     = {};
             var uirToFirsMap     = {};
+            var vatspyFir        = { firNachWort: {}, uirNachWort: {} };
+            var grenzenNachId    = null;   // Boundaries-id -> [Feature, ...] (kontinental/ozeanisch)
 
             var CTRL_TYPES = {
                 0:{label:'OBS',color:'#95a5a6'}, 1:{label:'FSS',color:'#8e44ad'},
@@ -759,8 +862,8 @@
             function buildIvaoAircraftIcon(heading) { return netzFliegerIcon(heading, true); }
 
             function buildAirportCtrlIcon(icao, ctrlList, atisList) {
-                var TYPES = { 2:{short:'D',color:'#3498db'}, 3:{short:'G',color:'#e67e22'}, 4:{short:'T',color:'#e74c3c'}, 5:{short:'A',color:'#27ae60'} };
-                var order = [2,3,4,5];
+                var TYPES = { 0:{short:'O',color:'#7f8c8d'}, 2:{short:'D',color:'#3498db'}, 3:{short:'G',color:'#e67e22'}, 4:{short:'T',color:'#e74c3c'}, 5:{short:'A',color:'#27ae60'} };
+                var order = [2,3,4,0,5];
                 var counts = {};
                 ctrlList.forEach(function(c){ if(TYPES[c.facility]) counts[c.facility]=(counts[c.facility]||0)+1; });
                 var ac = atisList ? atisList.length : 0;
@@ -839,9 +942,9 @@
             }
 
             function buildAirportCtrlPopup(icao, ctrlList, atisList) {
-                var order={2:1,3:2,4:3,5:4};
+                var order={2:1,3:2,4:3,0:4,5:5};
                 ctrlList=ctrlList.slice().sort(function(a,b){return(order[a.facility]||9)-(order[b.facility]||9);});
-                var BADGE={2:{label:'DEL',color:'#2980b9'},3:{label:'GND',color:'#d35400'},4:{label:'TWR',color:'#c0392b'},5:{label:'APP',color:'#27ae60'}};
+                var BADGE={0:{label:'OBS',color:'#7f8c8d'},2:{label:'DEL',color:'#2980b9'},3:{label:'GND',color:'#d35400'},4:{label:'TWR',color:'#c0392b'},5:{label:'APP',color:'#27ae60'}};
                 var ctrlRows=ctrlList.map(function(c){
  var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};return '<div style="padding:7px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="background:'+t.color+';color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;flex-shrink:0">'+h(t.label)+'</span><span style="font-size:13px;font-weight:700;color:#1a1a1a">'+h(c.callsign||'—')+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+h(safeFreq(c.frequency||''))+'</span></div>'+ctrlInfoLine(c)+'</div>';}).join('');
                 var atisRows='';
@@ -943,8 +1046,16 @@
                     var normId=rawId.replace(/-/g,'_');
                     featureById[normId]=feature; featureById[rawId]=feature;
                 });
+                if(!grenzenNachId){
+                    grenzenNachId={};
+                    firBoundsGeoJson.features.forEach(function(feature){
+                        var id=String((feature.properties||{}).id||feature.id||'').toUpperCase();
+                        if(id)(grenzenNachId[id]=grenzenNachId[id]||[]).push(feature);
+                    });
+                }
                 var claimedFeatures={};
                 var ctrlFeatureMap={};
+                var schonGezeichnet=[];
                 function _norm(s){return s.replace(/-/g,'_');}
                 Object.keys(activeFirMap).forEach(function(mapKey){
                     var info=activeFirMap[mapKey];
@@ -952,15 +1063,23 @@
                     var isSubKey=mapKey.indexOf('_')!==-1;
                     var resolvedRoot=firPrefixMap[root]||root;
                     var features=[];
+                    /* Radar-Verfahren: VATSpy-Grenzkennungen (laengster Praefix, Sammelposition, _FSS = Ozean) */
+                    (info.kennungen||[]).forEach(function(k){
+                        var ft=window.LM3.firFlaeche(grenzenNachId[String(k).toUpperCase()],info.callsign);
+                        if(ft&&features.indexOf(ft)===-1)features.push(ft);
+                    });
+                    if(features.length&&info.firName&&!firNameCache[root])firNameCache[root]=info.firName;
+                    /* Rueckfall: die bisherige Grob-Zuordnung, wenn VATSpy keinen Eintrag kennt */
                     /* Phase 1: exact sub-key match (sectored callsigns like UNKL_N_CTR) */
-                    if(isSubKey){var f=featureById[mapKey]||featureById[mapKey.replace(/_/g,'-')];if(f){features=[f];claimedFeatures[mapKey]=true;claimedFeatures[mapKey.replace(/_/g,'-')]=true;}}
+                    if(features.length===0&&isSubKey){var f=featureById[mapKey]||featureById[mapKey.replace(/_/g,'-')];if(f){features=[f];claimedFeatures[mapKey]=true;claimedFeatures[mapKey.replace(/_/g,'-')]=true;}}
                     /* Phase 2: broad normalised search — runs for ALL keys when Phase 1 missed */
                     if(features.length===0){var nR=_norm(root),nRe=_norm(resolvedRoot);Object.keys(featureById).forEach(function(fK){if(claimedFeatures[fK])return;var nk=_norm(fK),ft=featureById[fK];if(nk===nRe||nk===nR||nk==='K'+nR||nR==='K'+nk){if(features.indexOf(ft)===-1)features.push(ft);}});}
                     /* Phase 3: startsWith fallback for sub-sector GeoJSON IDs (e.g. UNKL-1) */
                     if(features.length===0){var nR2=_norm(root),nRe2=_norm(resolvedRoot);Object.keys(featureById).forEach(function(fK){if(claimedFeatures[fK])return;var nk=_norm(fK),ft=featureById[fK];if(nk.indexOf(nRe2+'_')===0||nk.indexOf(nR2+'_')===0){if(features.indexOf(ft)===-1)features.push(ft);}});}
                     /* Phase 4: UIR expansion — resolve UIR (e.g. RU-SC) to constituent FIR polygons */
                     if(features.length===0){var uirFirs=uirToFirsMap[root]||uirToFirsMap[resolvedRoot]||uirToFirsMap[_norm(root)]||null;if(uirFirs){uirFirs.forEach(function(fid){var nfid=_norm(fid);var ft=featureById[nfid]||featureById[fid];if(ft&&features.indexOf(ft)===-1)features.push(ft);});if(features.length)info.isUpper=true;}}
-                    if(features.length>0) ctrlFeatureMap[mapKey]=features;
+                    features=features.filter(function(ft){return schonGezeichnet.indexOf(ft)===-1;});
+                    if(features.length>0){ctrlFeatureMap[mapKey]=features;schonGezeichnet=schonGezeichnet.concat(features);}
                 });
 
                 Object.keys(ctrlFeatureMap).forEach(function(matchKey){
@@ -1019,7 +1138,7 @@
                     var labelW=Math.max(short.length*8+16,64), labelH=36;
                     (anDerDatumsgrenze ? [0, 360, -360] : [0]).forEach(function(d){
                     L.marker([center[0], center[1] + d],{
-                        icon:L.divIcon({html:'<div style="background:'+color+';color:#fff;padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 2px 5px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);white-space:nowrap;text-align:center">'+shortSafe+'<br><span style="font-size:9px;font-weight:400;opacity:0.85">'+firLabelSafe+'</span></div>',className:'',iconSize:[labelW,labelH],iconAnchor:[labelW/2,labelH/2]}),
+                        icon:L.divIcon({html:'<div style="background:'+color+';color:#fff;padding:3px 9px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 2px 5px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);white-space:nowrap;text-align:center">'+shortSafe+'<br><span style="font-size:9px;font-weight:400;opacity:0.85">'+firLabelSafe+'</span></div>',className:'lm3-sektor-etikett',iconSize:[labelW,labelH],iconAnchor:[labelW/2,labelH/2]}),
                         zIndexOffset: -200,
                         interactive: false,
                         keyboard: false,
@@ -1056,9 +1175,9 @@
             }
 
             function buildAirportCtrlPopupIvao(icao, ctrlList, atisList) {
-                var order={2:1,3:2,4:3,5:4};
+                var order={2:1,3:2,4:3,0:4,5:5};
                 ctrlList=ctrlList.slice().sort(function(a,b){return(order[a.facility]||9)-(order[b.facility]||9);});
-                var BADGE={2:{label:'DEL',color:'#2980b9'},3:{label:'GND',color:'#d35400'},4:{label:'TWR',color:'#c0392b'},5:{label:'APP',color:'#27ae60'}};
+                var BADGE={0:{label:'OBS',color:'#7f8c8d'},2:{label:'DEL',color:'#2980b9'},3:{label:'GND',color:'#d35400'},4:{label:'TWR',color:'#c0392b'},5:{label:'APP',color:'#27ae60'}};
                 var ctrlRows=ctrlList.map(function(c){
                     var t=BADGE[c.facility]||{label:'ATC',color:'#7f8c8d'};
                     return '<div style="padding:7px 0;border-bottom:1px solid #f0f0f0"><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="background:'+t.color+';color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.5px;flex-shrink:0">'+h(t.label)+'</span><span style="font-size:13px;font-weight:700;color:#1a1a1a">'+h(c.callsign||'—')+'</span><span style="font-size:12px;color:#888;margin-left:auto">'+h(safeFreq(c.frequency||''))+'</span></div>'+ctrlInfoLine(c)+'</div>';
@@ -1080,9 +1199,29 @@
                 return '<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+h(icao)+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px">'+(airportFullName?'<span class="vatsim-popup-route" style="margin:0">'+h(airportFullName)+'</span>':'')+'<span style="background:#e67e22;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">IVAO</span></div><div style="font-size:11px;color:#aaa;margin-top:3px">'+total+' station'+(total!==1?'s':'')+' active</div></div><div class="vatsim-popup-body">'+ctrlRows+atisRows+'</div></div>';
             }
 
+            // Abruf mit Zeitgrenze: ein haengender Feed blockiert sonst den naechsten Takt
+            // (vatsimFetchInFlight bliebe gesetzt). Nicht-200 zaehlt als Fehler.
+            function holeMitFrist(url, ms) {
+                var ab = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                var t = ab ? setTimeout(function(){ ab.abort(); }, ms || 20000) : null;
+                return fetch(url, ab ? { signal: ab.signal } : undefined).then(function(r){
+                    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url);
+                    return r;
+                }).finally(function(){ if (t) clearTimeout(t); });
+            }
+            var firNamesLauf = null, grenzenLauf = null;
+            // Boundaries.geojson einmal laden; bei Fehlschlag versucht es der naechste Takt.
+            function ladeGrenzen() {
+                if (firBoundsGeoJson) return Promise.resolve();
+                if (grenzenLauf) return grenzenLauf;
+                grenzenLauf = holeMitFrist(VATSPY_BOUNDS_API, 60000).then(function(r){return r.json();}).then(function(gj){firBoundsGeoJson=gj;grenzenNachId=null;})
+                    .finally(function(){ grenzenLauf = null; });
+                return grenzenLauf;
+            }
             function loadFirNames() {
                 if (firNameLoaded) return Promise.resolve();
-                return fetch(VATSPY_DAT_API).then(function(r){return r.text();}).then(function(text){
+                if (firNamesLauf) return firNamesLauf;
+                return firNamesLauf = holeMitFrist(VATSPY_DAT_API, 60000).then(function(r){return r.text();}).then(function(text){
                     firNameLoaded=true; staticAirportLoaded=true;
                     var section='';
                     text.split('\n').forEach(function(line){
@@ -1090,10 +1229,7 @@
                         if(!line||line.startsWith(';')) return;
                         if(line.startsWith('[')){section=line.replace(/[\[\]]/g,'').toLowerCase();return;}
                         var parts=line.split('|');
-                        if(section==='airports'&&parts.length>=4){
-                            var icao=parts[0].trim().toUpperCase(),aname=parts[1].trim(),lat=parseFloat(parts[2]),lon=parseFloat(parts[3]);
-                            if(icao&&!isNaN(lat)&&!isNaN(lon)){staticAirportPos[icao]=[lat,lon];if(aname)airportNameCache[icao]=aname;}
-                        } else if(section==='firs'&&parts.length>=2){
+                        if(section==='firs'&&parts.length>=2){
                             var ficao=parts[0].trim().toUpperCase(),name=parts[1].trim(),prefix=(parts[2]||'').trim().toUpperCase();
                             if(ficao&&name){firNameCache[ficao]=name;if(prefix){firNameCache[prefix]=name;firPrefixMap[prefix]=ficao;firPrefixMap[ficao]=ficao;}}
                         } else if(section==='uirs'&&parts.length>=2){
@@ -1112,11 +1248,16 @@
                             if(uid&&allFirs.length){uirToFirsMap[uid]=allFirs;firPrefixMap[uid]=uid;}
                         }
                     });
-                }).catch(function(e){firNameLoaded=true;staticAirportLoaded=true;console.warn('[VATSIM] VATSpy.dat nicht geladen:',e);});
+                    // Plaetze und FIR-Zuordnung nach dem Radar-Verfahren (reiner Block, getestet).
+                    var v=window.LM3.vatspyLesen(text);
+                    staticAirportPos=v.plaetze; airportNameCache=v.namen;
+                    Object.keys(v.firNamen).forEach(function(k){if(!firNameCache[k])firNameCache[k]=v.firNamen[k];});
+                    vatspyFir=v;
+                }).catch(function(e){firNameLoaded=false;console.warn('[VATSIM] VATSpy.dat nicht geladen, naechster Takt versucht es neu:',e);}).finally(function(){firNamesLauf=null;});
             }
 
             function loadTransceivers() {
-                return fetch(VATSIM_TRX_API).then(function(r){return r.json();}).then(function(trxList){
+                return holeMitFrist(VATSIM_TRX_API).then(function(r){return r.json();}).then(function(trxList){
                     ctrlPosCache={};
                     (trxList||[]).forEach(function(entry){
                         if(!entry.callsign||!entry.transceivers||!entry.transceivers.length) return;
@@ -1126,13 +1267,13 @@
                 }).catch(function(err){console.warn('[VATSIM] Transceivers nicht geladen:',err);});
             }
 
-            function normalizeKey(prefix) {
-                if(staticAirportPos[prefix]) return prefix;
-                if(staticAirportPos['K'+prefix]) return 'K'+prefix;
-                if(staticAirportPos['C'+prefix]) return 'C'+prefix;
-                if(staticAirportPos['P'+prefix]) return 'P'+prefix;
-                if(prefix.length===4&&prefix[0]==='K'&&staticAirportPos[prefix.slice(1)]) return prefix.slice(1);
-                return prefix;
+            // Platz zu einem Rufzeichen-Praefix (VATSpy: Funk-Praefix vor ICAO), sonst null.
+            function platzZu(prefix) { return staticAirportPos[prefix] || null; }
+            // Gruppen-Schluessel = aufgeloeste Stelle, nicht der Praefix: CLT_GND und
+            // KCLT_ATIS gehoeren in denselben Kasten. Anzeige: der laengste Code (ICAO).
+            function platzSchluessel(prefix) {
+                var k = platzZu(prefix);
+                return k ? '@' + k[0].toFixed(5) + ',' + k[1].toFixed(5) : prefix;
             }
 
             function distKm(a,b) {
@@ -1145,7 +1286,7 @@
                 if (vatsimFetchInFlight) return Promise.resolve(false);
                 vatsimFetchInFlight = true;
                 return Promise.all([
-                    fetch(VATSIM_DATA_API).then(function(r){return r.json();}),
+                    holeMitFrist(VATSIM_DATA_API).then(function(r){return r.json();}),
                     loadTransceivers(),
                     loadFirNames()
                 ]).then(function(results){
@@ -1163,33 +1304,34 @@
                     });
 
                     var controllers=data.controllers||[], atisRaw=data.atis||[], ctrlDone=0;
-                    var atisGroups={}, airportGroups={}, centerList=[];
+                    var atisGroups={}, airportGroups={}, centerList=[], anzeige={};
+                    // Anzeigename je Platz-Gruppe: der laengste Praefix (KCLT vor CLT).
+                    function merkeName(key,raw){if(!anzeige[key]||raw.length>anzeige[key].length)anzeige[key]=raw;}
 
                     atisRaw.forEach(function(a){
-                        var raw=a.callsign.split('_')[0].toUpperCase(), key=normalizeKey(raw);
-                        var pos=staticAirportPos[key]||staticAirportPos[raw]||null;
-                        if(!pos)(data.airports||[]).forEach(function(ap){if(!pos&&(ap.icao===raw||ap.icao===key)){var lt=parseFloat(ap.latitude||ap.lat),ln=parseFloat(ap.longitude||ap.lon);if(!isNaN(lt)&&!isNaN(ln))pos=[lt,ln];}});
-                        if(!pos) pos=ctrlPosCache[a.callsign.toUpperCase()];
+                        // ATIS ausserhalb 117–137 MHz (VOR-ATIS, Beobachter) zaehlt nicht, wie VATSIM Radar.
+                        if(!window.LM3.aufSprechfrequenz(a.frequency)) return;
+                        var raw=a.callsign.split('_')[0].toUpperCase(), key=platzSchluessel(raw);
+                        var pos=platzZu(raw)||ctrlPosCache[a.callsign.toUpperCase()];
                         if(!pos) return;
+                        merkeName(key,raw);
                         if(!atisGroups[key]) atisGroups[key]={pos:pos,list:[]};
                         atisGroups[key].list.push(a);
                     });
 
                     controllers.forEach(function(c){
-                        if(c.facility===0) return;
                         var prefix=c.callsign.split('_')[0].toUpperCase();
-                        var pos=staticAirportPos[prefix]||staticAirportPos['K'+prefix]||staticAirportPos['P'+prefix]||staticAirportPos['C'+prefix]||null;
-                        if(!pos)(data.airports||[]).forEach(function(a){if(!pos&&(a.icao===prefix||a.icao==='K'+prefix)){var alat=parseFloat(a.latitude||a.lat),alon=parseFloat(a.longitude||a.lon);if(!isNaN(alat)&&!isNaN(alon))pos=[alat,alon];}});
-                        if(!pos) pos=ctrlPosCache[c.callsign.toUpperCase()];
+                        // Beobachter nur, wenn er auf Sprechfrequenz an einem echten Platz sitzt (ADD_OBS 122.575).
+                        if(c.facility===0&&!(window.LM3.aufSprechfrequenz(c.frequency)&&platzZu(prefix))) return;
+                        var pos=platzZu(prefix)||ctrlPosCache[c.callsign.toUpperCase()];
                         /* CTR/FSS without position: keep for FIR sector matching (polygon doesn't need pos) */
                         if(!pos&&(c.facility===6||c.facility===1)){centerList.push({ctrl:c,pos:null});return;}
                         if(!pos) return;
                         if(c.facility===6||c.facility===1){centerList.push({ctrl:c,pos:pos});}
                         else{
                             var raw=c.callsign.split('_')[0].toUpperCase();
-                            var isRealAirport=!!(staticAirportPos[raw]||staticAirportPos['K'+raw]||staticAirportPos['C'+raw]||staticAirportPos['P'+raw]);
-                            if(!isRealAirport){centerList.push({ctrl:c,pos:pos,isTracon:true});}
-                            else{var key=normalizeKey(raw);if(!airportGroups[key])airportGroups[key]={pos:pos,ctrls:[]};airportGroups[key].ctrls.push(c);}
+                            if(!platzZu(raw)){centerList.push({ctrl:c,pos:pos,isTracon:true});}
+                            else{var key=platzSchluessel(raw);merkeName(key,raw);if(!airportGroups[key])airportGroups[key]={pos:platzZu(raw),ctrls:[]};airportGroups[key].ctrls.push(c);}
                         }
                     });
 
@@ -1205,9 +1347,10 @@
                         if(bestKey){if(!airportGroups[bestKey]){airportGroups[bestKey]={pos:(atisGroups[bestKey]||{}).pos||entry.pos,ctrls:[]};allAirportKeys[bestKey]=true;}airportGroups[bestKey].ctrls.push(entry.ctrl);traconMerged[idx]=true;}
                     });
 
-                    Object.keys(allAirportKeys).forEach(function(icao){
-                        var group=airportGroups[icao]||{pos:atisGroups[icao].pos,ctrls:[]};
-                        var atisList=atisGroups[icao]?atisGroups[icao].list:[];
+                    Object.keys(allAirportKeys).forEach(function(key){
+                        var icao=anzeige[key]||key;
+                        var group=airportGroups[key]||{pos:atisGroups[key].pos,ctrls:[]};
+                        var atisList=atisGroups[key]?atisGroups[key].list:[];
                         ctrlDone+=group.ctrls.length+atisList.length;
                         L.marker(group.pos,{icon:buildAirportCtrlIcon(icao,group.ctrls,atisList),title:icao,zIndexOffset:500}).bindPopup(buildAirportCtrlPopup(icao,group.ctrls,atisList),{maxWidth:300}).addTo(vatsimCtrlLayer);
                     });
@@ -1224,13 +1367,14 @@
                             L.marker(entry.pos,{icon:traconIcon,title:c.callsign,zIndexOffset:400}).bindPopup('<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+h(c.callsign||'—')+'</div><div class="vatsim-popup-route">TRACON / Approach Control</div></div><div class="vatsim-popup-body">'+vRow('Frequency',safeFreq(c.frequency||'') || '—')+ctrlInfoLine(c)+'</div></div>',{maxWidth:260}).addTo(vatsimCtrlLayer);
                         } else {
                             var mapKey=parts.length>=3?root+'_'+parts[1].toUpperCase():root;
-                            if(!activeFirMap[mapKey])activeFirMap[mapKey]={callsign:c.callsign,frequency:c.frequency,name:c.name,cid:c.cid,rating:c.rating,logon_time:c.logon_time,visual_range:c.visual_range,color:color,isUpper:isUpper,root:root,network:'VATSIM'};
+                            var g=window.LM3.grenzenFuerLotse(c.callsign,vatspyFir.firNachWort,vatspyFir.uirNachWort);
+                            if(!activeFirMap[mapKey])activeFirMap[mapKey]={callsign:c.callsign,frequency:c.frequency,name:c.name,cid:c.cid,rating:c.rating,logon_time:c.logon_time,visual_range:c.visual_range,color:g.uir?'#8e44ad':color,isUpper:isUpper||g.uir,root:root,network:'VATSIM',kennungen:g.kennungen,firName:g.name};
                         }
                     });
 
-                    vatsimSectorLayer.clearLayers();
-                    var boundsPromise=firBoundsGeoJson?Promise.resolve():fetch(VATSPY_BOUNDS_API).then(function(r){return r.json();}).then(function(gj){firBoundsGeoJson=gj;});
-                    Promise.all([boundsPromise,loadFirNames()]).then(function(){if(firBoundsGeoJson)renderActiveSectors(activeFirMap);}).catch(function(e){console.warn('[VATSIM] Sektoren-Fehler:',e);});
+                    // Kein Leeren hier: renderActiveSectors leert selbst, erst wenn die Grenzen da sind.
+                    // Schlaegt der Abruf fehl, bleibt der letzte Stand stehen; der naechste Takt holt neu.
+                    Promise.all([ladeGrenzen(),loadFirNames()]).then(function(){if(firBoundsGeoJson)renderActiveSectors(activeFirMap);}).catch(function(e){console.warn('[VATSIM] Sektoren-Fehler:',e);});
 
                     if(typeof applyLayerVisibility==='function') applyLayerVisibility();
                     var statsEl=document.getElementById('vatsimStats'), dotEl=document.getElementById('vatsimNetDot');
@@ -1248,14 +1392,16 @@
             function loadIvao(map) {
                 if (ivaoFetchInFlight) return Promise.resolve(false);
                 ivaoFetchInFlight = true;
-                return fetch(IVAO_DATA_API).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(data){
+                // VATSpy auch hier: Plaetze und FIR-Zuordnung gelten fuer IVAO genauso.
+                return Promise.all([holeMitFrist(IVAO_DATA_API).then(function(r){return r.json();}),loadFirNames()]).then(function(res){
+                    var data=res[0];
                     var clients=data.clients||{}, pilots=clients.pilots||[], atcs=clients.atcs||[];
                     var statsEl=document.getElementById('ivaoStats'), dotEl=document.getElementById('ivaoNetDot');
                     if(statsEl) statsEl.textContent='\u2708'+pilots.length+'  \uD83C\uDFA7'+atcs.length;
                     if(dotEl)   dotEl.style.background='#fff';
                     if(!showIvao) return true;
 
-                    ivaoPilotsLayer.clearLayers(); ivaoCtrlLayer.clearLayers(); ivaoSectorLayer.clearLayers();
+                    ivaoPilotsLayer.clearLayers(); ivaoCtrlLayer.clearLayers();
                     var IVAO_FAC={'DEL':2,'GND':3,'TWR':4,'APP':5,'DEP':5,'CTR':6,'FSS':1};
 
                     pilots.forEach(function(p){
@@ -1277,7 +1423,7 @@
                         var atisLines=(c.atis&&Array.isArray(c.atis.lines))?c.atis.lines:[];
                         if(facility===6||facility===1){
                             var root=cs.split('_')[0].toUpperCase(), isUpper=!!UPPER_FIR[root];
-                            if(!ivaoFirMap[root]){var _vid=c.userId||''; ivaoFirMap[root]={callsign:cs,frequency:freq,color:isUpper?'#8e44ad':'#16a085',isUpper:isUpper,root:root,network:'IVAO',cid:_vid,cid_link:_vid?'https://tracker.ivao.aero/atc/'+_vid:'',rating:c.rating||0,logon_time:c.createdAt||''}; }
+                            if(!ivaoFirMap[root]){var _vid=c.userId||'', g=window.LM3.grenzenFuerLotse(cs,vatspyFir.firNachWort,vatspyFir.uirNachWort); ivaoFirMap[root]={callsign:cs,frequency:freq,color:(isUpper||g.uir)?'#8e44ad':'#16a085',isUpper:isUpper||g.uir,root:root,network:'IVAO',cid:_vid,cid_link:_vid?'https://tracker.ivao.aero/atc/'+_vid:'',rating:c.rating||0,logon_time:c.createdAt||'',kennungen:g.kennungen,firName:g.name}; }
                         } else if(!isNaN(lat)&&!isNaN(lon)){
                             var icaoRaw=cs.split('_')[0].toUpperCase();
                             if(!ivaoAirportGroups[icaoRaw])ivaoAirportGroups[icaoRaw]={pos:[lat,lon],ctrls:[],atis:[]};
@@ -1292,7 +1438,7 @@
                         L.marker(pos,{icon:buildAirportCtrlIconIvao(icao,group.ctrls,group.atis),title:icao,zIndexOffset:490}).bindPopup(buildAirportCtrlPopupIvao(icao,group.ctrls,group.atis),{maxWidth:300}).addTo(ivaoCtrlLayer);
                     });
 
-                    if(vatsimShowSectors) renderActiveSectors(ivaoFirMap, ivaoSectorLayer);
+                    if(vatsimShowSectors) ladeGrenzen().then(function(){renderActiveSectors(ivaoFirMap, ivaoSectorLayer);}).catch(function(e){console.warn('[IVAO] Sektoren-Fehler:',e);});
                     if(typeof applyLayerVisibility==='function') applyLayerVisibility();
                     return true;
                 }).catch(function(err){
@@ -1960,7 +2106,7 @@
 
             // ── Entwirren: nichts auf der Karte liegt uebereinander ──
             // Rangfolge: VA-Symbol (+ Rufzeichen des gewaehlten Flugs) > Lotsenkasten/TRACON
-            // > VA-Rufzeichen > Netz-Flieger. Wer einen schon platzierten trifft, wird
+            // > VA-Rufzeichen > Sektor-Etikett > Netz-Flieger. Wer einen schon platzierten trifft, wird
             // unsichtbar (visibility, nicht display: so bleibt er messbar und kommt beim
             // Hineinzoomen wieder). Gleicher Flughafen in VATSIM und IVAO: nebeneinander.
             var lmEntwirrenAngefordert = false;
@@ -1979,6 +2125,7 @@
                 // 1. zuruecksetzen (nur schreiben)
                 pane.querySelectorAll('.lm3-verdeckt').forEach(function (el) { el.classList.remove('lm3-verdeckt'); });
                 pane.querySelectorAll('.lm3-mehr').forEach(function (el) { el.parentNode.removeChild(el); });
+                pane.querySelectorAll('.lm3-sektor-etikett > div').forEach(function (el) { el.style.transform = ''; });
                 var stationen = { vatsim: {}, ivao: {} };
                 icons.forEach(function (el) {
                     var netz = el.classList.contains('vatsim-airport-marker') ? 'vatsim' : el.classList.contains('ivao-airport-marker') ? 'ivao' : null;
@@ -2013,7 +2160,7 @@
                     if (!teile.length) return null;
                     return teile.reduce(function (a, b) { return { l: Math.min(a.l, b.l), t: Math.min(a.t, b.t), r: Math.max(a.r, b.r), b: Math.max(a.b, b.b) }; });
                 }
-                var feste = [], vaFlieger = [], kaesten = [], rufzeichen = [], netzflieger = [];
+                var feste = [], vaFlieger = [], kaesten = [], rufzeichen = [], etiketten = [], netzflieger = [];
                 icons.forEach(function (el) {
                     if (el.style.display === 'none') return;
                     if (el.classList.contains('lm3-marker')) {
@@ -2029,6 +2176,10 @@
                     } else if (el.classList.contains('lm3-tracon')) {
                         var rt = rechteck(el.firstElementChild || el);
                         if (rt) kaesten.push({ el: el, r: rt, gewicht: 1 });
+                    } else if (el.classList.contains('lm3-sektor-etikett')) {
+                        // Teilsektoren (EDGG dreifach) liegen dicht beieinander; die Flaeche bleibt sichtbar.
+                        var re = rechteck(el.firstElementChild || el);
+                        if (re) etiketten.push({ el: el, r: re });
                     } else if (el.querySelector('.lm3-netz-flieger')) {
                         var rn = rechteck(el.querySelector('.lm3-netz-flieger'));
                         if (rn) netzflieger.push({ el: el, r: rn });
@@ -2060,11 +2211,29 @@
                     belegt.push(x.mehr ? { l: x.box.l, t: x.box.t - 3, r: x.box.r + 3, b: x.box.b } : x.r);
                     if (x.label) belegt.push(x.label);
                 });
-                [kaesten, rufzeichen, netzflieger].forEach(function (gruppe) {
+                [kaesten, rufzeichen].forEach(function (gruppe) {
                     gruppe.forEach(function (x) {
                         if (trifft(x.r)) weg.push(x.el); else belegt.push(x.r);
                     });
                 });
+                // Sektor-Etikett: erst ein Stueck neben die Mitte ruecken (bleibt in der Flaeche),
+                // erst ohne freien Platz ausblenden.
+                var RUECKE = [[0, 0], [0, -40], [0, 40], [-70, 0], [70, 0], [-70, -40], [70, -40], [-70, 40], [70, 40]], gerueckt = [];
+                etiketten.forEach(function (x) {
+                    for (var k = 0; k < RUECKE.length; k++) {
+                        var d = RUECKE[k], r = { l: x.r.l + d[0], t: x.r.t + d[1], r: x.r.r + d[0], b: x.r.b + d[1] };
+                        if (r.l < rahmen.left || r.r > rahmen.right || r.t < rahmen.top || r.b > rahmen.bottom) continue;
+                        if (trifft(r)) continue;
+                        belegt.push(r);
+                        if (k) gerueckt.push({ el: x.el, d: d });
+                        return;
+                    }
+                    weg.push(x.el);
+                });
+                netzflieger.forEach(function (x) {
+                    if (trifft(x.r)) weg.push(x.el); else belegt.push(x.r);
+                });
+                gerueckt.forEach(function (g) { if (g.el.firstElementChild) g.el.firstElementChild.style.transform = 'translate(' + g.d[0] + 'px,' + g.d[1] + 'px)'; });
                 weg.forEach(function (el) { el.classList.add('lm3-verdeckt'); });
                 gastgeber.forEach(function (x) {
                     if (!x.mehr) return;

@@ -189,3 +189,82 @@ test('Jeder Fehlercode des Servers hat im Widget einen deutschen und englischen 
   // und jeder Code ist entweder "kurze Stoerung" (Stand halten) oder nicht — nie undefiniert
   for (const c of codes) assert.equal(typeof LM3.fehlerIstVoruebergehend(c), 'boolean', c);
 });
+
+// ── VATSIM/IVAO-Lotsen nach dem Radar-Verfahren (Vorlage aeroacars-live atcKarte.ts) ──
+// Zeilen woertlich aus VATSpy.dat (vatspy-data-project, Stand 03.11.2026), nicht ausgedacht.
+const VATSPY = [
+  '[Countries]', 'Germany|ED|Center',
+  '[Airports]',
+  'KCLT|Charlotte- Douglas Intl NC|35.214011|-80.943125|CLT|KZTL|0',
+  'CYYZ|Toronto-Pearson Intl|43.677222|-79.630556|YYZ|CZYZ|1',
+  'EGHI|Solent|50.950261|-1.356803|SOLENT|EGTT|1',
+  '[FIRs]',
+  'ADR|Adria Radar||ADR',
+  'ADR|Adria Radar (Upper FL335+)|ADR_U|ADR',
+  'ADR-E|Adria Radar (East)|ADR_E|ADR-E',
+  'ADR-E|Adria Radar (Upper East FL335+)|ADR_UE|ADR-E',
+  'BIRD|Reykjavik||BIRD',
+  'BIRD|Reykjavik|BIRD_S1|BIRD',
+  'BIRD-E|Reykjavik ACC (East) - Reykjavik|BIRD_E|BIRD-E',
+  'BIRD-E|Reykjavik ACC (East) - Reykjavik|BIRD_E1|BIRD-E',
+  'EGTT|London|LON|EGTT',
+  'LPPO|Santa Maria|LPAZ|LPPO',
+  'KZNY|New York|NY|KZNY',
+  '[UIRs]',
+  'AFRE|East Africa Control|HAAA,HCSM,HHAA,HSSS,HJJJ',
+  'AFRE_E|East Africa Control|HAAA,HCSM',
+].join('\n');
+
+test('Sprechfunk nur 117–137 MHz (Beobachter auf 199.998 zaehlt nicht)', () => {
+  for (const f of ['118.305', '122.575', '117.000', '137.000']) assert.equal(LM3.aufSprechfrequenz(f), true, f);
+  for (const f of ['199.998', '109.200', '116.999', '137.001', '', null]) assert.equal(LM3.aufSprechfrequenz(f), false, String(f));
+});
+
+test('VATSpy-Plaetze: Funk-Praefix vor ICAO, Behelf bleibt erreichbar', () => {
+  const v = LM3.vatspyLesen(VATSPY);
+  // CLT_GND und KCLT_ATIS zeigen auf dieselbe Stelle
+  assert.deepEqual(klar(v.plaetze.CLT), [35.214011, -80.943125]);
+  assert.deepEqual(klar(v.plaetze.KCLT), [35.214011, -80.943125]);
+  assert.deepEqual(klar(v.plaetze.YYZ), [43.677222, -79.630556]);
+  assert.deepEqual(klar(v.plaetze.CYYZ), [43.677222, -79.630556]);
+  assert.deepEqual(klar(v.plaetze.SOLENT), [50.950261, -1.356803]);
+  assert.equal(v.namen.KCLT, 'Charlotte- Douglas Intl NC');
+  assert.equal(v.plaetze.ZZZZ, undefined);
+});
+
+test('FIR-Zuordnung: laengster Praefix gewinnt, Teilsektor statt ganzer FIR', () => {
+  const v = LM3.vatspyLesen(VATSPY);
+  const g = (ruf) => klar(LM3.grenzenFuerLotse(ruf, v.firNachWort, v.uirNachWort).kennungen);
+  assert.deepEqual(g('ADR_E_CTR'), ['ADR-E']);
+  assert.deepEqual(g('ADR_UE_CTR'), ['ADR-E']);
+  assert.deepEqual(g('ADR_CTR'), ['ADR']);
+  assert.deepEqual(g('BIRD_E1_CTR'), ['BIRD-E']);
+  assert.deepEqual(g('BIRD_CTR'), ['BIRD']);
+  assert.deepEqual(g('LON_S_CTR'), ['EGTT']);
+  assert.deepEqual(g('LPPO_FSS'), ['LPPO']);
+  assert.deepEqual(g('LPAZ_CTR'), ['LPPO']);   // Santa Maria funkt unter dem Praefix LPAZ
+  assert.equal(LM3.grenzenFuerLotse('LON_S_CTR', v.firNachWort, v.uirNachWort).name, 'London');
+  // Sammelposition aus [UIRs]: die laengste passende
+  const afre = LM3.grenzenFuerLotse('AFRE_E_CTR', v.firNachWort, v.uirNachWort);
+  assert.deepEqual(klar(afre.kennungen), ['HAAA', 'HCSM']);
+  assert.equal(afre.uir, true);
+  assert.deepEqual(g('AFRE_CTR'), ['HAAA', 'HCSM', 'HHAA', 'HSSS', 'HJJJ']);
+  assert.deepEqual(g('ZZZZ_CTR'), []);
+});
+
+test('Doppelflaeche: _FSS bekommt die ozeanische, CTR die kontinentale', () => {
+  const land = { properties: { id: 'KZNY', oceanic: '0' } }, meer = { properties: { id: 'KZNY', oceanic: '1' } };
+  assert.equal(LM3.firFlaeche([land, meer], 'NY_FSS'), meer);
+  assert.equal(LM3.firFlaeche([meer, land], 'NY_CTR'), land);
+  assert.equal(LM3.firFlaeche([land], 'NY_FSS'), land);
+  assert.equal(LM3.firFlaeche([], 'NY_CTR'), null);
+});
+
+test('Widget gruppiert Lotsen nach aufgeloester Stelle und laesst Beobachter ohne Sprechfunk weg', () => {
+  // Quelltext-Pruefung der UI-Verdrahtung (der Teil laeuft nur im Browser)
+  assert.match(skript, /function platzSchluessel\(prefix\)[\s\S]{0,200}'@'\s*\+\s*k\[0\]\.toFixed\(5\)/);
+  assert.doesNotMatch(skript, /normalizeKey\(/);
+  assert.match(skript, /c\.facility===0&&!\(window\.LM3\.aufSprechfrequenz\(c\.frequency\)&&platzZu\(prefix\)\)/);
+  assert.match(skript, /if\(!window\.LM3\.aufSprechfrequenz\(a\.frequency\)\) return;/);
+  assert.doesNotMatch(skript, /raw\.githubusercontent\.com\/vatsimnetwork/);
+});
