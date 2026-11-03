@@ -109,7 +109,7 @@
 
                     .lm3-reiter { display: flex; align-items: stretch; border-bottom: 1px solid var(--lm-linie); background: var(--lm-flaeche-2); flex: 0 0 auto; }
                     .lm3-reiter [role="tab"] {
-                        flex: 1 1 0; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: none; cursor: pointer;
+                        flex: 1 1 0; padding: 8px 12px; border: 0; white-space: nowrap; border-bottom: 2px solid transparent; background: none; cursor: pointer;
                         font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--lm-text-2);
                     }
                     .lm3-reiter [role="tab"][aria-selected="true"] { color: var(--lm-text); border-bottom-color: #3498db; }
@@ -167,6 +167,7 @@
                         .lm3-g-plan { grid-template-columns: minmax(0, 1fr) 96px; }
                         .lm3-g-plan .lm3-sp-zeit { display: none; }
                         .lm3-tafel-kopf { gap: 10px; padding: 9px 12px; }
+                        .lm3-reiter [role="tab"] { padding: 8px 6px; }
                     }
 
                     /* ── Werkzeuge (oben rechts) ── */
@@ -288,6 +289,9 @@
                     .lm3--schmal { --lm-unten: 22px; }
                     .lm3--schmal .lm3-ui { display: flex; flex-direction: column; gap: 8px; padding: 8px 8px var(--lm-unten) 8px; }
                     .lm3--schmal .lm3-mitte, .lm3--schmal .lm3-rechts { display: contents; }
+                    /* display: contents erzeugt keinen Container, deshalb misst hier die ganze Ebene */
+                    .lm3--schmal .lm3-ui { container-type: inline-size; container-name: lmmitte; }
+                    .lm3--schmal .lm3-mitte { container-type: normal; container-name: none; }
                     .lm3--schmal .lm3-werkzeuge { order: 1; }
                     .lm3--schmal .lm3-box { order: 2; margin-left: var(--lm-zoom); flex: 0 1 auto; }
                     .lm3--schmal .lm3-ui::after { content: ''; order: 3; flex: 1 1 0; min-height: 0; }
