@@ -46,7 +46,7 @@ New in v5.1.0:
     with a grey "O"), controllers grouped by resolved facility, FIR
     assignment by longest prefix, sub-sectors, collective positions from
     [UIRs], _FSS = oceanic area. IVAO sectors also appear without VATSIM.
-    Fetches have a timeout and retry on the next tick; sources come via
+    Fetches have a timeout and are retried (large data files after 5 min); sources come via
     jsDelivr; overlapping sector labels are nudged or hidden.
   - NOT adopted: TRACON areas of the SimAware TRACON Project (measured
     03.11.2026: the 1.77 MB release asset has no CORS header on GitHub,

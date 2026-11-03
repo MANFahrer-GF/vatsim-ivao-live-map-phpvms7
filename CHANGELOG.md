@@ -18,8 +18,8 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
   Daten werden weggelassen. Die Technik von 5.0 (Daten über das Modul) bleibt.
   *Compact flight board and detail box as in 4.7.9, 5.0 data path kept.*
 - **Datenquelle „Beide“** (neben phpVMS und AeroACARS Live): AeroACARS- und
-  phpVMS-Flug mit demselben Piloten und demselben Rufzeichen sind ein Flug
-  (Registrierung, PIREP-Link und Logo kommen vom PIREP). Fällt eine Quelle aus,
+  phpVMS-Flug mit demselben Piloten (phpVMS-Konto `users.id`) und demselben
+  Rufzeichen sind ein Flug (Registrierung, PIREP-Link und Logo kommen vom PIREP). Fällt eine Quelle aus,
   zeigt die Karte die andere mit einem Hinweis.
   *Source "Both": same pilot + same callsign = one flight; if one source fails,
   the other is shown with a notice.*
@@ -95,15 +95,17 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
 - **VATSIM/IVAO — FIR-Zuordnung nach dem Verfahren von VATSIM Radar:**
   längster Präfix, Teilsektoren, Sammelpositionen aus `[UIRs]` (die längste
   passende), `_FSS` = ozeanische Fläche. Die alte Grobzuordnung bleibt als
-  Rückfall. IVAO läuft über denselben Weg und lädt VATSpy und Grenzen jetzt
-  selbst (Sektoren erschienen vorher nur mit VATSIM).
+  Rückfall. IVAO läuft über denselben Weg (Teilsektoren getrennt, Plätze nach
+  aufgelöster Stelle gruppiert) und lädt VATSpy und Grenzen jetzt selbst
+  (Sektoren erschienen vorher nur mit VATSIM).
   *FIR assignment as VATSIM Radar does it: longest prefix, sub-sectors, collective positions from [UIRs] (longest match), _FSS = oceanic area; old coarse matching kept as fallback; IVAO uses the same path and loads VATSpy and boundaries itself (sectors used to need VATSIM).*
-- **VATSIM/IVAO — Robustheit:** Abrufe mit Zeitgrenze (20 s), Sektoren werden
-  erst nach geladenen Grenzen geleert, VATSpy und Grenzen werden bei einem
-  Fehlschlag im nächsten Takt neu versucht. Die Quellen kommen über jsDelivr
+- **VATSIM/IVAO — Robustheit:** Abrufe mit Zeitgrenze (20 s, VATSpy und
+  Grenzen 60 s, jeweils bis die Antwort ganz gelesen ist), Sektoren werden
+  erst nach geladenen Grenzen geleert, VATSpy und Grenzen werden nach einem
+  Fehlschlag nach 5 Minuten neu versucht. Die Quellen kommen über jsDelivr
   (Browser-Puffer 7 Tage statt 5 min). Sektor-Etiketten werden gerückt und,
   wenn kein Platz bleibt, ausgeblendet, statt sich zu überlappen.
-  *Fetches with a timeout, sectors cleared only after boundaries have loaded, retry on the next tick; sources via jsDelivr (7-day browser cache instead of 5 min); sector labels are nudged or hidden instead of overlapping.*
+  *Fetches with a timeout covering the whole response (20 s; VATSpy/boundaries 60 s), sectors cleared only after boundaries have loaded, VATSpy/boundaries retried 5 minutes after a failure; sources via jsDelivr (7-day browser cache instead of 5 min); sector labels are nudged or hidden instead of overlapping.*
 
 ### Not adopted / Bewusst nicht übernommen
 - **TRACON-Flächen aus dem SimAware-TRACON-Project.** Gemessen am 03.11.2026:
