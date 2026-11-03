@@ -211,9 +211,10 @@ function liveListe(): array
 zurueck();
 $einstellungen['acars.livemap_quelle'] = 'phpvms';
 $pireps = [(object) [
-    'id' => 'PIREP0000000001', 'flight_number' => '1234', 'airline' => (object) ['icao' => 'GSG'],
+    'id' => 'PIREP0000000001', 'flight_number' => '1234', 'airline' => (object) ['icao' => 'GSG', 'logo' => null],
     // phpVMS: name_private ist der gekuerzte Name ("Anna F."), name der volle.
-    'user' => (object) ['name' => 'Anna Maria Fischer', 'name_private' => 'Anna F.'],
+    // id/pilot_id hat jeder echte Nutzer (Zuordnung fuer Quelle „Beide“).
+    'user' => (object) ['id' => 7, 'pilot_id' => 1003, 'name' => 'Anna Maria Fischer', 'name_private' => 'Anna F.'],
     'aircraft' => (object) ['icao' => 'A320', 'registration' => 'D-AGSG'], 'source_name' => 'AeroACARS',
     'dpt_airport_id' => 'EDDF', 'arr_airport_id' => 'EDDM', 'status' => 'ENR',
     'position' => (object) ['lat' => 49.5, 'lon' => 9.5, 'altitude' => 35000, 'ias' => 280, 'gs' => 450, 'vs' => 0, 'heading' => 120],
@@ -247,6 +248,51 @@ $einstellungen['acars.livemap_quelle'] = 'phpvms';
 $pirepsKaputt = true;
 [$code, $j] = hole('/livemap/api/fluege');
 pruefe('phpVMS-Abfrage scheitert: 503, ok=false, fehler=phpvms', $code === 503 && ($j['ok'] ?? null) === false && ($j['fehler'] ?? '') === 'phpvms' && ($j['fluege'] ?? null) === [], [$code, $j]);
+
+// ═════════════════════════════════════════════════════════════════════════
+// 1b. Quelle „Beide“ (5.1): AeroACARS + phpVMS, derselbe Flug einmal
+// ═════════════════════════════════════════════════════════════════════════
+$beidePirep = fn (string $id, string $nr, int $pilotId) => (object) [
+    'id' => $id, 'flight_number' => $nr, 'airline' => (object) ['icao' => 'JAL', 'logo' => null],
+    'user' => (object) ['id' => 9, 'pilot_id' => $pilotId, 'name' => 'Kenji Mori', 'name_private' => 'Kenji M.'],
+    'aircraft' => (object) ['icao' => 'B789', 'registration' => 'JA861J'], 'source_name' => 'AeroACARS',
+    'dpt_airport_id' => 'PANC', 'arr_airport_id' => 'RJAA', 'status' => 'ENR',
+    'position' => (object) ['lat' => 55.0, 'lon' => 170.0, 'altitude' => 39000, 'ias' => 260, 'gs' => 505, 'vs' => 0, 'heading' => 238],
+    'updated_at' => Carbon::now(), 'created_at' => Carbon::now(),
+];
+zurueck();
+$einstellungen['acars.livemap_quelle'] = 'beide';
+$pireps = [$beidePirep('PIREPJAL7', '7', 1003), $beidePirep('PIREPGSG9', '9', 2000)];
+live(['live.kant.ovh/api/flights' => Http::response(liveListe(), 200)]);
+[$code, $j, $roh] = hole('/livemap/api/fluege');
+$ids = array_column($j['fluege'] ?? [], 'id');
+pruefe('Beide: 200, ok, Quelle beide, ein Flug zugeordnet', $code === 200 && ($j['quelle'] ?? '') === 'beide' && ($j['zugeordnet'] ?? null) === 1, [$code, $j['zugeordnet'] ?? null]);
+pruefe('Beide: JAL7 einmal (von live), der andere PIREP dazu', $ids === ['GSG/1003', 'phpvms/PIREPGSG9'], $ids);
+pruefe('Beide: PIREP-Link am live-Flug', str_ends_with((string) ($j['fluege'][0]['pirep_url'] ?? ''), '/pireps/PIREPJAL7'), $j['fluege'][0]['pirep_url'] ?? null);
+pruefe('Beide: interne Zuordnung (_pilot) verlaesst den Server nicht', !str_contains($roh, '_pilot'));
+pruefe('Beide: ohne Stoerung keine Warnung', !array_key_exists('warnung', $j));
+
+zurueck();
+$einstellungen['acars.livemap_quelle'] = 'beide';
+$pireps = [$beidePirep('PIREPJAL7', '7', 1003)];
+live(['live.kant.ovh/api/flights' => Http::response('', 500)]);
+[$code, $j] = hole('/livemap/api/fluege');
+pruefe('Beide, live gestoert: phpVMS-Flug + Warnung statt leer', $code === 200 && ($j['ok'] ?? null) === true
+    && array_column($j['fluege'] ?? [], 'id') === ['phpvms/PIREPJAL7'] && !empty($j['warnung']) && $j['warnung'] !== 'phpvms', [$code, $j]);
+
+zurueck();
+$einstellungen['acars.livemap_quelle'] = 'beide';
+$pirepsKaputt = true;
+live(['live.kant.ovh/api/flights' => Http::response(liveListe(), 200)]);
+[$code, $j] = hole('/livemap/api/fluege');
+pruefe('Beide, phpVMS gestoert: live-Flug + Warnung phpvms', $code === 200 && array_column($j['fluege'] ?? [], 'id') === ['GSG/1003'] && ($j['warnung'] ?? '') === 'phpvms', [$code, $j]);
+
+zurueck();
+$einstellungen['acars.livemap_quelle'] = 'beide';
+$pirepsKaputt = true;
+live(['live.kant.ovh/api/flights' => Http::response('', 500)]);
+[$code, $j] = hole('/livemap/api/fluege');
+pruefe('Beide, beide gestoert: 503, ok=false', $code === 503 && ($j['ok'] ?? null) === false && ($j['fluege'] ?? null) === [], [$code, $j]);
 
 // ═════════════════════════════════════════════════════════════════════════
 // 2. Quelle AeroACARS Live, gueltiger Schluessel
@@ -573,10 +619,13 @@ foreach (array_diff(glob($ansichtenOrdner.'/*.php') ?: [], $ansichtenVorher) as 
 array_map('unlink', glob($stub.'/layouts/*') ?: []);
 @rmdir($stub.'/layouts');
 @rmdir($stub);
-// Das Karten-Widget (live_map*.blade.php) darf den Schluessel gar nicht kennen
+// Das Karten-Widget (Theme-Datei + alle Ansichten im Modul) darf den Schluessel gar nicht kennen
+$widgetDateien = array_merge([dirname(__DIR__).'/live_map.blade.php', dirname(__DIR__).'/LiveMap/Resources/views/widget.blade.php'],
+    glob(dirname(__DIR__).'/LiveMap/Resources/views/partials/*.blade.php'));
+pruefe('Karten-Widget: alle Ansichten gefunden (Theme-Datei, widget, 3 Teile)', count(array_filter($widgetDateien, 'is_file')) === 5, $widgetDateien);
 $widgetQuellen = '';
-foreach (['live_map.blade.php', 'live_map_scripts.blade.php', 'live_map_styles.blade.php'] as $d) {
-    $widgetQuellen .= file_get_contents(dirname(__DIR__).'/'.$d);
+foreach ($widgetDateien as $d) {
+    $widgetQuellen .= file_get_contents($d);
 }
 pruefe('Karten-Widget: Quelltext kennt weder live_key noch livemap_live_key noch Bearer', !preg_match('/live_key|livemap_live_key|Bearer/i', $widgetQuellen));
 

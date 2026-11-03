@@ -101,10 +101,48 @@ foreach ($soll as $code => $phase) {
 }
 pruefe('phpVMS-Status → Phase', $alle);
 $p = N::ausPhpvms(['pirep_id' => 'abc123', 'callsign' => 'GSG100', 'status' => 'ENR', 'lat' => 50, 'lon' => 8, 'altitude' => 35000, 'pilot_name' => 'Paul N.']);
-pruefe('phpVMS-Flug in derselben Form', $p['id'] === 'phpvms/abc123' && $p['phase'] === 'CRUISE' && $p['pos']['alt_ft'] === 35000
-    && array_keys($p) === array_keys($f), $p);
+// Beide gehen nur ueber oeffentlich() hinaus (LiveFlightsController::mitBeiwerk)
+pruefe('phpVMS-Flug in derselben oeffentlichen Form', $p['id'] === 'phpvms/abc123' && $p['phase'] === 'CRUISE' && $p['pos']['alt_ft'] === 35000
+    && array_keys(N::oeffentlich($p)) === array_keys(N::oeffentlich($f)), array_keys(N::oeffentlich($p)));
+pruefe('oeffentlich: interne Pilotenzuordnung raus, Logo/PIREP-Link immer da', !array_key_exists('_pilot', N::oeffentlich($p))
+    && array_key_exists('logo', N::oeffentlich($f)) && N::oeffentlich($f)['pirep_url'] === null);
 $voll = N::ausPhpvms(['pirep_id' => 'abc124', 'callsign' => 'GSG101', 'status' => 'ENR', 'lat' => 50, 'lon' => 8, 'pilot_name' => 'Paul Peter Neumann']);
 pruefe('phpVMS ohne name_private: voller Name wird gekürzt', $voll['pilot_name'] === 'Paul N.', $voll['pilot_name']);
+
+// Quelle „Beide“: gleicher Pilot UND gleiches Rufzeichen (live mit Leerzeichen, phpVMS ohne)
+$liveFlug = N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => 'ITY 4532', 'dep' => 'LIRF', 'arr' => 'EDDF']));
+$pirep = N::ausPhpvms(['pirep_id' => 'p1', 'callsign' => 'ITY4532', 'status' => 'ENR', 'lat' => 48, 'lon' => 10,
+    'user_id' => '7', 'user_pilot_id' => '42', 'registration' => 'EI-DTA', 'pirep_url' => 'https://va.test/pireps/p1', 'logo' => '/l/ity.png']);
+$z = N::zusammenfuehren([$liveFlug], [$pirep]);
+pruefe('Beide: ein Flug statt zwei, als zugeordnet gezaehlt', count($z['fluege']) === 1 && $z['zugeordnet'] === 1, $z['zugeordnet']);
+pruefe('Beide: der AeroACARS-Flug bleibt (Phase/Position von live)', $z['fluege'][0]['id'] === 'GSG/42');
+pruefe('Beide: PIREP-Link und Logo vom PIREP, eigene Registrierung bleibt', $z['fluege'][0]['pirep_url'] === 'https://va.test/pireps/p1'
+    && $z['fluege'][0]['logo'] === '/l/ity.png' && $z['fluege'][0]['registration'] === 'JA861J', $z['fluege'][0]);
+$ohneReg = N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => 'ITY 4532', 'last_position' => ['lat' => 48, 'lon' => 10]]));
+pruefe('Beide: Registrierung vom PIREP, wenn live keine hat', N::zusammenfuehren([$ohneReg], [$pirep])['fluege'][0]['registration'] === 'EI-DTA');
+$fremd = N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '43', 'callsign' => 'ITY4532']))], [$pirep]);
+pruefe('Beide: gleiches Rufzeichen, anderer Pilot → zwei Fluege', count($fremd['fluege']) === 2 && $fremd['zugeordnet'] === 0);
+$anderesCs = N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => 'ITY4533']))], [$pirep]);
+pruefe('Beide: gleicher Pilot, anderes Rufzeichen → zwei Fluege', count($anderesCs['fluege']) === 2);
+pruefe('Beide: Pilot ueber users.id', N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '7', 'callsign' => 'ITY4532']))], [$pirep])['zugeordnet'] === 1);
+$ohneCsLive = N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => '', 'dep' => 'LIRF', 'arr' => 'EDDF']));
+$ohneCsPirep = N::ausPhpvms(['pirep_id' => 'p2', 'callsign' => '', 'status' => 'ENR', 'lat' => 48, 'lon' => 10, 'user_pilot_id' => '42', 'dep' => 'LIRF', 'arr' => 'EDDF']);
+pruefe('Beide: ohne Rufzeichen reichen Pilot + Abflug + Ziel', N::zusammenfuehren([$ohneCsLive], [$ohneCsPirep])['zugeordnet'] === 1);
+$andersZiel = N::ausPhpvms(['pirep_id' => 'p3', 'callsign' => '', 'status' => 'ENR', 'lat' => 48, 'lon' => 10, 'user_pilot_id' => '42', 'dep' => 'LIRF', 'arr' => 'EDDM']);
+pruefe('Beide: ohne Rufzeichen, anderes Ziel → zwei Fluege', N::zusammenfuehren([$ohneCsLive], [$andersZiel])['zugeordnet'] === 0);
+pruefe('Beide: ein PIREP wird nur einmal vergeben', N::zusammenfuehren([$liveFlug, $liveFlug], [$pirep])['zugeordnet'] === 1);
+pruefe('Beide: ohne live nur die PIREPs', count(N::zusammenfuehren([], [$pirep, $ohneCsPirep])['fluege']) === 2);
+
+// Logo nur fuer Kennungen, die es in airlines gibt; danach muss eine Ziffer folgen
+$logos = ['DLH' => '/l/dlh.svg', 'BA' => '/l/ba.svg', 'BAW' => '/l/baw.svg'];
+pruefe('Logo: DLH400', N::logoFuerRufzeichen('DLH400', $logos) === '/l/dlh.svg');
+pruefe('Logo: Leerzeichen egal', N::logoFuerRufzeichen('dlh 400', $logos) === '/l/dlh.svg');
+pruefe('Logo: laengster Treffer gewinnt (BAW vor BA)', N::logoFuerRufzeichen('BAW12', $logos) === '/l/baw.svg');
+pruefe('Logo: BA12 ueber BA', N::logoFuerRufzeichen('BA12', $logos) === '/l/ba.svg');
+pruefe('Logo: DLHX4 hat keine Ziffer nach der Kennung', N::logoFuerRufzeichen('DLHX4', $logos) === null);
+pruefe('Logo: unbekannte Kennung', N::logoFuerRufzeichen('XYZ1', $logos) === null);
+pruefe('Logo: leer/null', N::logoFuerRufzeichen(null, $logos) === null && N::logoFuerRufzeichen('', $logos) === null);
+pruefe('Rufzeichen-Schluessel wie im Widget', N::rufzeichenSchluessel(' ity-4532 ') === 'ITY4532');
 
 // Adresse von AeroACARS Live: der Schluessel darf nur an live.kant.ovh gehen (SSRF)
 pruefe('Standardadresse', N::liveBasis('', false) === 'https://live.kant.ovh');

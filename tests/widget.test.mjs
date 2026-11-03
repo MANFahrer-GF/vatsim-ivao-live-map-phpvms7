@@ -1,4 +1,4 @@
-// Tests fuer die reinen Hilfsfunktionen der Live-Karte (live_map_scripts.blade.php,
+// Tests fuer die reinen Hilfsfunktionen der Live-Karte (LiveMap/Resources/views/partials/scripts.blade.php,
 // Block zwischen /* <lm3-rein> */ und /* </lm3-rein> */). Ohne Browser, ohne Pakete:
 //
 //     node --test tests/widget.test.mjs
@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HIER = path.dirname(fileURLToPath(import.meta.url));
-const skript = fs.readFileSync(path.join(HIER, '..', 'live_map_scripts.blade.php'), 'utf8');
+const skript = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'scripts.blade.php'), 'utf8');
 const a = skript.indexOf('/* <lm3-rein> */');
 const b = skript.indexOf('/* </lm3-rein> */');
 assert.ok(a > 0 && b > a, 'Block <lm3-rein> nicht gefunden');
@@ -106,6 +106,60 @@ test('Phasenfilter nimmt die ROHE Phase (wie die Webapp)', () => {
   assert.deepEqual(klar(LM3.filterNachPhase(f, 'CLIMB').map((x) => x.id)), [1]);
   assert.deepEqual(klar(LM3.filterNachPhase(f, 'LEVEL').map((x) => x.id)), []);
   assert.equal(LM3.filterNachPhase(f, 'ALL').length, 2);
+});
+
+test('Geplante Fluege: AeroACARS „ITY 4532“ ist phpVMS „ITY4532“', () => {
+  assert.equal(LM3.rufzeichenSchluessel(' ity 4532 '), 'ITY4532');
+  assert.equal(LM3.rufzeichenSchluessel(null), '');
+  const geplant = [{ callsign: 'ITY4532' }, { callsign: 'ITY4533' }];
+  assert.deepEqual(klar(LM3.geplanteOhneAktive(geplant, [{ callsign: 'ITY 4532' }]).map((g) => g.callsign)), ['ITY4533']);
+});
+
+test('Hoehe wie die 4.7.9-Tafel: ab 18 000 ft Flugflaeche', () => {
+  assert.equal(LM3.hoeheText(37000, 'en'), 'FL370');
+  assert.equal(LM3.hoeheText(18000, 'en'), 'FL180');
+  assert.equal(LM3.hoeheText(17999, 'en'), LM3.zahl(17999, 'en') + ' ft');
+  assert.equal(LM3.hoeheText(null), '');
+});
+
+test('Distanz in nm (Grosskreis) und Fortschritt geflogen/gesamt', () => {
+  // FRA–JFK ~ 3343 nm (Grosskreis)
+  const fraJfk = LM3.distanzNm(50.0333, 8.5706, 40.6398, -73.7789);
+  assert.ok(Math.abs(fraJfk - 3343) < 15, String(fraJfk));
+  assert.equal(LM3.distanzNm(50, 8, 50, 8), 0);
+  const dep = { lat: 50.0333, lon: 8.5706 }, arr = { lat: 40.6398, lon: -73.7789 };
+  const halb = LM3.fortschritt(dep, arr, { lat: 55.5, lon: -30 });
+  assert.ok(halb.anteil > 0.3 && halb.anteil < 0.7, String(halb.anteil));
+  assert.ok(Math.abs(halb.geflogen + halb.rest - halb.gesamt) < 1e-6);
+  assert.equal(LM3.fortschritt(dep, arr, dep).anteil, 0);
+  // weiter weg vom Ziel als der Abflug: nie negativ
+  assert.equal(LM3.fortschritt(dep, arr, { lat: 52, lon: 20 }).geflogen, 0);
+  // fehlende oder 0/0-Orte: kein Fortschritt statt Unsinn
+  assert.equal(LM3.fortschritt(null, arr, dep), null);
+  assert.equal(LM3.fortschritt(dep, arr, { lat: 0, lon: 0 }), null);
+  assert.equal(LM3.fortschritt(dep, dep, dep), null);
+});
+
+test('Flugzeugklasse nach ICAO-Typ, unbekannt → Schmalrumpf', () => {
+  const soll = { C172: 'kolben', AT76: 'turboprop', CL60: 'bizjet', A320: 'schmal', B738: 'schmal', A21N: 'schmal',
+    B77W: 'gross', A359: 'gross', A388: 'vier', B744: 'vier', H135: 'heli', ' b77w ': 'gross', ZZZZ: 'schmal', '': 'schmal' };
+  for (const [typ, k] of Object.entries(soll)) assert.equal(LM3.flugzeugKlasse(typ), k, typ);
+  assert.equal(LM3.flugzeugKlasse(null), 'schmal');
+  assert.equal(LM3.flugzeugKlasse('toString'), 'schmal'); // nicht aus dem Prototyp
+  // jede Klasse hat ein Symbol k1..k7 und eine Groesse; groessere Flugzeuge groesser
+  const k = LM3.KLASSEN;
+  assert.deepEqual(Object.keys(k).map((x) => k[x].symbol).sort(), ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7']);
+  assert.ok(k.kolben.px < k.schmal.px && k.schmal.px < k.gross.px && k.gross.px < k.vier.px);
+  assert.equal(LM3.klassenInfo('gibtsnicht'), k.schmal);
+});
+
+test('Jedes Klassensymbol ist im Sprite definiert', () => {
+  for (const s of ['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7']) assert.match(skript, new RegExp('id="lm-' + s + '"'), s);
+});
+
+test('Am Boden: Rollen und Parkposition, nicht Start/Landung', () => {
+  for (const p of ['TAXI_OUT', 'taxi_in', 'BOARDING', 'ARRIVED']) assert.equal(LM3.amBoden(p), true, p);
+  for (const p of ['TAKEOFF', 'CRUISE', 'LANDING', null]) assert.equal(LM3.amBoden(p), false, String(p));
 });
 
 test('Geplante Fluege ohne die, die schon live fliegen', () => {
