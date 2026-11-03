@@ -2417,9 +2417,11 @@
                     // Tiefer geschachtelte feste Koepfe (SPTheme: .page-header ist kein Kind
                     // von <body>): was an der Kartenoberkante obenauf liegt, bis zum festen
                     // Vorfahren hochlaufen.
-                    if (k.top >= 0 && k.top < window.innerHeight && document.elementFromPoint) {
+                    // ab der sichtbaren Oberkante (gescrollt steht die Karte z. B. bei -0,5 px)
+                    var y = Math.max(k.top, 0) + 2;
+                    if (k.bottom > y && y < window.innerHeight && document.elementFromPoint) {
                         [0.2, 0.5, 0.8].forEach(function (anteil) {
-                            var e = document.elementFromPoint(k.left + k.width * anteil, k.top + 2);
+                            var e = document.elementFromPoint(k.left + k.width * anteil, y);
                             for (; e && e !== document.body && !wrap.contains(e); e = e.parentElement) {
                                 var pos = getComputedStyle(e).position;
                                 if (pos !== 'fixed' && pos !== 'sticky') continue;

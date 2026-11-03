@@ -127,7 +127,7 @@
                     .lm3-tafel-inhalt[hidden] { display: none; }
 
                     /* Reiter als kompakte Segmente; unten ist diese Zeile der Kopf */
-                    .lm3-reiter { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--lm-linie); flex: 0 0 auto; }
+                    .lm3-reiter { display: flex; align-items: center; gap: 4px; padding: 6px 8px; min-width: 0; border-bottom: 1px solid var(--lm-linie); flex: 0 0 auto; }
                     .lm3-reiter > .lm3-punkt { margin: 0 6px 0 4px; }
                     .lm3-reiter [role="tab"] {
                         flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 8px;
@@ -138,9 +138,9 @@
                     .lm3-reiter [role="tab"][aria-selected="true"] { color: var(--lm-text); background: var(--lm-gewaehlt); }
                     .lm3-tabzahl { display: inline-block; min-width: 18px; text-align: center; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 6px; background: var(--lm-flaeche-2); color: var(--lm-text-2); }
                     [aria-selected="true"] > .lm3-tabzahl { background: var(--lm-akzent); color: var(--lm-akzent-text); }
-                    .lm3-filter { display: flex; align-items: center; margin: 0 0 0 auto; padding-left: 8px; }
+                    .lm3-filter { display: flex; align-items: center; margin: 0 0 0 auto; padding-left: 8px; min-width: 0; flex: 0 1 auto; }
                     .lm3-filter[hidden] { display: none; }
-                    .lm3-filter select { font-size: 11.5px; padding: 3px 6px; border-radius: 7px; border: 1px solid var(--lm-linie); background: var(--lm-flaeche-2); color: var(--lm-text); max-width: 130px; }
+                    .lm3-filter select { font-size: 11.5px; padding: 3px 6px; border-radius: 7px; border: 1px solid var(--lm-linie); background: var(--lm-flaeche-2); color: var(--lm-text); max-width: 130px; width: 100%; min-width: 64px; }
                     .lm3.ist-dunkel .lm3-filter select { color-scheme: dark; }
 
                     .lm3-thead {
