@@ -2296,6 +2296,23 @@
                     var h = window.innerHeight - Math.max(0, oben) - untenFest - 16;
                     h = Math.max(cfg.minHoehe || 420, Math.min(cfg.maxHoehe || 1000, h));
                     flaeche.style.height = Math.round(h) + 'px';
+                    messeObenFrei();
+                }
+                // Feste Leiste des Themes ueber der Kartenoberkante (Cookie-Hinweis oben bei
+                // Seven/Disposable, beim Scrollen die Navigationsleiste): Tafel, Zoom und
+                // Knoepfe ruecken um die verdeckte Hoehe nach unten, statt darunter zu liegen.
+                function messeObenFrei() {
+                    var k = flaeche.getBoundingClientRect(), frei = 0;
+                    [].forEach.call(document.body.querySelectorAll('body > *'), function (e) {
+                        if (e.contains(wrap)) return;
+                        var st = getComputedStyle(e);
+                        if (st.position !== 'fixed' || st.display === 'none' || st.visibility === 'hidden' || +st.opacity === 0) return;
+                        var r = e.getBoundingClientRect();
+                        if (!r.height || r.height >= window.innerHeight / 2 || r.top > k.top + 1) return;
+                        if (r.right <= k.left || r.left >= k.right) return;
+                        frei = Math.max(frei, Math.min(r.bottom - k.top, k.height / 2));
+                    });
+                    wrap.style.setProperty('--lm-oben-frei', Math.max(0, Math.round(frei)) + 'px');
                 }
                 // Hell/Dunkel: Einstellung, sonst das Theme (Seven und SPTheme setzen
                 // data-bs-theme am <html>; manche Themes eine Klasse am <body>).
@@ -2435,6 +2452,10 @@
                 map.on('zoomend', function () { updateCtrlZoom(map); });
                 // nach updateCtrlZoom registriert: rAF laeuft erst, wenn dessen display-Werte stehen
                 map.on('zoomend moveend layeradd layerremove', lmEntwirrenPlanen);
+                // Nach einem animierten Zoom gleiten die Symbole noch ~0,25 s (CSS-Uebergang);
+                // gemessen wird dann zu frueh. Ein zweiter Lauf nach dem Gleiten.
+                var lmNachZoom = null;
+                map.on('zoomend', function () { clearTimeout(lmNachZoom); lmNachZoom = setTimeout(lmEntwirrenPlanen, 350); });
 
                 var va = starteVaFluege(map);
 
@@ -2511,6 +2532,13 @@
                 }
                 // Spaet geladene Leisten (Cookie-Hinweis) aendern die freie Hoehe.
                 window.addEventListener('load', function () { messeHoehe(); map.invalidateSize(); });
+                // Oben frei: beim Scrollen (feste Navigationsleiste) und wenn der Cookie-
+                // Hinweis nach dem Klick ausblendet (Klasse + Uebergang, kein childList).
+                var obenTimer = null;
+                function obenSpaeter() { clearTimeout(obenTimer); obenTimer = setTimeout(messeObenFrei, 120); }
+                window.addEventListener('scroll', obenSpaeter, { passive: true });
+                document.addEventListener('click', function () { setTimeout(obenSpaeter, 400); }, true);
+                document.addEventListener('transitionend', obenSpaeter, true);
                 // Manche Themes haengen die Cookie-Leiste erst nach dem Laden in <body>
                 // (SPTheme) — dann neu messen, sonst laege sie ueber dem Tafelkopf unten.
                 if (window.MutationObserver && document.body) {

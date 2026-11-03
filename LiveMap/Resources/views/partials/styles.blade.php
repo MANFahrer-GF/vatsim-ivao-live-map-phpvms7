@@ -67,7 +67,7 @@
                         display: grid;
                         grid-template-columns: var(--lm-zoom) minmax(0, 1fr) var(--lm-rechts);
                         column-gap: var(--lm-rand);
-                        padding: var(--lm-rand) var(--lm-rand) var(--lm-unten) var(--lm-rand);
+                        padding: calc(var(--lm-rand) + var(--lm-oben-frei, 0px)) var(--lm-rand) var(--lm-unten) var(--lm-rand);
                     }
                     .lm3-mitte {
                         grid-column: 2; min-width: 0; min-height: 0;
@@ -277,7 +277,7 @@
                     .lm3 .leaflet-control-zoom { border: 1px solid var(--lm-linie) !important; border-radius: 10px !important; box-shadow: var(--lm-schatten) !important; overflow: hidden; }
                     .lm3 .leaflet-control-zoom a { width: 32px !important; height: 32px !important; line-height: 32px !important; }
                     .lm3.ist-dunkel .leaflet-control-zoom a { background: #1e2530; color: #e3e9f2; border-color: #2a3444; }
-                    .lm3 .leaflet-top.leaflet-left .leaflet-control { margin: var(--lm-rand) 0 0 var(--lm-rand); }
+                    .lm3 .leaflet-top.leaflet-left .leaflet-control { margin: calc(var(--lm-rand) + var(--lm-oben-frei, 0px)) 0 0 var(--lm-rand); }
                     .lm3 .leaflet-control-attribution { font-size: 10px; line-height: 16px; }
                     .lm3.ist-dunkel .leaflet-control-attribution { background: rgba(22,30,44,.8); color: #8b9bb0; }
                     .lm3.ist-dunkel .leaflet-control-attribution a { color: #a9c3e0; }
@@ -315,7 +315,7 @@
 
                     /* ── schmal (< 760 px Widget-Breite): eine Spalte, Blatt unten ── */
                     .lm3--schmal { --lm-unten: 22px; }
-                    .lm3--schmal .lm3-ui { display: flex; flex-direction: column; gap: 8px; padding: 8px 8px var(--lm-unten) 8px; }
+                    .lm3--schmal .lm3-ui { display: flex; flex-direction: column; gap: 8px; padding: calc(8px + var(--lm-oben-frei, 0px)) 8px var(--lm-unten) 8px; }
                     .lm3--schmal .lm3-mitte, .lm3--schmal .lm3-rechts { display: contents; }
                     /* display: contents erzeugt keinen Container, deshalb misst hier die ganze Ebene */
                     .lm3--schmal .lm3-ui { container-type: inline-size; container-name: lmmitte; }
