@@ -10,13 +10,29 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
 *Compact look of 4.7.9 again, on the 5.0 technology; works under Seven, SPTheme and Disposable_v3.*
 
 ### Changed / Geändert
-- **Kompakte Optik wie 4.7.9.** Flugtafel oben mit „Aktive Flüge | Geplant“
-  (Reiter, aufklappbar, Spalten Flug mit Logo / Route / Höhe / GS / Distanz /
-  Phase / Pilot; schmale Fenster geben Spalten ab), Detailkasten wie der
+- **Kompakte Optik wie 4.7.9, moderner gestaltet.** Flugtafel mit „Aktiv | Geplant“
+  (Reiter, oben aufklappbar, Spalten Flug mit Logo / Route / Höhe / GS / Rest mit
+  Fortschrittsbalken / Phase / Pilot; schmale Fenster geben Spalten ab), Detailkasten wie der
   4.7.9-Crew-Pass (Route mit Flughafennamen, Pilot, Flugzeug, Höhe, GS, Kurs,
   V/S, Fortschrittsbalken, „Mehr Werte“, PIREP-Link, Folgen). Felder ohne
   Daten werden weggelassen. Die Technik von 5.0 (Daten über das Modul) bleibt.
   *Compact flight board and detail box as in 4.7.9, 5.0 data path kept.*
+- **Neugestaltung (Thomas 03.11.2026: „altbacken“, Liste unten „blöd
+  abgeschnitten und blöd sortiert“):** flache Flächen mit Haarlinie statt
+  Verlaufsbalken, Werkzeuge als eine Knopfgruppe, getönte Phasen-Pillen,
+  Detailkopf mit Phasen-Streifen; die Verwaltungsfarbe „Kopf der Flugliste“ ist
+  die Akzentfarbe (hell). Schriftgrößen und Zeilenhöhen wie 4.7.9. Lage unten
+  ohne Aufklapp-Kopf (die Reiterzeile ist der Kopf), keine Höhenbegrenzung.
+  Spaltenköpfe sortieren (Standard Phase in Flugreihenfolge, darin Rest-Strecke;
+  Offline unten; fehlende Werte hinten; Rufzeichen natürlich, GSG7 vor GSG101),
+  Wahl in `localStorage` (`livemap_sort`). Ohne Logo: Airline-Buchstaben;
+  fehlt das Logo im Flug, das der phpVMS-Airline (`AIRLINE_LOGOS`). Netz-Punkte:
+  grün = an und geladen, rot = Fehler, aus = kein Punkt. Popups dunkel lesbar.
+  *Redesign: flat surfaces, grouped tools, tinted phases, admin header colour as
+  accent; bottom list without a fold-out header and without height limit;
+  sortable columns (default phase in flight order, then distance to go), stored
+  in the browser; airline letters / airline logo fallback; network dots green /
+  red / off; dark popups readable.*
 - **Datenquelle „Beide“** (neben phpVMS und AeroACARS Live): AeroACARS- und
   phpVMS-Flug mit demselben Piloten (phpVMS-Konto `users.id`) und demselben
   Rufzeichen sind ein Flug (Registrierung, PIREP-Link und Logo kommen vom PIREP). Fällt eine Quelle aus,
@@ -76,12 +92,15 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
   Detail, klappt der Detailkasten auf seine Kopfzeile ein (Klick auf das
   Rufzeichen ▾ klappt ihn auf, der Kasten daneben geht zu); ein neuer Flug
   schließt einen Kasten, der nicht mehr daneben passt. Die schmale Tafel zeigt
-  keine Logos, damit das Rufzeichen lesbar bleibt. Der Tafelkopf hat Symbole
-  wie in 4.7.9.
+  keine Logos, damit das Rufzeichen lesbar bleibt. Der Tafelkopf zeigt
+  Live-Punkt und Zahlen.
   *Detail box collapses to its header row when a box beside it does not fit
-  (callsign ▾ expands it); narrow board without logos; board header with icons as in 4.7.9.*
+  (callsign ▾ expands it); narrow board without logos; board header with live dot and counts.*
 - **Kartenelemente unter den Bedienelementen:** Lotsenkästen und
   Sektor-Etiketten liegen unter Tafel, Zoom und Werkzeugen, wie in 4.7.9.
+  VA-Flieger liegen über allen Lotsen-Symbolen (gemessen: GSG101 lag unter
+  LFJL, ein Klick öffnete das Lotsen-Popup statt der Flugkarte).
+  *VA aircraft above all controller symbols (a controller symbol caught the click).*
   *Map elements (controller boxes, sector labels) sit below the controls (board, zoom, tools), as in 4.7.9.*
 - **VATSIM/IVAO — Sprechfunk-Riegel 117–137 MHz:** Ein ATIS außerhalb dieses
   Bereichs und ein Beobachter ohne Sprechfrequenz zählen nicht. Ein Beobachter
