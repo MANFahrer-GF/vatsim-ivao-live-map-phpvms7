@@ -271,6 +271,13 @@
                     .lm3[data-grundkarte="dark"] .lm3-flieger svg, .lm3[data-grundkarte="satellite"] .lm3-flieger svg { stroke: #f1f5f9; }
                     .lm3-marker.ist-offline .lm3-flieger { opacity: .5; }
                     .lm3-ring { position: absolute; border-radius: 50%; border: 2px solid var(--lm-gold); box-shadow: 0 0 0 2px rgba(11,31,58,.35); pointer-events: none; }
+                    .lm3 .lm3-verdeckt { visibility: hidden !important; pointer-events: none !important; }
+                    .lm3 .lm3-verdeckt * { visibility: hidden !important; }
+                    .lm3-mehr {
+                        position: absolute; right: -2px; top: -2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+                        background: var(--lm-gold); color: #0b1f3a; border: 1px solid #0b1f3a;
+                        font-size: 9.5px; font-weight: 800; line-height: 14px; text-align: center; cursor: zoom-in; pointer-events: auto;
+                    }
                     .lm3-mlabel {
                         position: absolute; left: 50%; transform: translateX(-50%);
                         padding: 1px 6px; border-radius: 5px; background: rgba(11,31,58,.88); color: #fff;

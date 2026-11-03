@@ -1050,8 +1050,9 @@
                 var ac=atisList?atisList.length:0,hasApp=!!(counts[5]),appCount=counts[5]||0;
                 var dots=order.filter(function(f){return f!==5&&counts[f];}).map(function(f){var t=TYPES[f],n=counts[f];return '<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:3px;background:'+t.color+';color:#fff;font-size:8px;font-weight:800;box-shadow:0 1px 2px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5)">'+t.short+(n>1?'<span style="position:absolute;top:-4px;right:-4px;background:#c0392b;color:#fff;border-radius:50%;width:9px;height:9px;font-size:6px;display:flex;align-items:center;justify-content:center;border:1px solid #fff;line-height:1;font-weight:900">'+n+'</span>':'')+'</span>';}).join('');
                 if(hasApp||ac>0){var hasAtis=ac>0,badgeText,badgeBg,badgeW2=18,badgeH2=18,badgeRadius='4px';if(hasApp&&hasAtis){badgeText='A<span style="font-style:italic;font-size:9px;opacity:0.9">i</span>';badgeBg='#27ae60';badgeW2=22;}else if(hasApp){badgeText='A';badgeBg='#27ae60';}else{badgeText='<span style="font-style:italic">i</span>';badgeBg='#5dade2';badgeRadius='50%';}dots+='<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;width:'+badgeW2+'px;height:'+badgeH2+'px;border-radius:'+badgeRadius+';background:'+badgeBg+';color:#fff;font-size:9px;font-weight:900;box-shadow:0 1px 4px rgba(0,0,0,0.5);border:1.5px solid rgba(255,255,255,0.6)">'+badgeText+'</span>';}
-                var w=Math.max((Object.keys(counts).length+1)*18,icao.length*7+8,30)+16,hgt=36;
-                return L.divIcon({html:'<div style="width:'+w+'px;height:'+hgt+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;outline:2px solid #e67e22;border-radius:3px;outline-offset:1px"><span style="font-size:9px;font-weight:700;color:#1a1a1a;text-shadow:0 0 3px #fff,0 0 3px #fff;letter-spacing:.3px;line-height:1">'+h(icao)+'</span><div style="display:flex;gap:2px;align-items:center">'+dots+'</div></div>',className:'ivao-airport-marker',iconSize:[w,hgt],iconAnchor:[w/2,hgt/2]});
+                // Netz-Zusatz "IVAO" statt Rahmen: steht ein VATSIM-Kasten daneben, bleiben beide unterscheidbar.
+                var w=Math.max((Object.keys(counts).length+1)*18,icao.length*7+30,30)+16,hgt=36;
+                return L.divIcon({html:'<div style="width:'+w+'px;height:'+hgt+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer"><span style="font-size:9px;font-weight:700;color:#1a1a1a;text-shadow:0 0 3px #fff,0 0 3px #fff;letter-spacing:.3px;line-height:1">'+h(icao)+' <span style="font-size:7px;font-weight:800;color:#5b6472">IVAO</span></span><div style="display:flex;gap:2px;align-items:center">'+dots+'</div></div>',className:'ivao-airport-marker',iconSize:[w,hgt],iconAnchor:[w/2,hgt/2]});
             }
 
             function buildAirportCtrlPopupIvao(icao, ctrlList, atisList) {
@@ -1219,7 +1220,7 @@
                         var color=entry.isTracon?'#27ae60':isUpper?'#8e44ad':c.facility===6?'#1abc9c':'#8e44ad';
                         ctrlDone++;
                         if(entry.isTracon){
-                            var traconIcon=L.divIcon({html:'<div style="display:flex;flex-direction:column;align-items:center;white-space:nowrap;pointer-events:auto"><div style="background:'+color+';color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);line-height:1.4">'+h(root)+'</div><div style="width:4px;height:4px;border-radius:50%;background:'+color+';margin-top:2px"></div></div>',className:'',iconSize:[root.length*8+16,26],iconAnchor:[(root.length*8+16)/2,13]});
+                            var traconIcon=L.divIcon({html:'<div style="display:flex;flex-direction:column;align-items:center;white-space:nowrap;pointer-events:auto"><div style="background:'+color+';color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.5px;box-shadow:0 1px 4px rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.5);line-height:1.4">'+h(root)+'</div><div style="width:4px;height:4px;border-radius:50%;background:'+color+';margin-top:2px"></div></div>',className:'lm3-tracon',iconSize:[root.length*8+16,26],iconAnchor:[(root.length*8+16)/2,13]});
                             L.marker(entry.pos,{icon:traconIcon,title:c.callsign,zIndexOffset:400}).bindPopup('<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+h(c.callsign||'—')+'</div><div class="vatsim-popup-route">TRACON / Approach Control</div></div><div class="vatsim-popup-body">'+vRow('Frequency',safeFreq(c.frequency||'') || '—')+ctrlInfoLine(c)+'</div></div>',{maxWidth:260}).addTo(vatsimCtrlLayer);
                         } else {
                             var mapKey=parts.length>=3?root+'_'+parts[1].toUpperCase():root;
@@ -1316,6 +1317,7 @@
                     schliessen: 'Schließen', stand: 'Stand', offline: 'offline', abflug: 'Abflug',
                     pilot: 'Pilot', veraltet: 'Angezeigt wird der letzte bekannte Stand.', nochmal: 'Erneut versuchen',
                     flugzeug: 'Flugzeug', hoehe: 'Höhe', kurs: 'Kurs', fortschritt: 'Fortschritt', mehr: 'Mehr Werte',
+                    weitereFluege: 'weitere Flüge hier – Klick zoomt hinein',
                     fehler: {
                         phpvms: 'Die laufenden Flüge konnten nicht gelesen werden.',
                         kein_schluessel: 'Für AeroACARS Live ist kein Lese-Schlüssel hinterlegt.',
@@ -1333,6 +1335,7 @@
                     schliessen: 'Close', stand: 'Stand', offline: 'offline', abflug: 'Departure',
                     pilot: 'Pilot', veraltet: 'Showing the last known state.', nochmal: 'Try again',
                     flugzeug: 'Aircraft', hoehe: 'Altitude', kurs: 'Heading', fortschritt: 'Progress', mehr: 'More values',
+                    weitereFluege: 'more flights here – click to zoom in',
                     fehler: {
                         phpvms: 'Running flights could not be read.',
                         kein_schluessel: 'No read key is stored for AeroACARS Live.',
@@ -1633,6 +1636,7 @@
                     Object.keys(marker).forEach(function (id) {
                         if (!sichtbar[id]) { flugEbene.removeLayer(marker[id]); delete marker[id]; }
                     });
+                    lmEntwirrenPlanen();
                 }
 
                 // ── Auswahl, Spur, Route ──
@@ -1811,7 +1815,16 @@
                 if (el.folgen) el.folgen.addEventListener('click', function () { setzeFolgen(!zustand.folgen); });
                 syncFolgenKnopf();
                 // Wer die Karte selbst bewegt, uebernimmt — Folgen geht aus.
-                map.on('dragstart', function () { if (zustand.folgen) setzeFolgen(false); });
+                // Auch Zoomen zaehlt (Rad, +/−, Doppelklick, Zwei-Finger, Tasten, "+n"),
+                // sonst holt der naechste Abruf die Ansicht zurueck.
+                function nutzerBewegt() { if (zustand.folgen) setzeFolgen(false); }
+                map.on('dragstart dblclick boxzoomstart lm3nutzerzoom', nutzerBewegt);
+                map.on('keydown', function (e) { if (/^(\+|-|=|_|Add|Subtract)$/.test(e.originalEvent && e.originalEvent.key || '')) nutzerBewegt(); });
+                (function (c) {
+                    c.addEventListener('wheel', nutzerBewegt, { passive: true });
+                    c.addEventListener('touchstart', function (e) { if (e.touches && e.touches.length > 1) nutzerBewegt(); }, { passive: true });
+                    c.querySelectorAll('.leaflet-control-zoom a').forEach(function (a) { a.addEventListener('click', nutzerBewegt); });
+                })(map.getContainer());
                 // Nach jedem Verschieben die Marker in die sichtbare Weltkopie holen,
                 // nach dem Zoomen Rufzeichen ein-/ausblenden (ab Zoom 6).
                 map.on('moveend zoomend', function () { zeichneMarker(); });
@@ -1908,6 +1921,129 @@
                 if(vatsimShowCtrl&&showIvao){if(!map.hasLayer(ivaoCtrlLayer))ivaoCtrlLayer.addTo(map);}else map.removeLayer(ivaoCtrlLayer);
                 if(vatsimShowSectors&&showVatsim){if(!map.hasLayer(vatsimSectorLayer))vatsimSectorLayer.addTo(map);}else map.removeLayer(vatsimSectorLayer);
                 if(vatsimShowSectors&&showIvao){if(!map.hasLayer(ivaoSectorLayer))ivaoSectorLayer.addTo(map);}else map.removeLayer(ivaoSectorLayer);
+            }
+
+            // ── Entwirren: nichts auf der Karte liegt uebereinander ──
+            // Rangfolge: VA-Symbol (+ Rufzeichen des gewaehlten Flugs) > Lotsenkasten/TRACON
+            // > VA-Rufzeichen > Netz-Flieger. Wer einen schon platzierten trifft, wird
+            // unsichtbar (visibility, nicht display: so bleibt er messbar und kommt beim
+            // Hineinzoomen wieder). Gleicher Flughafen in VATSIM und IVAO: nebeneinander.
+            var lmEntwirrenAngefordert = false;
+            function lmEntwirrenPlanen() {
+                if (lmEntwirrenAngefordert) return;
+                lmEntwirrenAngefordert = true;
+                requestAnimationFrame(function () { lmEntwirrenAngefordert = false; lmEntwirren(); });
+            }
+            function lmEntwirren() {
+                var map = lm3Karte;
+                if (!map) return;
+                var pane = map.getPane('markerPane');
+                if (!pane) return;
+                var icons = Array.prototype.slice.call(pane.children);
+
+                // 1. zuruecksetzen (nur schreiben)
+                pane.querySelectorAll('.lm3-verdeckt').forEach(function (el) { el.classList.remove('lm3-verdeckt'); });
+                pane.querySelectorAll('.lm3-mehr').forEach(function (el) { el.parentNode.removeChild(el); });
+                var stationen = { vatsim: {}, ivao: {} };
+                icons.forEach(function (el) {
+                    var netz = el.classList.contains('vatsim-airport-marker') ? 'vatsim' : el.classList.contains('ivao-airport-marker') ? 'ivao' : null;
+                    if (!netz) return;
+                    var innen = el.firstElementChild;
+                    if (innen) innen.style.marginLeft = '';
+                    var icao = el.getAttribute('title');
+                    if (icao) stationen[netz][icao] = el;
+                });
+                // 2. Paare nebeneinander (Breiten aus dem Stil, kein Layout-Lesen noetig)
+                Object.keys(stationen.vatsim).forEach(function (icao) {
+                    var v = stationen.vatsim[icao], i = stationen.ivao[icao];
+                    if (!i || !v.firstElementChild || !i.firstElementChild) return;
+                    var wv = parseFloat(v.firstElementChild.style.width) || 0, wi = parseFloat(i.firstElementChild.style.width) || 0;
+                    v.firstElementChild.style.marginLeft = (-(wi + 2) / 2) + 'px';
+                    i.firstElementChild.style.marginLeft = ((wv + 2) / 2) + 'px';
+                });
+
+                // 3. messen (nur lesen)
+                var rahmen = map.getContainer().getBoundingClientRect();
+                function rechteck(el) {
+                    var r = el.getBoundingClientRect();
+                    if (!r.width || !r.height) return null;
+                    if (r.right < rahmen.left || r.left > rahmen.right || r.bottom < rahmen.top || r.top > rahmen.bottom) return null;
+                    return { l: r.left, t: r.top, r: r.right, b: r.bottom };
+                }
+                // Lotsenkasten: nur der sichtbare Inhalt (Kuerzel + Abzeichen), nicht der Leerraum der Box
+                function inhalt(el) {
+                    var innen = el.firstElementChild;
+                    if (!innen || getComputedStyle(innen).display === 'none') return null;
+                    var teile = Array.prototype.slice.call(innen.children).map(rechteck).filter(Boolean);
+                    if (!teile.length) return null;
+                    return teile.reduce(function (a, b) { return { l: Math.min(a.l, b.l), t: Math.min(a.t, b.t), r: Math.max(a.r, b.r), b: Math.max(a.b, b.b) }; });
+                }
+                var feste = [], vaFlieger = [], kaesten = [], rufzeichen = [], netzflieger = [];
+                icons.forEach(function (el) {
+                    if (el.style.display === 'none') return;
+                    if (el.classList.contains('lm3-marker')) {
+                        var sym = el.querySelector('.lm3-flieger'), lab = el.querySelector('.lm3-mlabel');
+                        var rs = sym && rechteck(sym), rb = rechteck(el);
+                        var gew = el.classList.contains('ist-gewaehlt');
+                        var rl = lab && rechteck(lab);
+                        if (rs) vaFlieger[gew ? 'unshift' : 'push']({ el: el, r: rs, box: rb || rs, label: rl && gew ? rl : null });
+                        if (rl && !gew) rufzeichen.push({ el: lab, r: rl });
+                    } else if (el.classList.contains('vatsim-airport-marker') || el.classList.contains('ivao-airport-marker')) {
+                        var ri = inhalt(el);
+                        if (ri) kaesten.push({ el: el, r: ri, gewicht: el.querySelectorAll('span[style*="inline-flex"]').length });
+                    } else if (el.classList.contains('lm3-tracon')) {
+                        var rt = rechteck(el.firstElementChild || el);
+                        if (rt) kaesten.push({ el: el, r: rt, gewicht: 1 });
+                    } else if (el.querySelector('.lm3-netz-flieger')) {
+                        var rn = rechteck(el.querySelector('.lm3-netz-flieger'));
+                        if (rn) netzflieger.push({ el: el, r: rn });
+                    } else {
+                        var ro = rechteck(el);
+                        if (ro) feste.push(ro);   // Unbekanntes bleibt stehen und zaehlt als Hindernis
+                    }
+                });
+                kaesten.sort(function (a, b) { return b.gewicht - a.gewicht; });
+
+                // 4. platzieren, dann schreiben
+                var belegt = feste.slice(), weg = [];
+                function schneidet(r, o) { return r.l < o.r + 1 && r.r > o.l - 1 && r.t < o.b + 1 && r.b > o.t - 1; }
+                function trifft(r) {
+                    for (var k = 0; k < belegt.length; k++) if (schneidet(r, belegt[k])) return belegt[k];
+                    return null;
+                }
+                // VA-Flieger: der vordere bleibt, verdeckte zaehlen als "+n" an ihm (der gewaehlte steht vorn)
+                var gastgeber = [];
+                vaFlieger.forEach(function (x) {
+                    for (var k = 0; k < gastgeber.length; k++) {
+                        if (schneidet(x.r, gastgeber[k].r)) { gastgeber[k].mehr++; weg.push(x.el); return; }
+                    }
+                    x.mehr = 0;
+                    gastgeber.push(x);
+                });
+                gastgeber.forEach(function (x) {
+                    // mit "+n" belegt der Flieger seinen ganzen Rahmen (dort sitzt die Zahl)
+                    belegt.push(x.mehr ? { l: x.box.l, t: x.box.t - 3, r: x.box.r + 3, b: x.box.b } : x.r);
+                    if (x.label) belegt.push(x.label);
+                });
+                [kaesten, rufzeichen, netzflieger].forEach(function (gruppe) {
+                    gruppe.forEach(function (x) {
+                        if (trifft(x.r)) weg.push(x.el); else belegt.push(x.r);
+                    });
+                });
+                weg.forEach(function (el) { el.classList.add('lm3-verdeckt'); });
+                gastgeber.forEach(function (x) {
+                    if (!x.mehr) return;
+                    var z = document.createElement('span');
+                    z.className = 'lm3-mehr';
+                    z.textContent = '+' + x.mehr;
+                    z.title = x.mehr + ' ' + LM_T.weitereFluege;
+                    L.DomEvent.on(z, 'click', function (ev) {
+                        L.DomEvent.stop(ev);
+                        map.fire('lm3nutzerzoom');
+                        if (x.el._leaflet_pos) map.setView(map.layerPointToLatLng(x.el._leaflet_pos), Math.min(map.getZoom() + 2, map.getMaxZoom()));
+                    });
+                    x.el.appendChild(z);
+                });
             }
 
             (function lm3Start() {
@@ -2076,6 +2212,8 @@
                     });
                 });
                 map.on('zoomend', function () { updateCtrlZoom(map); });
+                // nach updateCtrlZoom registriert: rAF laeuft erst, wenn dessen display-Werte stehen
+                map.on('zoomend moveend layeradd layerremove', lmEntwirrenPlanen);
 
                 var va = starteVaFluege(map);
 
