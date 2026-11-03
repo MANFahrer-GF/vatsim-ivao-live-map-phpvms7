@@ -206,7 +206,95 @@ final class FlugNormalisierer
             'last_seen'      => self::ganzzahl($p['updated_ms'] ?? null),
             'started_at'     => self::ganzzahl($p['created_ms'] ?? null),
             'pos'            => self::position($roh),
+            'logo'           => self::text($p['logo'] ?? null, 300),
+            'pirep_url'      => self::text($p['pirep_url'] ?? null, 300),
+            // Nur fuer die Zusammenfuehrung („Beide“); `oeffentlich()` entfernt es.
+            '_pilot'         => array_values(array_filter([
+                self::text($p['user_id'] ?? null, 20), self::text($p['user_pilot_id'] ?? null, 20),
+            ], fn ($v) => $v !== null)),
         ];
+    }
+
+    /**
+     * Quelle „Beide“ (5.1, Entscheidung Thomas 03.11.2026): AeroACARS hat
+     * Vorrang (feiner, schneller), reine phpVMS-Fluege kommen dazu.
+     *
+     * AeroACARS legt jeden Flug auch als PIREP an. Derselbe Flug wird
+     * erkannt an Rufzeichen (ohne Leerzeichen: live „ITY 4532“, phpVMS
+     * „ITY4532“) UND Pilot (live `pilot_id` = phpVMS-Pilotnummer, siehe
+     * aeroacars-mqtt `MqttConfig::pilot_id`). Ohne Rufzeichen reichen Pilot +
+     * Abflug + Ziel. Nur Rufzeichen gleich, Pilot verschieden: zwei Fluege.
+     *
+     * Vom PIREP uebernimmt der AeroACARS-Flug, was live nicht liefert:
+     * Registrierung, PIREP-Link, Logo.
+     *
+     * @return array{fluege: array, zugeordnet: int}
+     */
+    public static function zusammenfuehren(array $live, array $phpvms): array
+    {
+        $frei = $phpvms;
+        $zugeordnet = 0;
+        foreach ($live as $i => $l) {
+            $cs = self::rufzeichenSchluessel($l['callsign'] ?? null);
+            $pilot = (string) ($l['pilot'] ?? '');
+            foreach ($frei as $j => $p) {
+                if ($pilot === '' || !in_array($pilot, $p['_pilot'] ?? [], true)) {
+                    continue;
+                }
+                $pcs = self::rufzeichenSchluessel($p['callsign'] ?? null);
+                $passt = $cs !== '' && $pcs !== ''
+                    ? $cs === $pcs
+                    : (($l['dep'] ?? null) !== null && ($l['dep'] ?? null) === ($p['dep'] ?? null) && ($l['arr'] ?? null) === ($p['arr'] ?? null));
+                if (!$passt) {
+                    continue;
+                }
+                if (empty($l['registration'])) {
+                    $live[$i]['registration'] = $p['registration'] ?? null;
+                }
+                $live[$i]['pirep_url'] = $p['pirep_url'] ?? null;
+                if (!empty($p['logo'])) {
+                    $live[$i]['logo'] = $p['logo'];
+                }
+                unset($frei[$j]);
+                $zugeordnet++;
+                break;
+            }
+        }
+
+        return ['fluege' => array_merge(array_values($live), array_values($frei)), 'zugeordnet' => $zugeordnet];
+    }
+
+    /** „ITY 4532“ → „ITY4532“ (wie `LM3.rufzeichenSchluessel` im Widget). */
+    public static function rufzeichenSchluessel($cs): string
+    {
+        return preg_replace('/[^A-Z0-9]/', '', strtoupper((string) ($cs ?? ''))) ?? '';
+    }
+
+    /**
+     * Logo ueber den Rufzeichen-Praefix — nur gegen die Kennungen, die es in
+     * `airlines` wirklich gibt (Gehirn: Kennung aus der DB, nie raten).
+     * Laengster Treffer gewinnt; danach muss eine Ziffer folgen.
+     *
+     * @param array<string,string> $logos ICAO → Logo-Adresse
+     */
+    public static function logoFuerRufzeichen($cs, array $logos): ?string
+    {
+        $k = self::rufzeichenSchluessel($cs);
+        for ($n = min(4, strlen($k) - 1); $n >= 2; $n--) {
+            if (isset($logos[substr($k, 0, $n)]) && ctype_digit($k[$n])) {
+                return $logos[substr($k, 0, $n)];
+            }
+        }
+
+        return null;
+    }
+
+    /** Nur die Felder, die das Widget sieht — interne Zuordnungsfelder raus. */
+    public static function oeffentlich(array $flug): array
+    {
+        unset($flug['_pilot']);
+
+        return $flug + ['logo' => null, 'pirep_url' => null];
     }
 
     /**

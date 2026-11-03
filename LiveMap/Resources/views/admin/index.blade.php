@@ -143,7 +143,18 @@
           <select id="flight_source" name="flight_source" class="form-control">
             <option value="phpvms" {{ $lmQuelle === 'phpvms' ? 'selected' : '' }}>phpVMS (running PIREPs)</option>
             <option value="aeroacars" {{ $lmQuelle === 'aeroacars' ? 'selected' : '' }}>AeroACARS Live</option>
+            <option value="beide" {{ $lmQuelle === 'beide' ? 'selected' : '' }}>Both (AeroACARS first, plus phpVMS-only flights)</option>
           </select>
+          <p class="help-block" style="margin-top:6px">
+            <strong>Both</strong>: AeroACARS flights are matched to their phpVMS PIREP by callsign and pilot
+            (registration and PIREP link come from the PIREP); flights only known to phpVMS are added.
+          </p>
+        </div>
+        <div class="form-group">
+          <label for="va_prefix">AeroACARS VA prefix</label>
+          <input type="text" id="va_prefix" name="va_prefix" class="form-control" autocomplete="off" maxlength="20"
+                 value="{{ old('va_prefix', $lmS('acars.livemap_va_prefix', '')) }}" placeholder="e.g. gsg — empty shows every VA">
+          @error('va_prefix')<p class="text-danger" style="margin-top:6px">{{ $message }}</p>@enderror
         </div>
         <div class="form-group">
           <label for="live_url">AeroACARS Live address</label>
@@ -161,10 +172,34 @@
         </div>
 
         <hr style="margin:32px 0 24px;">
+        <h5>Appearance</h5>
+        @php($lmModus = old('theme_mode', $lmS('acars.livemap_theme_mode', 'auto')))
+        <div class="form-group">
+          <label for="theme_mode">Light / dark</label>
+          <select id="theme_mode" name="theme_mode" class="form-control">
+            <option value="auto" {{ $lmModus === 'auto' ? 'selected' : '' }}>Follow the theme</option>
+            <option value="light" {{ $lmModus === 'light' ? 'selected' : '' }}>Always light</option>
+            <option value="dark" {{ $lmModus === 'dark' ? 'selected' : '' }}>Always dark</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="min_height">Map height (px): minimum / maximum</label>
+          <div style="display:flex; gap:8px; max-width:320px">
+            <input type="number" id="min_height" name="min_height" class="form-control" min="320" max="2000" value="{{ old('min_height', $lmS('acars.livemap_min_height', 420)) }}">
+            <input type="number" id="max_height" name="max_height" class="form-control" min="320" max="3000" value="{{ old('max_height', $lmS('acars.livemap_max_height', 1000)) }}" aria-label="Maximum height">
+          </div>
+          <p class="help-block" style="margin-top:6px">The map fills the window below the page header, within these limits.</p>
+        </div>
+        <div class="checkbox">
+          <label><input type="checkbox" name="show_labels" value="1" {{ filter_var($lmS('acars.livemap_show_labels', true), FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}> Show callsigns next to the aircraft from zoom 6</label>
+        </div>
+
+        <hr style="margin:32px 0 24px;">
         <h5>Basemap</h5>
         <p class="help-block" style="margin:0 0 18px;">
           The tiles the map is drawn on. Only the two CARTO styles need a key —
-          OpenStreetMap and Satellite do not.
+          OpenStreetMap and Satellite do not. <strong>Without a CARTO key the map uses OpenStreetMap</strong>
+          and the CARTO styles are not offered in the style switcher.
         </p>
 
       <div class="alert alert-{{ $cartoStatus['badgeClass'] }}" style="margin:0 0 22px;">

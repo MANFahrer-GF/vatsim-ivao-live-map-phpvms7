@@ -3,6 +3,8 @@
 namespace Modules\LiveMap\Http\Controllers;
 
 use App\Contracts\Controller;
+use App\Models\Airline;
+use App\Models\Airport;
 use App\Models\Enums\AcarsType;
 use App\Repositories\AcarsRepository;
 use Illuminate\Http\JsonResponse;
@@ -60,23 +62,128 @@ class LiveFlightsController extends Controller
                 return $this->antwort(['ok' => false, 'quelle' => 'phpvms', 'fehler' => 'phpvms', 'fluege' => []], 503);
             }
 
-            return $this->antwort(['ok' => true, 'quelle' => 'phpvms', 'fluege' => $fluege]);
+            return $this->mitBeiwerk(['ok' => true, 'quelle' => 'phpvms', 'fluege' => $fluege]);
         }
 
+        $live = $this->liveFluege();
+        if ($quelle === 'aeroacars') {
+            if (!$live['ok']) {
+                return $this->antwort(['ok' => false, 'quelle' => 'aeroacars', 'fehler' => $live['fehler'], 'fluege' => []], 503);
+            }
+
+            return $this->mitBeiwerk(['ok' => true, 'quelle' => 'aeroacars', 'fluege' => $live['fluege']]);
+        }
+
+        // „Beide“: faellt eine Quelle aus, zeigt die Karte die andere und
+        // nennt die Stoerung als Hinweis (statt ganz leer zu sein).
+        $php = $this->phpvmsFluege();
+        if (!$live['ok'] && $php === null) {
+            return $this->antwort(['ok' => false, 'quelle' => 'beide', 'fehler' => $live['fehler'], 'fluege' => []], 503);
+        }
+        $zusammen = FlugNormalisierer::zusammenfuehren($live['ok'] ? $live['fluege'] : [], $php ?? []);
+        $antwort = ['ok' => true, 'quelle' => 'beide', 'fluege' => $zusammen['fluege'], 'zugeordnet' => $zusammen['zugeordnet']];
+        if (!$live['ok']) {
+            $antwort['warnung'] = $live['fehler'];
+        } elseif ($php === null) {
+            $antwort['warnung'] = 'phpvms';
+        }
+
+        return $this->mitBeiwerk($antwort);
+    }
+
+    /** @return array{ok: bool, fehler?: string, fluege?: array} */
+    private function liveFluege(): array
+    {
         $ergebnis = $this->ausLive('/api/flights', 'livemap:live:fluege', self::PUFFER_LISTE_S);
         if (!$ergebnis['ok']) {
-            return $this->antwort(['ok' => false, 'quelle' => 'aeroacars', 'fehler' => $ergebnis['fehler'], 'fluege' => []], 503);
+            return ['ok' => false, 'fehler' => $ergebnis['fehler']];
         }
-
+        // Der Schluessel liefert alle VAs, die auf live fliegen. Mit gesetzter
+        // VA-Kennung bleiben nur die eigenen (zusaetzlich zur Bindung auf live).
+        $va = strtolower(trim((string) self::einstellung('acars.livemap_va_prefix', '')));
         $fluege = [];
         foreach (is_array($ergebnis['daten']) ? $ergebnis['daten'] : [] as $dto) {
             $f = FlugNormalisierer::ausLive($dto);
-            if ($f !== null) {
+            if ($f !== null && ($va === '' || strtolower($f['va']) === $va)) {
                 $fluege[] = $f;
             }
         }
 
-        return $this->antwort(['ok' => true, 'quelle' => 'aeroacars', 'fluege' => $fluege]);
+        return ['ok' => true, 'fluege' => $fluege];
+    }
+
+    /**
+     * Was die Karte zu jedem Flug noch braucht und nur phpVMS kennt: Logo
+     * (fuer Fluege ohne PIREP ueber den Rufzeichen-Praefix), Flughafennamen
+     * und -koordinaten (Distanz und Fortschritt). Interne Felder raus.
+     */
+    private function mitBeiwerk(array $antwort): JsonResponse
+    {
+        $logos = $this->airlineLogos();
+        $icaos = [];
+        foreach ($antwort['fluege'] as $i => $f) {
+            if (empty($f['logo'])) {
+                $f['logo'] = FlugNormalisierer::logoFuerRufzeichen($f['callsign'] ?? null, $logos);
+            }
+            $antwort['fluege'][$i] = FlugNormalisierer::oeffentlich($f);
+            foreach (['dep', 'arr'] as $k) {
+                if (!empty($f[$k])) {
+                    $icaos[$f[$k]] = true;
+                }
+            }
+        }
+        $antwort['flughaefen'] = $this->flughaefen(array_keys($icaos));
+
+        return $this->antwort($antwort);
+    }
+
+    /** @return array<string,string> ICAO → absolute Logo-Adresse */
+    private function airlineLogos(): array
+    {
+        return Cache::remember('livemap:logos', now()->addMinutes(10), function () {
+            try {
+                return Airline::whereNotNull('logo')->where('logo', '!=', '')->get(['icao', 'logo'])
+                    ->mapWithKeys(fn ($a) => [strtoupper((string) $a->icao) => self::absolut($a->logo)])
+                    ->filter()->all();
+            } catch (\Throwable $e) {
+                return [];
+            }
+        });
+    }
+
+    /** @return array<string, array{name: ?string, lat: ?float, lon: ?float}> */
+    private function flughaefen(array $icaos): array
+    {
+        sort($icaos);
+        if (!$icaos) {
+            return [];
+        }
+
+        return Cache::remember('livemap:flughaefen:'.md5(implode(',', $icaos)), now()->addMinutes(10), function () use ($icaos) {
+            try {
+                return Airport::whereIn('id', $icaos)->get(['id', 'name', 'lat', 'lon'])
+                    ->mapWithKeys(fn ($a) => [strtoupper((string) $a->id) => [
+                        'name' => $a->name !== null ? mb_substr((string) $a->name, 0, 60) : null,
+                        'lat'  => is_numeric($a->lat) ? round((float) $a->lat, 5) : null,
+                        'lon'  => is_numeric($a->lon) ? round((float) $a->lon, 5) : null,
+                    ]])->all();
+            } catch (\Throwable $e) {
+                return [];
+            }
+        });
+    }
+
+    private static function absolut(?string $logo): ?string
+    {
+        $logo = trim((string) $logo);
+        if ($logo === '') {
+            return null;
+        }
+        if (!str_starts_with($logo, 'http')) {
+            $logo = url($logo);
+        }
+
+        return str_starts_with($logo, 'http://') ? 'https://'.substr($logo, 7) : $logo;
     }
 
     public function spur(string $va, string $pilot): JsonResponse
@@ -87,7 +194,7 @@ class LiveFlightsController extends Controller
         if ($va === 'phpvms') {
             return $this->antwort(['ok' => true, 'punkte' => $this->phpvmsSpur($pilot)]);
         }
-        if ($this->quelle() !== 'aeroacars') {
+        if ($this->quelle() === 'phpvms') {
             return $this->antwort(['ok' => false, 'fehler' => 'ungueltig', 'punkte' => []], 404);
         }
 
@@ -105,7 +212,7 @@ class LiveFlightsController extends Controller
         if (!FlugNormalisierer::kennungGueltig($va) || !FlugNormalisierer::kennungGueltig($pilot)) {
             return $this->antwort(['ok' => false, 'fehler' => 'ungueltig', 'punkte' => []], 404);
         }
-        if ($va === 'phpvms' || $this->quelle() !== 'aeroacars') {
+        if ($va === 'phpvms' || $this->quelle() === 'phpvms') {
             // phpVMS: die Route steht nur als Text im PIREP; ohne Navdaten keine Punkte.
             return $this->antwort(['ok' => true, 'punkte' => []]);
         }
@@ -119,12 +226,12 @@ class LiveFlightsController extends Controller
         return $this->antwort(['ok' => true, 'punkte' => FlugNormalisierer::route($ergebnis['daten'])]);
     }
 
-    /** 'aeroacars' | 'phpvms' */
+    /** 'aeroacars' | 'phpvms' | 'beide' */
     public static function quelle(): string
     {
         $wert = strtolower(trim((string) self::einstellung('acars.livemap_quelle', 'phpvms')));
 
-        return $wert === 'aeroacars' ? 'aeroacars' : 'phpvms';
+        return in_array($wert, ['aeroacars', 'beide'], true) ? $wert : 'phpvms';
     }
 
     /**
@@ -232,6 +339,10 @@ class LiveFlightsController extends Controller
                     'heading'       => $pos->heading,
                     'updated_ms'    => optional($p->updated_at)->getTimestampMs(),
                     'created_ms'    => optional($p->created_at)->getTimestampMs(),
+                    'logo'          => self::absolut(optional($p->airline)->logo),
+                    'pirep_url'     => url('/pireps/'.$p->id),
+                    'user_id'       => $nutzer ? (string) $nutzer->id : null,
+                    'user_pilot_id' => $nutzer && $nutzer->pilot_id !== null ? (string) $nutzer->pilot_id : null,
                 ]);
                 if ($f !== null) {
                     $fluege[] = $f;
