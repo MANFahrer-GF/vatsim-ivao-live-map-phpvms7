@@ -6,6 +6,7 @@
                 {{-- Admin settings keys (phpVMS settings table / admin):
                      acars.livemap_old_style
                      acars.livemap_show_top_flights_panel
+                     acars.livemap_flights_panel (top|bottom|off, 5.1)
                      acars.livemap_default_basemap
                      acars.livemap_show_basemap_switcher
                      acars.livemap_enable_satellite
@@ -85,10 +86,17 @@
                     // Sprache der Bedienelemente: Deutsch, wenn die Seite deutsch ist.
                     $lmDe = str_starts_with(strtolower((string) app()->getLocale()), 'de');
 
-                    $oldStyle = $lmBool($lmSetting('acars.livemap_old_style', false), false);
-                    $showTopFlights = $oldStyle
-                        ? false
-                        : $lmBool($lmSetting('acars.livemap_show_top_flights_panel', true), true);
+                    // 5.1: Lage der Flugtafel (oben ueber der Karte / unten als Tabelle /
+                    // aus). Fehlt die Einstellung (Update von 4.7.x), gelten die Altschluessel.
+                    $lmTafelLage = strtolower($lmString($lmSetting('acars.livemap_flights_panel', ''), ''));
+                    if (!in_array($lmTafelLage, ['top', 'bottom', 'off'], true)) {
+                        $lmTafelLage = \Modules\LiveMap\Http\Controllers\Admin\SettingsController::tafelLageAusAlt(
+                            $lmSetting('acars.livemap_old_style', false),
+                            $lmSetting('acars.livemap_show_top_flights_panel', true)
+                        );
+                    }
+                    $oldStyle = $lmTafelLage === 'off';
+                    $showTopFlights = $lmTafelLage !== 'off';
                     $defaultBasemap = strtolower($lmString($lmSetting('acars.livemap_default_basemap', 'positron'), 'positron'));
                     if (!in_array($defaultBasemap, ['positron', 'osm', 'dark', 'satellite'], true)) {
                         $defaultBasemap = 'positron';
@@ -154,6 +162,7 @@
                         // Top flights panel ("old style" = hidden)
                         'oldStyle'              => $oldStyle,
                         'showTopFlightsPanel'   => $showTopFlights,
+                        'tafelLage'             => $lmTafelLage,
                         'defaultBasemap'        => $defaultBasemap,
                         'cartoApiKey'           => $cartoApiKey,
                         'showBasemapSwitcher'   => $lmBool($lmSetting('acars.livemap_show_basemap_switcher', true), true),

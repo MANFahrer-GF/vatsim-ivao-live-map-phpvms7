@@ -31,9 +31,6 @@
                         --lm-rechts: 300px;
                         position: relative;
                         width: 100%;
-                        /* Startwert; das Skript setzt die Hoehe aus Fenster minus Seitenkopf
-                           (Einstellung Mindest-/Hoechsthoehe). */
-                        height: clamp({{ $lmMinHoehe }}px, calc(100vh - 160px), {{ $lmMaxHoehe }}px);
                         overflow: hidden;
                         border-radius: inherit;
                         color: var(--lm-text);
@@ -55,6 +52,9 @@
                         --lm-schatten: 0 6px 24px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
                     }
                     .lm3 *, .lm3 *::before, .lm3 *::after { box-sizing: border-box; }
+                    /* Die Kartenflaeche traegt die Hoehe; Startwert, das Skript setzt sie aus
+                       Fenster minus Seitenkopf (Einstellung Mindest-/Hoechsthoehe). */
+                    .lm3-flaeche { position: relative; height: clamp({{ $lmMinHoehe }}px, calc(100vh - 160px), {{ $lmMaxHoehe }}px); overflow: hidden; }
                     .lm3 #map { position: absolute; inset: 0; width: 100%; height: 100%; transition: filter .3s ease; background: #dfe6ee; z-index: 0; }
                     .lm3.ist-dunkel #map { background: #0d1726; }
                     .lm3 .dark-map { filter: brightness(0.55) contrast(1.15) saturate(1.05); }
@@ -150,24 +150,35 @@
                     .lm3-meldung[hidden] { display: none; }
                     .lm3-nochmal { margin-left: 8px; border: 1px solid currentColor; background: none; color: inherit; border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 11px; }
 
-                    /* Tafel gibt Spalten ab, statt ueber die rechte Spalte zu wachsen */
+                    /* ── Tafel unten: feste Tabelle unter der Karte, ganze Breite ── */
+                    .lm3-unten { container-type: inline-size; container-name: lmmitte; border-top: 1px solid var(--lm-linie); background: var(--lm-flaeche); }
+                    .lm3-unten .lm3-tafel {
+                        width: 100%; max-width: none; max-height: none; border-radius: 0; box-shadow: none;
+                        --lm-sp: minmax(150px, 1.4fr) minmax(110px, 1fr) 70px 54px 96px 110px minmax(100px, 1.2fr);
+                    }
+                    .lm3-unten .lm3-tafel-kopf { cursor: default; user-select: auto; }
+                    .lm3-unten .lm3-g-plan { grid-template-columns: minmax(150px, 1.4fr) minmax(110px, 1fr) 96px minmax(100px, 1.2fr); }
+                    .lm3-unten .lm3-zeilen { max-height: 360px; }
+
+                    /* Tafel gibt Spalten ab, statt ueber die rechte Spalte zu wachsen
+                       (Selektoren mit .lm3 davor, damit sie auch die Tafel unten treffen) */
                     @container lmmitte (max-width: 720px) {
-                        .lm3-tafel { --lm-sp: 140px 100px 60px 44px 84px minmax(80px, 1fr); }
-                        .lm3-tafel .lm3-sp-pilot { display: none; }
+                        .lm3 .lm3-tafel { --lm-sp: 140px 100px 60px 44px 84px minmax(80px, 1fr); }
+                        .lm3 .lm3-tafel .lm3-sp-pilot { display: none; }
                     }
                     @container lmmitte (max-width: 600px) {
-                        .lm3-tafel { --lm-sp: 140px 100px 60px 44px minmax(80px, 1fr); }
-                        .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist { display: none; }
-                        .lm3-g-plan { grid-template-columns: 140px 100px minmax(60px, 1fr); }
-                        .lm3-g-plan .lm3-sp-pilot { display: none; }
+                        .lm3 .lm3-tafel { --lm-sp: 140px 100px 60px 44px minmax(80px, 1fr); }
+                        .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist { display: none; }
+                        .lm3 .lm3-g-plan { grid-template-columns: 140px 100px minmax(60px, 1fr); }
+                        .lm3 .lm3-g-plan .lm3-sp-pilot { display: none; }
                     }
                     @container lmmitte (max-width: 480px) {
-                        .lm3-tafel { --lm-sp: minmax(0, 1fr) 96px minmax(70px, 88px); }
-                        .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist, .lm3-tafel .lm3-sp-alt, .lm3-tafel .lm3-sp-gs { display: none; }
-                        .lm3-g-plan { grid-template-columns: minmax(0, 1fr) 96px; }
-                        .lm3-g-plan .lm3-sp-zeit { display: none; }
-                        .lm3-tafel-kopf { gap: 10px; padding: 9px 12px; }
-                        .lm3-reiter [role="tab"] { padding: 8px 6px; }
+                        .lm3 .lm3-tafel { --lm-sp: minmax(0, 1fr) 96px minmax(70px, 88px); }
+                        .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist, .lm3-tafel .lm3-sp-alt, .lm3-tafel .lm3-sp-gs { display: none; }
+                        .lm3 .lm3-g-plan { grid-template-columns: minmax(0, 1fr) 96px; }
+                        .lm3 .lm3-g-plan .lm3-sp-zeit { display: none; }
+                        .lm3 .lm3-tafel-kopf { gap: 10px; padding: 9px 12px; }
+                        .lm3 .lm3-reiter [role="tab"] { padding: 8px 6px; }
                     }
 
                     /* ── Werkzeuge (oben rechts) ── */
@@ -299,12 +310,15 @@
                     /* display: contents erzeugt keinen Container, deshalb misst hier die ganze Ebene */
                     .lm3--schmal .lm3-ui { container-type: inline-size; container-name: lmmitte; }
                     .lm3--schmal .lm3-mitte { container-type: normal; container-name: none; }
-                    .lm3--schmal .lm3-werkzeuge { order: 1; }
+                    /* Werkzeuge neben dem Zoom, nicht darueber; die Zeile ist so hoch wie
+                       der Zoom, damit nichts Folgendes (Kasten, Tafel) an ihn heranwaechst. */
+                    .lm3--schmal .lm3-werkzeuge { order: 1; margin-left: var(--lm-zoom); min-height: 70px; align-items: flex-start; }
                     .lm3--schmal .lm3-box { order: 2; margin-left: var(--lm-zoom); flex: 0 1 auto; }
                     .lm3--schmal .lm3-ui::after { content: ''; order: 3; flex: 1 1 0; min-height: 0; }
                     .lm3--schmal .lm3-tafel { order: 4; width: 100%; flex: 0 1 auto; }
                     .lm3--schmal .lm3-detail { order: 5; flex: 0 1 auto; max-height: 58%; }
                     .lm3--schmal .lm3-zeilen { max-height: none; }
+                    .lm3--schmal .lm3-unten .lm3-zeilen { max-height: 360px; }
                     .lm3--schmal.ohne-tafel-mobil .lm3-tafel { display: none; }
                     /* ── uebernommen: Wetterebenen, Netz-Legende, VATSIM/IVAO-Popups ── */
                     .owm-clouds-layer,

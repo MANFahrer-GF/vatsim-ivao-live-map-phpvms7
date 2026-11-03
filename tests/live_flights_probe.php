@@ -622,12 +622,21 @@ array_map('unlink', glob($stub.'/layouts/*') ?: []);
 // Das Karten-Widget (Theme-Datei + alle Ansichten im Modul) darf den Schluessel gar nicht kennen
 $widgetDateien = array_merge([dirname(__DIR__).'/live_map.blade.php', dirname(__DIR__).'/LiveMap/Resources/views/widget.blade.php'],
     glob(dirname(__DIR__).'/LiveMap/Resources/views/partials/*.blade.php'));
-pruefe('Karten-Widget: alle Ansichten gefunden (Theme-Datei, widget, 3 Teile)', count(array_filter($widgetDateien, 'is_file')) === 5, $widgetDateien);
+pruefe('Karten-Widget: alle Ansichten gefunden (Theme-Datei, widget, 4 Teile)', count(array_filter($widgetDateien, 'is_file')) === 6, $widgetDateien);
 $widgetQuellen = '';
 foreach ($widgetDateien as $d) {
     $widgetQuellen .= file_get_contents($d);
 }
 pruefe('Karten-Widget: Quelltext kennt weder live_key noch livemap_live_key noch Bearer', !preg_match('/live_key|livemap_live_key|Bearer/i', $widgetQuellen));
+
+// 5.1 Tafel-Lage: Update von 4.7.x ohne neue Einstellung → aus den Altschluesseln
+$lage = [\Modules\LiveMap\Http\Controllers\Admin\SettingsController::class, 'tafelLageAusAlt'];
+pruefe('Tafel-Lage alt: Modern (old_style aus, Tafel an) → top', $lage(false, true) === 'top');
+pruefe('Tafel-Lage alt: Old Style (old_style an) → off', $lage('1', '0') === 'off');
+pruefe('Tafel-Lage alt: Tafel-Schalter aus → off', $lage('0', '0') === 'off');
+pruefe('Tafel-Lage alt: nichts gesetzt → top', $lage(false, null) === 'top');
+pruefe('Tafel unten: Teil tafel.blade.php in markup oben UND unten eingebunden',
+    substr_count(file_get_contents(dirname(__DIR__).'/LiveMap/Resources/views/partials/markup.blade.php'), "@include('livemap::partials.tafel')") === 2);
 
 // ─────────────────────────────────────────────────────────────────────────
 Carbon::setTestNow();

@@ -16,51 +16,17 @@
      eng, gibt die Tafel Spalten ab und die rechte Spalte scrollt — nichts
      legt sich ueber etwas anderes.
 ══════════════════════════════════════════════════════════════════ --}}
-<div class="live-map-wrapper lm3" id="lm-root" data-quelle="{{ $liveMapUiConfig['quelle'] }}">
+@php($lmTafelUnten = ($liveMapUiConfig['tafelLage'] ?? 'top') === 'bottom')
+<div class="live-map-wrapper lm3 {{ $lmTafelUnten ? 'lm3--tafel-unten' : '' }}" id="lm-root" data-quelle="{{ $liveMapUiConfig['quelle'] }}">
+    {{-- Die Flaeche traegt die Hoehe; unten haengt die Tafel darunter. --}}
+    <div class="lm3-flaeche" id="lm3-flaeche">
     <div id="map" role="region" aria-label="{{ $lmDe ? 'Live-Karte' : 'Live map' }}"></div>
 
     <div class="lm3-ui">
         <div class="lm3-mitte">
-            <section class="lm3-tafel" id="va-flights-panel" aria-label="{{ $lmDe ? 'Flüge' : 'Flights' }}">
-                <button type="button" class="lm3-tafel-kopf" id="lm3-tafel-kopf" aria-expanded="false" aria-controls="lm3-tafel-inhalt">
-                    <span class="lm3-kopf-stat"><span class="lm3-punkt" id="lm3-status-punkt" aria-hidden="true"></span>
-                        {{ $lmDe ? 'Aktive Flüge' : 'Active Flights' }} <b class="lm3-n-aktiv" id="lm3-zahl">—</b></span>
-                    <span class="lm3-kopf-trenner" aria-hidden="true"></span>
-                    <span class="lm3-kopf-stat">{{ $lmDe ? 'Geplant' : 'Planned' }} <b class="lm3-n-geplant" id="lm3-zahl-geplant">—</b></span>
-                    <span class="lm3-chevron" aria-hidden="true">▾</span>
-                </button>
-                <div class="lm3-tafel-inhalt" id="lm3-tafel-inhalt" hidden>
-                    <div class="lm3-reiter" role="tablist">
-                        <button type="button" role="tab" id="lm3-tab-aktiv" aria-selected="true">
-                            {{ $lmDe ? 'Aktiv' : 'Active' }} <span class="lm3-tabzahl" id="lm3-n-aktiv">0</span>
-                        </button>
-                        <button type="button" role="tab" id="lm3-tab-geplant" aria-selected="false">
-                            {{ $lmDe ? 'Geplant' : 'Planned' }} <span class="lm3-tabzahl" id="lm3-n-geplant">0</span>
-                        </button>
-                        <label class="lm3-filter" id="lm3-filter">
-                            <span class="lm-sr">{{ $lmDe ? 'Phase' : 'Phase' }}</span>
-                            <select id="lm3-phase"></select>
-                        </label>
-                    </div>
-                    <p class="lm3-meldung" id="lm3-meldung" role="status" hidden></p>
-                    <div class="lm3-thead lm3-g-akt" id="lm3-kopf-aktiv" aria-hidden="true">
-                        <span>{{ $lmDe ? 'Flug' : 'Flight' }}</span>
-                        <span>Route</span>
-                        <span class="lm3-sp-alt">{{ $lmDe ? 'Höhe' : 'Alt' }}</span>
-                        <span class="lm3-sp-gs">GS</span>
-                        <span class="lm3-sp-dist">{{ $lmDe ? 'Distanz' : 'Distance' }}</span>
-                        <span class="lm3-sp-phase">Phase</span>
-                        <span class="lm3-sp-pilot">Pilot</span>
-                    </div>
-                    <div class="lm3-thead lm3-g-plan" id="lm3-kopf-geplant" aria-hidden="true" hidden>
-                        <span>{{ $lmDe ? 'Flug' : 'Flight' }}</span>
-                        <span>Route</span>
-                        <span class="lm3-sp-zeit">{{ $lmDe ? 'Abflug' : 'Departure' }}</span>
-                        <span class="lm3-sp-pilot">Pilot</span>
-                    </div>
-                    <div class="lm3-zeilen" id="lm3-liste" role="list"></div>
-                </div>
-            </section>
+            @if(!$lmTafelUnten)
+                @include('livemap::partials.tafel')
+            @endif
         </div>
 
         <div class="lm3-rechts">
@@ -145,4 +111,10 @@
             <aside class="lm3-detail" id="lm3-detail" aria-live="polite" hidden></aside>
         </div>
     </div>
+    </div>
+    @if($lmTafelUnten)
+        <div class="lm3-unten">
+            @include('livemap::partials.tafel')
+        </div>
+    @endif
 </div>

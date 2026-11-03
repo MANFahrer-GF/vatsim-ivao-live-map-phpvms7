@@ -1416,6 +1416,8 @@
                 };
                 if (el.wrap && !document.getElementById('lm-k1')) el.wrap.insertAdjacentHTML('afterbegin', LM_SYMBOLE);
                 function schmal() { return !!(el.wrap && el.wrap.classList.contains('lm3--schmal')); }
+                // Tafel unten (Verwaltung): feste Tabelle unter der Karte, immer offen.
+                var tafelUnten = !!(el.wrap && el.wrap.classList.contains('lm3--tafel-unten'));
 
                 // ── Phasenfilter: Reihenfolge wie die Webapp ──
                 if (el.phase) {
@@ -1853,14 +1855,14 @@
                     var links = 50, rechts = 30, oben = 30, unten = 30;
                     var belegt = function (e) { return e && !e.hidden && e.offsetParent !== null ? e.getBoundingClientRect() : null; };
                     if (!schmal()) {
-                        var t = belegt(el.tafel);
+                        var t = tafelUnten ? null : belegt(el.tafel);
                         if (t) oben = Math.max(oben, t.bottom - karte.top + 20);
                         var r = belegt(el.detail) || null;
                         [].forEach.call(el.wrap.querySelectorAll('.lm3-box'), function (b) { if (!b.hidden) r = r || b.getBoundingClientRect(); });
                         if (r) rechts = Math.max(rechts, karte.right - r.left + 20);
                     } else {
                         var unterkante = karte.bottom;
-                        [el.detail, el.tafel].forEach(function (e) { var q = belegt(e); if (q) unterkante = Math.min(unterkante, q.top); });
+                        [el.detail, tafelUnten ? null : el.tafel].forEach(function (e) { var q = belegt(e); if (q) unterkante = Math.min(unterkante, q.top); });
                         unten = Math.max(unten, karte.bottom - unterkante + 20);
                         oben = 60;
                     }
@@ -1882,6 +1884,7 @@
                 // ── Tafel auf/zu ──
                 function setzeTafel(offen) {
                     if (!el.inhalt || !el.kopf) return;
+                    if (tafelUnten) { el.inhalt.hidden = false; return; }
                     el.inhalt.hidden = !offen;
                     el.kopf.setAttribute('aria-expanded', offen ? 'true' : 'false');
                 }
@@ -1891,7 +1894,7 @@
                     [].forEach.call(el.wrap.querySelectorAll('.lm3-box'), function (b) { b.hidden = true; });
                     [].forEach.call(el.wrap.querySelectorAll('.lm3-wz[aria-expanded]'), function (k) { k.setAttribute('aria-expanded', 'false'); });
                 }
-                if (el.kopf) el.kopf.addEventListener('click', function () {
+                if (el.kopf && !tafelUnten) el.kopf.addEventListener('click', function () {
                     var offen = !!el.inhalt.hidden;
                     if (offen && schmal()) { if (zustand.auswahl) schliesseDetail(); schliesseKaesten(); }
                     setzeTafel(offen);
@@ -2064,8 +2067,9 @@
                 // Hoehe: Fenster minus das, was ueber dem Widget steht (Navigations-
                 // leiste des Themes) und was unten fest am Fenster klebt (Cookie-
                 // Leiste), begrenzt durch Mindest-/Hoechsthoehe aus der Verwaltung.
+                var flaeche = document.getElementById('lm3-flaeche') || wrap;
                 function messeHoehe() {
-                    var oben = wrap.getBoundingClientRect().top + (window.pageYOffset || 0);
+                    var oben = flaeche.getBoundingClientRect().top + (window.pageYOffset || 0);
                     var untenFest = 0;
                     [].forEach.call(document.body.querySelectorAll('body > *'), function (e) {
                         if (e.contains(wrap)) return;
@@ -2074,9 +2078,13 @@
                         var r = e.getBoundingClientRect();
                         if (r.height > 0 && r.height < window.innerHeight / 2 && r.bottom >= window.innerHeight - 1) untenFest = Math.max(untenFest, r.height);
                     });
+                    // Tafel unten: ihre Kopfzeile soll noch im Fenster stehen, damit man
+                    // sieht, dass unter der Karte die Flugliste kommt.
+                    var kopfUnten = wrap.classList.contains('lm3--tafel-unten') && document.getElementById('lm3-tafel-kopf');
+                    if (kopfUnten && kopfUnten.offsetParent !== null) untenFest += kopfUnten.getBoundingClientRect().height;
                     var h = window.innerHeight - Math.max(0, oben) - untenFest - 16;
                     h = Math.max(cfg.minHoehe || 420, Math.min(cfg.maxHoehe || 1000, h));
-                    wrap.style.height = Math.round(h) + 'px';
+                    flaeche.style.height = Math.round(h) + 'px';
                 }
                 // Hell/Dunkel: Einstellung, sonst das Theme (Seven und SPTheme setzen
                 // data-bs-theme am <html>; manche Themes eine Klasse am <body>).
@@ -2290,6 +2298,15 @@
                 }
                 // Spaet geladene Leisten (Cookie-Hinweis) aendern die freie Hoehe.
                 window.addEventListener('load', function () { messeHoehe(); map.invalidateSize(); });
+                // Manche Themes haengen die Cookie-Leiste erst nach dem Laden in <body>
+                // (SPTheme) — dann neu messen, sonst laege sie ueber dem Tafelkopf unten.
+                if (window.MutationObserver && document.body) {
+                    var hoeheTimer = null;
+                    new MutationObserver(function () {
+                        clearTimeout(hoeheTimer);
+                        hoeheTimer = setTimeout(function () { messeHoehe(); map.invalidateSize(); }, 300);
+                    }).observe(document.body, { childList: true });
+                }
             })();
         });
     </script>

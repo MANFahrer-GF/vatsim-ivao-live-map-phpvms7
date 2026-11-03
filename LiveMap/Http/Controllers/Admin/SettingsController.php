@@ -31,7 +31,7 @@ class SettingsController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'layout_mode'             => 'required|in:modern,old_style',
+            'flights_panel'           => 'required|in:top,bottom,off',
             'default_basemap'         => 'required|in:positron,osm,dark,satellite',
             'weather_default_layer'   => 'required|in:none,clouds,radar,storms,wind,temp,combo',
             'weather_default_opacity' => 'required|numeric|min:0.2|max:1',
@@ -122,14 +122,17 @@ class SettingsController extends Controller
         }
         $liveUrl = $liveUrlGeprueft;
 
-        $layoutMode = $validated['layout_mode'];
+        // 5.1: Lage der Flugtafel. Die beiden Altschluessel werden mitgeschrieben,
+        // damit aeltere Theme-Dateien und ein Rueckweg auf 4.7.x weiter stimmen.
+        $tafelLage = $validated['flights_panel'];
         $primaryColor = $this->normalizeHexColor($validated['ui_primary_color'] ?? '', '#1A2A4A');
         $accentColor = $this->normalizeHexColor($validated['ui_accent_color'] ?? '', '#243B6A');
         $boxBackgroundColor = $this->normalizeHexColor($validated['color_box_background'] ?? '', '#FFFFFF');
 
         $payload = [
-            'acars.livemap_old_style'                   => $layoutMode === 'old_style',
-            'acars.livemap_show_top_flights_panel'      => $layoutMode === 'modern',
+            'acars.livemap_flights_panel'               => $tafelLage,
+            'acars.livemap_old_style'                   => $tafelLage === 'off',
+            'acars.livemap_show_top_flights_panel'      => $tafelLage === 'top',
             'acars.livemap_default_basemap'             => $validated['default_basemap'],
             'acars.livemap_show_basemap_switcher'       => $request->boolean('show_basemap_switcher'),
             'acars.livemap_enable_satellite'            => $request->boolean('enable_satellite'),
@@ -184,11 +187,31 @@ class SettingsController extends Controller
         return redirect('/admin/livemap')->with('status', $meldung);
     }
 
+    /** Tafel-Lage aus den 4.7.x-Schluesseln: ausgeschaltet → off, sonst top. */
+    public static function tafelLageAusAlt($oldStyle, $showTop): string
+    {
+        $an = fn ($v) => is_bool($v) ? $v : in_array(strtolower(trim((string) $v)), ['1', 'true', 'yes', 'on'], true);
+        if ($an($oldStyle) || ($showTop !== null && $showTop !== '' && !$an($showTop))) {
+            return 'off';
+        }
+
+        return 'top';
+    }
+
     private function currentSettings(): array
     {
         $values = [];
         foreach ($this->definitions() as $key => $definition) {
             $values[$key] = $this->lmGet($key, $definition['default'] ?? null);
+        }
+        // 5.1: Nach einem Update von 4.7.x fehlt die Tafel-Lage noch — aus den
+        // Altschluesseln ableiten, sonst zeigte die Seite „oben“ fuer eine
+        // Installation, die die Tafel ausgeschaltet hatte.
+        if ($this->lmGet('acars.livemap_flights_panel', null) === null) {
+            $values['acars.livemap_flights_panel'] = self::tafelLageAusAlt(
+                $values['acars.livemap_old_style'] ?? false,
+                $values['acars.livemap_show_top_flights_panel'] ?? true,
+            );
         }
 
         return $values;
@@ -595,6 +618,12 @@ class SettingsController extends Controller
     private function definitions(): array
     {
         return [
+            'acars.livemap_flights_panel' => [
+                'name'        => 'Live Map: Flights Panel Position',
+                'description' => 'top = collapsible panel over the map, bottom = table below the map, off = hidden',
+                'type'        => 'string',
+                'default'     => 'top',
+            ],
             'acars.livemap_old_style' => [
                 'name'        => 'Live Map: Old Style',
                 'description' => 'Hide the top flights table overlay',

@@ -7,8 +7,8 @@
     $lmS = function (string $key, $default = null) use ($settings) {
       return array_key_exists($key, $settings) ? $settings[$key] : $default;
     };
-    $oldStyleChecked = (bool) $lmS('acars.livemap_old_style', false);
-    $layoutMode = $oldStyleChecked ? 'old_style' : 'modern';
+    $tafelLage = (string) $lmS('acars.livemap_flights_panel', 'top');
+    if (!in_array($tafelLage, ['top', 'bottom', 'off'], true)) $tafelLage = 'top';
   @endphp
   <div class="card border-blue-bottom">
     <div class="content">
@@ -89,17 +89,20 @@
 
         <h5>Layout</h5>
         <div class="form-group">
-          <label for="layout_mode">Layout mode</label>
-          <select id="layout_mode" name="layout_mode" class="form-control">
-            <option value="modern" {{ $layoutMode === 'modern' ? 'selected' : '' }}>
-              Modern (show top flights panel)
+          <label for="flights_panel">Flights panel</label>
+          <select id="flights_panel" name="flights_panel" class="form-control">
+            <option value="top" {{ $tafelLage === 'top' ? 'selected' : '' }}>
+              Top — collapsible panel over the map
             </option>
-            <option value="old_style" {{ $layoutMode === 'old_style' ? 'selected' : '' }}>
-              Old Style (hide top flights table overlay)
+            <option value="bottom" {{ $tafelLage === 'bottom' ? 'selected' : '' }}>
+              Bottom — table below the map (always open, outside the map)
+            </option>
+            <option value="off" {{ $tafelLage === 'off' ? 'selected' : '' }}>
+              Off — no flights list (aircraft stay on the map)
             </option>
           </select>
           <p class="help-block" style="margin-top:6px">
-            Choose one mode to avoid conflicting layout settings.
+            Replaces the former “Layout mode” (Modern = Top, Old Style = Off).
           </p>
         </div>
         <div class="form-group">
