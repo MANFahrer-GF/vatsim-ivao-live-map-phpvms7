@@ -1651,6 +1651,9 @@
                     // Schmal teilen sich Tafel und Detail das Blatt unten.
                     if (schmal()) { setzeTafel(false); schliesseKaesten(); }
                     zeichneListe(); zeichneMarker(); zeichneDetail();
+                    // Breit: neuer Flug zeigt das ganze Detail; passt ein offener Kasten
+                    // nicht mehr daneben, geht der Kasten zu (nichts abgeschnitten).
+                    if (!schmal() && el.detail) { el.detail.classList.remove('ist-klein'); if (!rechtsPasst()) schliesseKaesten(); }
                     if (f && f.pos) {
                         // Aus der Weltansicht heranholen, damit Spur und Lage lesbar sind.
                         if (map.getZoom() < 5) map.setView(lageFuer(f), 5, { animate: false });
@@ -1777,7 +1780,7 @@
                     el.detail.innerHTML =
                         '<header class="lm3-d-kopf">' +
                           (logoUrl ? '<span class="lm3-d-logo"><img src="' + lmEsc(logoUrl) + '" alt="" onerror="this.parentNode.remove()"></span>' : '') +
-                          '<span class="lm3-d-cs">' + lmEsc(f.callsign || (LM_T.pilot + ' ' + f.pilot)) + '</span>' +
+                                '<button type="button" class="lm3-d-cs" data-lm3-auf>' + lmEsc(f.callsign || (LM_T.pilot + ' ' + f.pilot)) + '</button>' +
                           '<button type="button" class="lm3-zu" data-lm3-zu aria-label="' + lmEsc(LM_T.schliessen) + '">✕</button>' +
                         '</header>' +
                         '<div class="lm3-d-route">' +
@@ -1798,6 +1801,13 @@
                     el.detail.scrollTop = scrollVorher;
                     var zu = el.detail.querySelector('[data-lm3-zu]');
                     if (zu) zu.addEventListener('click', schliesseDetail);
+                    // Eingeklappt (Kasten daneben braucht den Platz): Rufzeichen klappt auf.
+                    var auf = el.detail.querySelector('[data-lm3-auf]');
+                    if (auf) auf.addEventListener('click', function () {
+                        if (!el.detail.classList.contains('ist-klein')) return;
+                        el.detail.classList.remove('ist-klein');
+                        schliesseKaesten();
+                    });
                     var fo = el.detail.querySelector('[data-lm3-folgen]');
                     if (fo) fo.addEventListener('click', function () { setzeFolgen(!zustand.folgen); });
                 }
@@ -1881,6 +1891,28 @@
                 }
                 map.on('click', function () { if (zustand.auswahl) schliesseDetail(); });
 
+                // Passt alles in der rechten Spalte ohne Abschneiden? (volle Hoehen
+                // der sichtbaren Teile + Abstaende gegen die Spaltenhoehe)
+                function rechtsPasst() {
+                    var r = el.rechts;
+                    if (!r) return true;
+                    var summe = 0, n = 0;
+                    [].forEach.call(r.children, function (k) {
+                        if (k.hidden || k.offsetParent === null) return;
+                        summe += k.classList.contains('lm3-detail') && k.classList.contains('ist-klein') ? k.getBoundingClientRect().height : k.scrollHeight;
+                        n++;
+                    });
+                    return summe + Math.max(0, n - 1) * 8 <= r.clientHeight + 1;
+                }
+                // Kasten neben dem Detail: reicht die Hoehe nicht fuer beide, klappt das
+                // Detail auf seine Kopfzeile ein (Auswahl und Spur bleiben).
+                function passeRechts() {
+                    if (!el.detail || el.detail.hidden) return;
+                    el.detail.classList.remove('ist-klein');
+                    var kastenOffen = [].some.call(el.wrap.querySelectorAll('.lm3-box'), function (b) { return !b.hidden; });
+                    if (!schmal() && kastenOffen && !rechtsPasst()) el.detail.classList.add('ist-klein');
+                }
+
                 // ── Tafel auf/zu ──
                 function setzeTafel(offen) {
                     if (!el.inhalt || !el.kopf) return;
@@ -1905,7 +1937,7 @@
                 zeichneListe();
                 holeFluege().then(function () { planeAbruf(); });
 
-                return { setzeTafel: setzeTafel, schliesseDetail: schliesseDetail, zustand: zustand, schmal: schmal };
+                return { setzeTafel: setzeTafel, schliesseDetail: schliesseDetail, zustand: zustand, schmal: schmal, passeRechts: passeRechts };
             }
             // ════════════════════════════════════════════════════════════
             //  KARTE — eigener Leaflet-Aufbau statt `render_live_map`.
@@ -2253,6 +2285,7 @@
                         a.knopf.setAttribute('aria-expanded', offen ? 'true' : 'false');
                         // Schmal teilen sich Kasten, Tafel und Detail eine Spalte.
                         if (offen && va && va.schmal()) { va.setzeTafel(false); va.schliesseDetail(); }
+                        if (va && !va.schmal()) va.passeRechts();
                     });
                 });
                 if (cfg.showTopFlightsPanel === false) {
@@ -2284,7 +2317,7 @@
                     map.invalidateSize();
                 };
                 if (window.ResizeObserver && wrap) new ResizeObserver(neuMessen).observe(wrap);
-                window.addEventListener('resize', function () { messeHoehe(); neuMessen(); });
+                window.addEventListener('resize', function () { messeHoehe(); neuMessen(); if (va) va.passeRechts(); });
                 // Theme-Schalter (hell/dunkel) beobachten.
                 if (window.MutationObserver) {
                     var beiThemeWechsel = function () {

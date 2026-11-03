@@ -95,6 +95,7 @@
                         font-size: 13px; font-weight: 600; letter-spacing: .2px; white-space: nowrap;
                     }
                     .lm3-kopf-stat { display: inline-flex; align-items: center; gap: 6px; }
+                    .lm3-kopf-stat svg { width: 14px; height: 14px; fill: currentColor; opacity: .85; flex: 0 0 auto; }
                     .lm3-kopf-stat b { font-weight: 800; font-size: 15px; }
                     .lm3-n-aktiv { color: #6fcf7c; }
                     .lm3-n-geplant { color: #7cb8f0; }
@@ -179,6 +180,8 @@
                         .lm3 .lm3-g-plan .lm3-sp-zeit { display: none; }
                         .lm3 .lm3-tafel-kopf { gap: 10px; padding: 9px 12px; }
                         .lm3 .lm3-reiter [role="tab"] { padding: 8px 6px; }
+                        /* Rufzeichen vor Logo: schmal bleibt das Rufzeichen lesbar */
+                        .lm3 .lm3-zeile .lm3-logo { display: none; }
                     }
 
                     /* ── Werkzeuge (oben rechts) ── */
@@ -232,7 +235,12 @@
                     .lm3-d-kopf { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: linear-gradient(135deg, var(--lm-primary) 0%, var(--lm-accent) 100%); color: #fff; position: sticky; top: 0; z-index: 1; }
                     .lm3-d-logo { height: 30px; min-width: 56px; max-width: 96px; padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.95); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
                     .lm3-d-logo img { max-height: 24px; max-width: 82px; object-fit: contain; display: block; }
-                    .lm3-d-cs { font-size: 14px; font-weight: 800; letter-spacing: .3px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+                    .lm3-d-cs { font-size: 14px; font-weight: 800; letter-spacing: .3px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto;
+                        border: 0; padding: 0; background: none; color: inherit; text-align: left; cursor: default; }
+                    /* Eingeklappt: nur die Kopfzeile, Rufzeichen klappt wieder auf */
+                    .lm3-detail.ist-klein > :not(.lm3-d-kopf) { display: none !important; }
+                    .lm3-detail.ist-klein .lm3-d-cs { cursor: pointer; }
+                    .lm3-detail.ist-klein .lm3-d-cs::after { content: ' ▾'; opacity: .75; }
                     .lm3-zu { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 6px; border: 0; background: rgba(255,255,255,.14); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; }
                     .lm3-zu:hover { background: rgba(255,255,255,.26); }
                     .lm3-d-route { display: flex; align-items: center; padding: 10px 12px; background: var(--lm-flaeche-2); border-bottom: 1px solid var(--lm-linie); }
