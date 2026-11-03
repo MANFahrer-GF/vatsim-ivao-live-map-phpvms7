@@ -159,18 +159,43 @@ class LiveFlightsController extends Controller
             return [];
         }
 
-        return Cache::remember('livemap:flughaefen:'.md5(implode(',', $icaos)), now()->addMinutes(10), function () use ($icaos) {
+        // Je Flughafen ein Eintrag: die Menge bleibt durch die Zahl der Plaetze
+        // begrenzt (ein Eintrag je Kombination wuchs mit jedem Flugwechsel).
+        $schluessel = fn (string $icao) => 'livemap:flughafen:'.$icao;
+        $treffer = [];
+        $fehlen = [];
+        foreach ($icaos as $icao) {
+            $wert = Cache::get($schluessel($icao));
+            if (is_array($wert)) {
+                if ($wert !== []) {
+                    $treffer[$icao] = $wert;
+                }
+            } else {
+                $fehlen[] = $icao;
+            }
+        }
+        if ($fehlen) {
             try {
-                return Airport::whereIn('id', $icaos)->get(['id', 'name', 'lat', 'lon'])
+                $neu = Airport::whereIn('id', $fehlen)->get(['id', 'name', 'lat', 'lon'])
                     ->mapWithKeys(fn ($a) => [strtoupper((string) $a->id) => [
                         'name' => $a->name !== null ? mb_substr((string) $a->name, 0, 60) : null,
                         'lat'  => is_numeric($a->lat) ? round((float) $a->lat, 5) : null,
                         'lon'  => is_numeric($a->lon) ? round((float) $a->lon, 5) : null,
                     ]])->all();
             } catch (\Throwable $e) {
-                return [];
+                return $treffer;
             }
-        });
+            foreach ($fehlen as $icao) {
+                // Unbekannte ICAO als leerer Eintrag, damit sie nicht jede Abfrage neu trifft
+                Cache::put($schluessel($icao), $neu[$icao] ?? [], now()->addMinutes(10));
+                if (isset($neu[$icao])) {
+                    $treffer[$icao] = $neu[$icao];
+                }
+            }
+        }
+        ksort($treffer);
+
+        return $treffer;
     }
 
     private static function absolut(?string $logo): ?string

@@ -88,6 +88,8 @@
                         background: var(--lm-flaeche);
                         --lm-sp: 148px 104px 60px 44px 84px 92px minmax(72px, 1fr);
                     }
+                    /* Lage „aus“: das Skript setzt hidden; display:flex oben darf es nicht ueberstimmen */
+                    .lm3 .lm3-tafel[hidden] { display: none !important; }
                     .lm3-tafel-kopf {
                         flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
                         padding: 9px 16px; border: 0; cursor: pointer; user-select: none; width: 100%;

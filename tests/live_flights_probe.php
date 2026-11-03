@@ -252,9 +252,10 @@ pruefe('phpVMS-Abfrage scheitert: 503, ok=false, fehler=phpvms', $code === 503 &
 // ═════════════════════════════════════════════════════════════════════════
 // 1b. Quelle „Beide“ (5.1): AeroACARS + phpVMS, derselbe Flug einmal
 // ═════════════════════════════════════════════════════════════════════════
-$beidePirep = fn (string $id, string $nr, int $pilotId) => (object) [
+// live `pilot_id` ist users.id (aeroacars-live provision.ts) — zugeordnet wird ueber user->id.
+$beidePirep = fn (string $id, string $nr, int $userId, int $pilotNr = 1) => (object) [
     'id' => $id, 'flight_number' => $nr, 'airline' => (object) ['icao' => 'JAL', 'logo' => null],
-    'user' => (object) ['id' => 9, 'pilot_id' => $pilotId, 'name' => 'Kenji Mori', 'name_private' => 'Kenji M.'],
+    'user' => (object) ['id' => $userId, 'pilot_id' => $pilotNr, 'name' => 'Kenji Mori', 'name_private' => 'Kenji M.'],
     'aircraft' => (object) ['icao' => 'B789', 'registration' => 'JA861J'], 'source_name' => 'AeroACARS',
     'dpt_airport_id' => 'PANC', 'arr_airport_id' => 'RJAA', 'status' => 'ENR',
     'position' => (object) ['lat' => 55.0, 'lon' => 170.0, 'altitude' => 39000, 'ias' => 260, 'gs' => 505, 'vs' => 0, 'heading' => 238],
@@ -270,7 +271,16 @@ pruefe('Beide: 200, ok, Quelle beide, ein Flug zugeordnet', $code === 200 && ($j
 pruefe('Beide: JAL7 einmal (von live), der andere PIREP dazu', $ids === ['GSG/1003', 'phpvms/PIREPGSG9'], $ids);
 pruefe('Beide: PIREP-Link am live-Flug', str_ends_with((string) ($j['fluege'][0]['pirep_url'] ?? ''), '/pireps/PIREPJAL7'), $j['fluege'][0]['pirep_url'] ?? null);
 pruefe('Beide: interne Zuordnung (_pilot) verlaesst den Server nicht', !str_contains($roh, '_pilot'));
+// Gegenprobe: Pilotnummer 1003 eines anderen Kontos (users.id 55) ist nicht derselbe Pilot
+zurueck();
+$einstellungen['acars.livemap_quelle'] = 'beide';
+$pireps = [$beidePirep('PIREPJAL7', '7', 55, 1003)];
+live(['live.kant.ovh/api/flights' => Http::response(liveListe(), 200)]);
+[$code, $j] = hole('/livemap/api/fluege');
+pruefe('Beide: Pilotnummer eines fremden Kontos ordnet nicht zu', $code === 200 && ($j['zugeordnet'] ?? null) === 0 && count($j['fluege'] ?? []) === 2, [$code, $j['zugeordnet'] ?? null]);
 pruefe('Beide: ohne Stoerung keine Warnung', !array_key_exists('warnung', $j));
+// Flughaefen: je ICAO ein Puffer-Eintrag (auch unbekannte, als leerer Eintrag), keine Kombinations-Schluessel
+pruefe('Flughaefen: je ICAO gepuffert', is_array($j['flughaefen'] ?? null) && Cache::has('livemap:flughafen:PANC') && Cache::has('livemap:flughafen:RJAA'), array_keys($j['flughaefen'] ?? []));
 
 zurueck();
 $einstellungen['acars.livemap_quelle'] = 'beide';

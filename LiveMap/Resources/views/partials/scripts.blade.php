@@ -761,6 +761,7 @@
             var firPrefixMap     = {};
             var uirToFirsMap     = {};
             var vatspyFir        = { firNachWort: {}, uirNachWort: {} };
+            var letzteIvaoFirMap = null;   // fuer sofortiges Zeichnen beim Einschalten der Sektoren
             var grenzenNachId    = null;   // Boundaries-id -> [Feature, ...] (kontinental/ozeanisch)
 
             var CTRL_TYPES = {
@@ -1199,29 +1200,34 @@
                 return '<div class="vatsim-popup"><div class="vatsim-popup-header"><div class="vatsim-popup-callsign">'+h(icao)+'</div><div style="display:flex;align-items:center;gap:6px;margin-top:2px">'+(airportFullName?'<span class="vatsim-popup-route" style="margin:0">'+h(airportFullName)+'</span>':'')+'<span style="background:#e67e22;color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:.5px;flex-shrink:0">IVAO</span></div><div style="font-size:11px;color:#aaa;margin-top:3px">'+total+' station'+(total!==1?'s':'')+' active</div></div><div class="vatsim-popup-body">'+ctrlRows+atisRows+'</div></div>';
             }
 
-            // Abruf mit Zeitgrenze: ein haengender Feed blockiert sonst den naechsten Takt
-            // (vatsimFetchInFlight bliebe gesetzt). Nicht-200 zaehlt als Fehler.
-            function holeMitFrist(url, ms) {
+            // Abruf mit Zeitgrenze bis einschliesslich Antwortkoerper: ein haengender Feed
+            // blockiert sonst den naechsten Takt (vatsimFetchInFlight bliebe gesetzt).
+            // Nicht-200 zaehlt als Fehler. art: 'json' oder 'text'.
+            function holeMitFrist(url, ms, art) {
                 var ab = (typeof AbortController !== 'undefined') ? new AbortController() : null;
                 var t = ab ? setTimeout(function(){ ab.abort(); }, ms || 20000) : null;
                 return fetch(url, ab ? { signal: ab.signal } : undefined).then(function(r){
                     if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + url);
-                    return r;
+                    return art === 'text' ? r.text() : r.json();
                 }).finally(function(){ if (t) clearTimeout(t); });
             }
             var firNamesLauf = null, grenzenLauf = null;
-            // Boundaries.geojson einmal laden; bei Fehlschlag versucht es der naechste Takt.
+            // Nach einem Fehlschlag 5 min Pause: die Dateien sind 2,3 und 0,9 MB gross.
+            var PAUSE_NACH_FEHLER_MS = 5 * 60 * 1000, grenzenNichtVor = 0, firNamenNichtVor = 0;
+            // Boundaries.geojson einmal laden.
             function ladeGrenzen() {
                 if (firBoundsGeoJson) return Promise.resolve();
                 if (grenzenLauf) return grenzenLauf;
-                grenzenLauf = holeMitFrist(VATSPY_BOUNDS_API, 60000).then(function(r){return r.json();}).then(function(gj){firBoundsGeoJson=gj;grenzenNachId=null;})
+                if (Date.now() < grenzenNichtVor) return Promise.reject(new Error('Boundaries: Pause nach Fehlschlag'));
+                grenzenLauf = holeMitFrist(VATSPY_BOUNDS_API, 60000, 'json').then(function(gj){firBoundsGeoJson=gj;grenzenNachId=null;})
+                    .catch(function(e){ grenzenNichtVor = Date.now() + PAUSE_NACH_FEHLER_MS; throw e; })
                     .finally(function(){ grenzenLauf = null; });
                 return grenzenLauf;
             }
             function loadFirNames() {
-                if (firNameLoaded) return Promise.resolve();
+                if (firNameLoaded || Date.now() < firNamenNichtVor) return Promise.resolve();
                 if (firNamesLauf) return firNamesLauf;
-                return firNamesLauf = holeMitFrist(VATSPY_DAT_API, 60000).then(function(r){return r.text();}).then(function(text){
+                return firNamesLauf = holeMitFrist(VATSPY_DAT_API, 60000, 'text').then(function(text){
                     firNameLoaded=true; staticAirportLoaded=true;
                     var section='';
                     text.split('\n').forEach(function(line){
@@ -1253,11 +1259,11 @@
                     staticAirportPos=v.plaetze; airportNameCache=v.namen;
                     Object.keys(v.firNamen).forEach(function(k){if(!firNameCache[k])firNameCache[k]=v.firNamen[k];});
                     vatspyFir=v;
-                }).catch(function(e){firNameLoaded=false;console.warn('[VATSIM] VATSpy.dat nicht geladen, naechster Takt versucht es neu:',e);}).finally(function(){firNamesLauf=null;});
+                }).catch(function(e){firNameLoaded=false;firNamenNichtVor=Date.now()+PAUSE_NACH_FEHLER_MS;console.warn('[VATSIM] VATSpy.dat nicht geladen, neuer Versuch in 5 min:',e);}).finally(function(){firNamesLauf=null;});
             }
 
             function loadTransceivers() {
-                return holeMitFrist(VATSIM_TRX_API).then(function(r){return r.json();}).then(function(trxList){
+                return holeMitFrist(VATSIM_TRX_API, 20000, 'json').then(function(trxList){
                     ctrlPosCache={};
                     (trxList||[]).forEach(function(entry){
                         if(!entry.callsign||!entry.transceivers||!entry.transceivers.length) return;
@@ -1286,7 +1292,7 @@
                 if (vatsimFetchInFlight) return Promise.resolve(false);
                 vatsimFetchInFlight = true;
                 return Promise.all([
-                    holeMitFrist(VATSIM_DATA_API).then(function(r){return r.json();}),
+                    holeMitFrist(VATSIM_DATA_API, 20000, 'json'),
                     loadTransceivers(),
                     loadFirNames()
                 ]).then(function(results){
@@ -1393,7 +1399,7 @@
                 if (ivaoFetchInFlight) return Promise.resolve(false);
                 ivaoFetchInFlight = true;
                 // VATSpy auch hier: Plaetze und FIR-Zuordnung gelten fuer IVAO genauso.
-                return Promise.all([holeMitFrist(IVAO_DATA_API).then(function(r){return r.json();}),loadFirNames()]).then(function(res){
+                return Promise.all([holeMitFrist(IVAO_DATA_API, 20000, 'json'),loadFirNames()]).then(function(res){
                     var data=res[0];
                     var clients=data.clients||{}, pilots=clients.pilots||[], atcs=clients.atcs||[];
                     var statsEl=document.getElementById('ivaoStats'), dotEl=document.getElementById('ivaoNetDot');
@@ -1422,22 +1428,26 @@
                         if(facility===0) return;
                         var atisLines=(c.atis&&Array.isArray(c.atis.lines))?c.atis.lines:[];
                         if(facility===6||facility===1){
-                            var root=cs.split('_')[0].toUpperCase(), isUpper=!!UPPER_FIR[root];
-                            if(!ivaoFirMap[root]){var _vid=c.userId||'', g=window.LM3.grenzenFuerLotse(cs,vatspyFir.firNachWort,vatspyFir.uirNachWort); ivaoFirMap[root]={callsign:cs,frequency:freq,color:(isUpper||g.uir)?'#8e44ad':'#16a085',isUpper:isUpper||g.uir,root:root,network:'IVAO',cid:_vid,cid_link:_vid?'https://tracker.ivao.aero/atc/'+_vid:'',rating:c.rating||0,logon_time:c.createdAt||'',kennungen:g.kennungen,firName:g.name}; }
+                            var csTeile=cs.split('_'), root=csTeile[0].toUpperCase(), isUpper=!!UPPER_FIR[root];
+                            // Teilsektoren getrennt (LON_N_CTR / LON_S_CTR), wie bei VATSIM
+                            var ivaoKey=csTeile.length>=3?root+'_'+csTeile[1].toUpperCase():root;
+                            if(!ivaoFirMap[ivaoKey]){var _vid=c.userId||'', g=window.LM3.grenzenFuerLotse(cs,vatspyFir.firNachWort,vatspyFir.uirNachWort); ivaoFirMap[ivaoKey]={callsign:cs,frequency:freq,color:(isUpper||g.uir)?'#8e44ad':'#16a085',isUpper:isUpper||g.uir,root:root,network:'IVAO',cid:_vid,cid_link:_vid?'https://tracker.ivao.aero/atc/'+_vid:'',rating:c.rating||0,logon_time:c.createdAt||'',kennungen:g.kennungen,firName:g.name}; }
                         } else if(!isNaN(lat)&&!isNaN(lon)){
-                            var icaoRaw=cs.split('_')[0].toUpperCase();
-                            if(!ivaoAirportGroups[icaoRaw])ivaoAirportGroups[icaoRaw]={pos:[lat,lon],ctrls:[],atis:[]};
-                            var ivaoVid=c.userId||''; ivaoAirportGroups[icaoRaw].ctrls.push({callsign:cs,facility:facility,frequency:freq,name:'',cid:ivaoVid,cid_link:'https://tracker.ivao.aero/atc/'+ivaoVid,rating:c.rating||0,logon_time:c.createdAt||'',network:'IVAO'});
-                            if(atisLines.length)ivaoAirportGroups[icaoRaw].atis.push({callsign:cs,frequency:freq,text_atis:atisLines});
+                            // nach aufgeloester Stelle wie bei VATSIM (CLT_GND + KCLT_TWR = ein Kasten)
+                            var icaoRaw=cs.split('_')[0].toUpperCase(), ivaoPlatz=platzSchluessel(icaoRaw);
+                            if(!ivaoAirportGroups[ivaoPlatz])ivaoAirportGroups[ivaoPlatz]={pos:platzZu(icaoRaw)||[lat,lon],ctrls:[],atis:[],name:icaoRaw};
+                            if(icaoRaw.length>ivaoAirportGroups[ivaoPlatz].name.length)ivaoAirportGroups[ivaoPlatz].name=icaoRaw;
+                            var ivaoVid=c.userId||''; ivaoAirportGroups[ivaoPlatz].ctrls.push({callsign:cs,facility:facility,frequency:freq,name:'',cid:ivaoVid,cid_link:'https://tracker.ivao.aero/atc/'+ivaoVid,rating:c.rating||0,logon_time:c.createdAt||'',network:'IVAO'});
+                            if(atisLines.length)ivaoAirportGroups[ivaoPlatz].atis.push({callsign:cs,frequency:freq,text_atis:atisLines});
                         }
                     });
 
-                    Object.keys(ivaoAirportGroups).forEach(function(icao){
-                        var group=ivaoAirportGroups[icao];
-                        var pos=staticAirportPos[icao]||group.pos;
+                    Object.keys(ivaoAirportGroups).forEach(function(key){
+                        var group=ivaoAirportGroups[key], icao=group.name, pos=group.pos;
                         L.marker(pos,{icon:buildAirportCtrlIconIvao(icao,group.ctrls,group.atis),title:icao,zIndexOffset:490}).bindPopup(buildAirportCtrlPopupIvao(icao,group.ctrls,group.atis),{maxWidth:300}).addTo(ivaoCtrlLayer);
                     });
 
+                    letzteIvaoFirMap=ivaoFirMap;
                     if(vatsimShowSectors) ladeGrenzen().then(function(){renderActiveSectors(ivaoFirMap, ivaoSectorLayer);}).catch(function(e){console.warn('[IVAO] Sektoren-Fehler:',e);});
                     if(typeof applyLayerVisibility==='function') applyLayerVisibility();
                     return true;
@@ -2222,7 +2232,7 @@
                 etiketten.forEach(function (x) {
                     for (var k = 0; k < RUECKE.length; k++) {
                         var d = RUECKE[k], r = { l: x.r.l + d[0], t: x.r.t + d[1], r: x.r.r + d[0], b: x.r.b + d[1] };
-                        if (r.l < rahmen.left || r.r > rahmen.right || r.t < rahmen.top || r.b > rahmen.bottom) continue;
+                        if (r.r < rahmen.left || r.l > rahmen.right || r.b < rahmen.top || r.t > rahmen.bottom) continue;
                         if (trifft(r)) continue;
                         belegt.push(r);
                         if (k) gerueckt.push({ el: x.el, d: d });
@@ -2435,7 +2445,8 @@
                 var btnPilots = document.getElementById('btnVatsimPilots'), btnCtrl = document.getElementById('btnVatsimCtrl'), btnSectors = document.getElementById('btnVatsimSectors');
                 if (btnPilots) { btnPilots.classList.toggle('active', vatsimShowPilots); btnPilots.addEventListener('click', function () { vatsimShowPilots = !vatsimShowPilots; btnPilots.classList.toggle('active', vatsimShowPilots); applyLayerVisibility(); }); }
                 if (btnCtrl) { btnCtrl.classList.toggle('active', vatsimShowCtrl); btnCtrl.addEventListener('click', function () { vatsimShowCtrl = !vatsimShowCtrl; btnCtrl.classList.toggle('active', vatsimShowCtrl); applyLayerVisibility(); }); }
-                if (btnSectors) { btnSectors.classList.toggle('active', vatsimShowSectors); btnSectors.addEventListener('click', function () { vatsimShowSectors = !vatsimShowSectors; btnSectors.classList.toggle('active', vatsimShowSectors); applyLayerVisibility(); }); }
+                if (btnSectors) { btnSectors.classList.toggle('active', vatsimShowSectors); btnSectors.addEventListener('click', function () { vatsimShowSectors = !vatsimShowSectors; btnSectors.classList.toggle('active', vatsimShowSectors); applyLayerVisibility();
+                    if (vatsimShowSectors && showIvao && letzteIvaoFirMap) ladeGrenzen().then(function(){ renderActiveSectors(letzteIvaoFirMap, ivaoSectorLayer); }).catch(function(){}); }); }
                 applyLayerVisibility();
 
                 // ── Werkzeugleiste: Netz / Wetter als Aufklapper, nie gleichzeitig ──

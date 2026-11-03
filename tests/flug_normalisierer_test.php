@@ -110,25 +110,25 @@ $voll = N::ausPhpvms(['pirep_id' => 'abc124', 'callsign' => 'GSG101', 'status' =
 pruefe('phpVMS ohne name_private: voller Name wird gekürzt', $voll['pilot_name'] === 'Paul N.', $voll['pilot_name']);
 
 // Quelle „Beide“: gleicher Pilot UND gleiches Rufzeichen (live mit Leerzeichen, phpVMS ohne)
-$liveFlug = N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => 'ITY 4532', 'dep' => 'LIRF', 'arr' => 'EDDF']));
+$liveFlug = N::ausLive(array_merge($live, ['pilot_id' => '7', 'callsign' => 'ITY 4532', 'dep' => 'LIRF', 'arr' => 'EDDF']));
 $pirep = N::ausPhpvms(['pirep_id' => 'p1', 'callsign' => 'ITY4532', 'status' => 'ENR', 'lat' => 48, 'lon' => 10,
     'user_id' => '7', 'user_pilot_id' => '42', 'registration' => 'EI-DTA', 'pirep_url' => 'https://va.test/pireps/p1', 'logo' => '/l/ity.png']);
 $z = N::zusammenfuehren([$liveFlug], [$pirep]);
 pruefe('Beide: ein Flug statt zwei, als zugeordnet gezaehlt', count($z['fluege']) === 1 && $z['zugeordnet'] === 1, $z['zugeordnet']);
-pruefe('Beide: der AeroACARS-Flug bleibt (Phase/Position von live)', $z['fluege'][0]['id'] === 'GSG/42');
+pruefe('Beide: der AeroACARS-Flug bleibt (Phase/Position von live)', $z['fluege'][0]['id'] === 'GSG/7');
 pruefe('Beide: PIREP-Link und Logo vom PIREP, eigene Registrierung bleibt', $z['fluege'][0]['pirep_url'] === 'https://va.test/pireps/p1'
     && $z['fluege'][0]['logo'] === '/l/ity.png' && $z['fluege'][0]['registration'] === 'JA861J', $z['fluege'][0]);
-$ohneReg = N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => 'ITY 4532', 'last_position' => ['lat' => 48, 'lon' => 10]]));
+$ohneReg = N::ausLive(array_merge($live, ['pilot_id' => '7', 'callsign' => 'ITY 4532', 'last_position' => ['lat' => 48, 'lon' => 10]]));
 pruefe('Beide: Registrierung vom PIREP, wenn live keine hat', N::zusammenfuehren([$ohneReg], [$pirep])['fluege'][0]['registration'] === 'EI-DTA');
 $fremd = N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '43', 'callsign' => 'ITY4532']))], [$pirep]);
 pruefe('Beide: gleiches Rufzeichen, anderer Pilot → zwei Fluege', count($fremd['fluege']) === 2 && $fremd['zugeordnet'] === 0);
-$anderesCs = N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => 'ITY4533']))], [$pirep]);
+$anderesCs = N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '7', 'callsign' => 'ITY4533']))], [$pirep]);
 pruefe('Beide: gleicher Pilot, anderes Rufzeichen → zwei Fluege', count($anderesCs['fluege']) === 2);
-pruefe('Beide: Pilot ueber users.id', N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '7', 'callsign' => 'ITY4532']))], [$pirep])['zugeordnet'] === 1);
-$ohneCsLive = N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => '', 'dep' => 'LIRF', 'arr' => 'EDDF']));
-$ohneCsPirep = N::ausPhpvms(['pirep_id' => 'p2', 'callsign' => '', 'status' => 'ENR', 'lat' => 48, 'lon' => 10, 'user_pilot_id' => '42', 'dep' => 'LIRF', 'arr' => 'EDDF']);
+pruefe('Beide: live traegt users.id — die Pilotnummer eines Kontos ordnet nicht zu', N::zusammenfuehren([N::ausLive(array_merge($live, ['pilot_id' => '42', 'callsign' => 'ITY4532']))], [$pirep])['zugeordnet'] === 0);
+$ohneCsLive = N::ausLive(array_merge($live, ['pilot_id' => '7', 'callsign' => '', 'dep' => 'LIRF', 'arr' => 'EDDF']));
+$ohneCsPirep = N::ausPhpvms(['pirep_id' => 'p2', 'callsign' => '', 'status' => 'ENR', 'lat' => 48, 'lon' => 10, 'user_id' => '7', 'user_pilot_id' => '42', 'dep' => 'LIRF', 'arr' => 'EDDF']);
 pruefe('Beide: ohne Rufzeichen reichen Pilot + Abflug + Ziel', N::zusammenfuehren([$ohneCsLive], [$ohneCsPirep])['zugeordnet'] === 1);
-$andersZiel = N::ausPhpvms(['pirep_id' => 'p3', 'callsign' => '', 'status' => 'ENR', 'lat' => 48, 'lon' => 10, 'user_pilot_id' => '42', 'dep' => 'LIRF', 'arr' => 'EDDM']);
+$andersZiel = N::ausPhpvms(['pirep_id' => 'p3', 'callsign' => '', 'status' => 'ENR', 'lat' => 48, 'lon' => 10, 'user_id' => '7', 'user_pilot_id' => '42', 'dep' => 'LIRF', 'arr' => 'EDDM']);
 pruefe('Beide: ohne Rufzeichen, anderes Ziel → zwei Fluege', N::zusammenfuehren([$ohneCsLive], [$andersZiel])['zugeordnet'] === 0);
 pruefe('Beide: ein PIREP wird nur einmal vergeben', N::zusammenfuehren([$liveFlug, $liveFlug], [$pirep])['zugeordnet'] === 1);
 pruefe('Beide: ohne live nur die PIREPs', count(N::zusammenfuehren([], [$pirep, $ohneCsPirep])['fluege']) === 2);

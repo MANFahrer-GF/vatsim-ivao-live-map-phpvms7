@@ -209,8 +209,10 @@ final class FlugNormalisierer
             'logo'           => self::text($p['logo'] ?? null, 300),
             'pirep_url'      => self::text($p['pirep_url'] ?? null, 300),
             // Nur fuer die Zusammenfuehrung („Beide“); `oeffentlich()` entfernt es.
+            // live `pilot_id` ist users.id (aeroacars-live recorder/src/provision.ts:182),
+            // nicht die Pilotnummer — sonst traefe Nummer 42 das Konto 42 eines anderen.
             '_pilot'         => array_values(array_filter([
-                self::text($p['user_id'] ?? null, 20), self::text($p['user_pilot_id'] ?? null, 20),
+                self::text($p['user_id'] ?? null, 20),
             ], fn ($v) => $v !== null)),
         ];
     }
@@ -221,8 +223,8 @@ final class FlugNormalisierer
      *
      * AeroACARS legt jeden Flug auch als PIREP an. Derselbe Flug wird
      * erkannt an Rufzeichen (ohne Leerzeichen: live „ITY 4532“, phpVMS
-     * „ITY4532“) UND Pilot (live `pilot_id` = phpVMS-Pilotnummer, siehe
-     * aeroacars-mqtt `MqttConfig::pilot_id`). Ohne Rufzeichen reichen Pilot +
+     * „ITY4532“) UND Pilot (live `pilot_id` = phpVMS `users.id`, siehe
+     * aeroacars-live recorder/src/provision.ts). Ohne Rufzeichen reichen Pilot +
      * Abflug + Ziel. Nur Rufzeichen gleich, Pilot verschieden: zwei Fluege.
      *
      * Vom PIREP uebernimmt der AeroACARS-Flug, was live nicht liefert:
