@@ -1,6 +1,6 @@
 {
     "name": "LiveMap",
-    "version": "5.0.0",
+    "version": "5.1.0",
     "alias": "livemap",
     "description": "Live Map admin settings, flight data proxy and weather proxy",
     "keywords": [

@@ -1,6 +1,6 @@
 # VATSIM + IVAO Live Map for phpVMS 7
 
-Version: **5.0.0** (2026-10-30)
+Version: **5.1.0** (2026-11-03)
 
 Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR sectors, VA flight panels, weather overlays, and an admin-driven configuration module.
 
@@ -18,22 +18,23 @@ Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR secto
 - Bogus 0/0 positions are ignored instead of drawing phantom aircraft
 - Route line to the destination crosses the date line instead of wrapping around the world
 - Pacific ATC sectors (Anchorage, Oakland Oceanic, Magadan …) are shown whole across the date line
+- 5.1: compact 4.7.9 look again, source "Both" (AeroACARS + phpVMS merged), aircraft silhouettes by class, own Leaflet 1.9.4, views inside the module (theme file is a single `@include`), runs under Seven, SPTheme and Disposable_v3
 - 5.0: flight data always fetched through the module (`/livemap/api/fluege`), source phpVMS (default) or AeroACARS Live; own Leaflet map, new layout, map fills the window
 
 ## Package Contents
 
 This repository ships two deployable parts:
 
-1. `LiveMap/` (phpVMS module)
-2. `live_map.blade.php` (theme widget template)
+1. `LiveMap/` (phpVMS module, contains all views, styles and scripts)
+2. `live_map.blade.php` (theme file, a single `@include('livemap::widget')`)
 
 For convenience, versioned full packages contain both, for example:
 
-- `LiveMap-full-package-20260422-xxxxxx-v4.6.5.zip`
+- `LiveMap-full-package-v5.1.0.zip`
 
 ## Installation (No SSH)
 
-Install this release as a **full package** — the module code and the three widget blade files must always be on the same version. Mixing a new module with old widget files is the #1 cause of "loads and loads", mixed-content warnings, and stale settings.
+Install this release as a **full package**: the module and the theme file belong together.
 
 ### 1. Deploy the module
 
@@ -43,25 +44,17 @@ Copy the `LiveMap/` directory to your phpVMS installation:
 <phpvms-root>/modules/LiveMap/
 ```
 
-### 2. Deploy the three widget files
+### 2. Deploy the theme file
 
-Copy all **three** blade files into your active phpVMS theme's widgets directory. Example paths:
-
-```
-resources/views/layouts/SPTheme/widgets/live_map.blade.php
-resources/views/layouts/SPTheme/widgets/live_map_styles.blade.php
-resources/views/layouts/SPTheme/widgets/live_map_scripts.blade.php
-```
-
-or for Disposable v3:
+Copy `live_map.blade.php` into the widgets directory of **every theme you use**:
 
 ```
-resources/views/layouts/Disposable_v3/widgets/live_map.blade.php
-resources/views/layouts/Disposable_v3/widgets/live_map_styles.blade.php
-resources/views/layouts/Disposable_v3/widgets/live_map_scripts.blade.php
+resources/views/layouts/<Theme>/widgets/live_map.blade.php
 ```
 
-All three files are required. If you only replace one, the frontend and the backend will disagree about which settings store / which tile URLs are in use.
+Supported themes: **Seven, SPTheme, Disposable_v3**. For any other theme copy the same file into that theme's `widgets/` folder.
+
+From 5.1 on, `live_map_styles.blade.php` and `live_map_scripts.blade.php` are **no longer needed**. If they still exist in your theme's `widgets/` folder from an older version, delete them.
 
 ### 3. Run phpVMS update + cache clear
 
@@ -90,17 +83,26 @@ No SSH/CLI commands are required for any of the above.
 
 - If you were on v4.6.1 – v4.6.4, your existing settings live in `storage/app/kvp.json`. On the **first** visit to Admin → Live Map after upgrading, the module promotes those values into the DB automatically. Nothing to do.
 - If you were on v4.6.0 or earlier, your settings live in the legacy phpVMS settings rows. They are picked up by the same read path — no action required.
-- Always deploy `LiveMap/` **and** all three widget files together. Hard-refresh the browser (`Ctrl+F5`) after deploy.
+- **From 4.x / 5.0 to 5.1:** deploy `LiveMap/`, copy the new `live_map.blade.php` into every theme in use, delete the old `live_map_scripts.blade.php` and `live_map_styles.blade.php` there, then run `php artisan view:clear` (or Admin → Maintenance → Clear Caches). Hard-refresh the browser (`Ctrl+F5`).
+- Before 5.1, `LiveMap/` and all three widget files had to be deployed together; with 5.1 only `LiveMap/` plus the one-line `live_map.blade.php` are needed.
 
 ## Troubleshooting
 
 **"Settings reset to defaults every day"** — You are on v4.6.1 – v4.6.4. Upgrade to v4.6.5.
 
-**"Map loads and loads and loads"** — Either (a) no OWM key is configured *and* you are running pre-v4.6.5 widget files, so the frontend keeps requesting blank tiles, or (b) your theme still has a pre-v4.6.0 `live_map_scripts.blade.php` with HTTP tile URLs. Redeploy **all three** widget files from v4.6.5.
+**"Map loads and loads and loads"** — Either (a) no OWM key is configured *and* you are running pre-v4.6.5 widget files, so the frontend keeps requesting blank tiles, or (b) your theme still has a pre-v4.6.0 `live_map_scripts.blade.php` with HTTP tile URLs. Upgrade to 5.1 (no theme scripts any more) or redeploy all three widget files from v4.6.5.
 
 **"Mixed content warnings in browser console"** — Same cause as above. v4.6.5 uses HTTPS for all tile sources.
 
 **"Weather Proxy Status: API Key Missing"** — Paste the key in Admin → Live Map and click Save Settings. It will persist from now on.
+
+## Flight Source
+
+Admin → Live Map → source:
+
+- **phpVMS** (default): the running PIREPs of this site.
+- **AeroACARS Live**: flights from the AeroACARS Live server (needs a read key; the key stays on the server). Optional **VA prefix** limits the list to the flights of one VA.
+- **Both**: AeroACARS flights plus phpVMS-only flights. An AeroACARS flight and a phpVMS flight with the same pilot and the same callsign are shown as one flight (registration, PIREP link and logo come from the PIREP). If one source fails, the other is shown with a notice.
 
 ## Critical phpVMS Setting Note (Important)
 
@@ -164,7 +166,7 @@ Mapping:
 ## Compatibility
 
 - phpVMS 7 (current maintained branches)
-- Themes: SPTheme, Disposable_v3 (and any theme using compatible widget path)
+- Themes: Seven, SPTheme, Disposable_v3; other themes work by copying `live_map.blade.php` into their `widgets/` folder (the map brings its own Leaflet, independent of the theme)
 
 ## Release Files
 

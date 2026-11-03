@@ -4,6 +4,83 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.1.0] — 2026-11-03
+
+Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und Disposable_v3.
+*Compact look of 4.7.9 again, on the 5.0 technology; works under Seven, SPTheme and Disposable_v3.*
+
+### Changed / Geändert
+- **Kompakte Optik wie 4.7.9.** Flugtafel oben mit „Aktive Flüge | Geplant“
+  (Reiter, aufklappbar, Spalten Flug mit Logo / Route / Höhe / GS / Distanz /
+  Phase / Pilot; schmale Fenster geben Spalten ab), Detailkasten wie der
+  4.7.9-Crew-Pass (Route mit Flughafennamen, Pilot, Flugzeug, Höhe, GS, Kurs,
+  V/S, Fortschrittsbalken, „Mehr Werte“, PIREP-Link, Folgen). Felder ohne
+  Daten werden weggelassen. Die Technik von 5.0 (Daten über das Modul) bleibt.
+  *Compact flight board and detail box as in 4.7.9, 5.0 data path kept.*
+- **Datenquelle „Beide“** (neben phpVMS und AeroACARS Live): AeroACARS- und
+  phpVMS-Flug mit demselben Piloten und demselben Rufzeichen sind ein Flug
+  (Registrierung, PIREP-Link und Logo kommen vom PIREP). Fällt eine Quelle aus,
+  zeigt die Karte die andere mit einem Hinweis.
+  *Source "Both": same pilot + same callsign = one flight; if one source fails,
+  the other is shown with a notice.*
+- **Flugzeugsymbole nach Klasse:** sieben Silhouetten (Kolben, Turboprop,
+  Bizjet, Schmalrumpf, Großraum, Vierstrahler, Hubschrauber), die Nase zeigt in
+  Flugrichtung, am Boden etwas kleiner, Farbe = Flugphase. Unbekannter Typ =
+  Schmalrumpf. Netz-Flieger (VATSIM/IVAO) bleiben graue Schmalrümpfe.
+  *Seven aircraft silhouettes by class, nose in flight direction, smaller on the ground.*
+- **Theme-unabhängig durch eigenes Leaflet 1.9.4** (gepinnt, mit
+  Subresource-Integrity), das die Leaflet-Version des Themes nicht berührt.
+  *Own pinned Leaflet 1.9.4 with SRI, independent of the theme's Leaflet.*
+- **Ansichten liegen im Modul** (`livemap::widget`). Die Theme-Datei
+  `live_map.blade.php` besteht nur noch aus einem `@include`; ein Update
+  betrifft künftig nur `modules/LiveMap`. `live_map_styles.blade.php` und
+  `live_map_scripts.blade.php` entfallen.
+  *Views now ship inside the module; the theme file is a single `@include`.*
+- **Kartenelemente entwirrt:** VA-Flieger liegen vor Lotsenkasten, vor
+  Rufzeichen, vor Netz-Fliegern; gestapelte VA-Flüge werden zu einem Symbol mit
+  „+n“; VATSIM- und IVAO-Kasten desselben Flughafens stehen nebeneinander. Der
+  IVAO-Kasten hat keinen orangen Rahmen mehr, sondern den grauen Zusatz „IVAO“.
+  *Map elements untangled (stacking order, "+n" for stacked flights, VATSIM/IVAO
+  boxes side by side, IVAO without orange frame).*
+- **Zoomen beendet „Folgen“** (Mausrad, Knöpfe, Doppelklick, Tasten, „+n“).
+  *Any zoom ends follow mode.*
+- **Raster ohne Überlappung** der Bedienelemente bei allen Fenstergrößen;
+  schmaler Modus unter 760 px Widget-Breite (eine Spalte, nur Kasten, Tafel
+  oder Detail ist offen).
+  *Layout grid: no overlapping controls at any window size; narrow mode below 760 px.*
+- **Dunkelmodus** erkennt `data-bs-theme` (Seven, SPTheme) und `data-theme`
+  (Disposable_v3) und folgt Theme-Wechseln zur Laufzeit; neue Einstellung
+  Hell/Dunkel/Auto.
+  *Dark mode detects both theme attributes; new light/dark/auto setting.*
+- **Höhe aus der Fensterhöhe** mit Mindest- und Höchsthöhe (Verwaltung,
+  Standard 420/1000 px) statt fester Werte.
+  *Map height follows the window within a configurable minimum/maximum.*
+- **Ohne CARTO-Schlüssel ist die Standardkarte OpenStreetMap**; die
+  CARTO-Stile erscheinen dann nicht im Umschalter (Hinweis im Kasten „Kartenstil“).
+  *Without a CARTO key the default map is OpenStreetMap.*
+
+### Added / Neu — Einstellungen (Admin → Live Map)
+- Datenquelle „Beide“, VA-Kennung (nur AeroACARS-Flüge dieser VA zeigen, z. B.
+  `gsg`; leer = alle), Hell/Dunkel/Auto, Mindest- und Höchsthöhe der Karte,
+  Rufzeichen neben den Flugzeugen ab Zoom 6 (an/aus).
+  *New settings: source "Both", VA prefix, light/dark/auto, min/max height, callsign labels.*
+
+### Upgrade
+1. `LiveMap/` nach `modules/` kopieren (erst hochladen, dann umbenennen, siehe INSTALL.txt).
+2. Die Theme-Datei `live_map.blade.php` aus dem Paket in **jedes benutzte Theme**
+   kopieren: `resources/views/layouts/<Theme>/widgets/live_map.blade.php`.
+3. Die alten Dateien `live_map_scripts.blade.php` und `live_map_styles.blade.php`
+   im selben Ordner löschen (werden nicht mehr benutzt).
+4. `php artisan view:clear` (bei gecachten Routen wie bei 5.0 zusätzlich
+   `php artisan route:cache`).
+
+*Upgrade: copy `LiveMap/` to `modules/`; copy `live_map.blade.php` into every
+theme in use (`resources/views/layouts/<Theme>/widgets/`); delete the old
+`live_map_scripts.blade.php` and `live_map_styles.blade.php` there; run
+`php artisan view:clear`.*
+
+---
+
 ## [5.0.0] — 2026-10-30
 
 AeroACARS 3.0, Pflichtenheft P-11.11 (A-75, N-12, F-020).

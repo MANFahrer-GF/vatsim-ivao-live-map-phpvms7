@@ -1,11 +1,46 @@
-LiveMap v5.0.0 - Install Package
+LiveMap v5.1.0 - Install Package
 ================================
 
 Contents:
   LiveMap/                     -> phpVMS module (copy to <phpvms-root>/modules/LiveMap/)
-  live_map.blade.php           -> theme widget
-  live_map_styles.blade.php    -> theme widget
-  live_map_scripts.blade.php   -> theme widget
+  live_map.blade.php           -> theme file (one line, copy into each theme in use)
+
+New in v5.1.0:
+
+  Compact look of 4.7.9 again (flight board "Active flights | Planned" at
+  the top, detail box like the 4.7.9 crew pass) on the 5.0 technology.
+
+  - Source "Both" (Admin -> Live Map): AeroACARS Live plus phpVMS. The same
+    pilot with the same callsign counts as ONE flight (registration, PIREP
+    link and logo come from the PIREP). If one source fails, the other is
+    shown with a notice. Optional "AeroACARS VA prefix" limits the list to
+    one VA.
+  - Aircraft symbols by class (seven silhouettes), nose in flight direction,
+    smaller on the ground.
+  - Own Leaflet 1.9.4 (pinned, with integrity check): works under Seven,
+    SPTheme and Disposable_v3 without depending on the theme's Leaflet.
+    Other themes: copy live_map.blade.php into their widgets/ folder.
+  - The views live inside the module. The theme file is a single @include.
+    live_map_styles.blade.php and live_map_scripts.blade.php are NO LONGER
+    NEEDED (from 5.1 on). Later updates only touch modules/LiveMap.
+  - Cleaner map (stacking order, "+n" for stacked flights, VATSIM and IVAO
+    boxes side by side), zooming ends "Follow", no overlapping controls at
+    any window size, narrow mode below 760 px widget width.
+  - Dark mode follows the theme (data-bs-theme / data-theme) or is set to
+    light/dark in the settings. Height follows the window between a
+    minimum and maximum you set. Without a CARTO key the default map is
+    OpenStreetMap.
+  - New settings: source "Both", VA prefix, light/dark/auto, minimum and
+    maximum height, callsign labels on/off.
+
+  UPGRADE from 5.0 or older:
+    1. Copy LiveMap/ to modules/ (steps below: upload first, swap last).
+    2. Copy live_map.blade.php into every theme you use:
+         resources/views/layouts/<Theme>/widgets/live_map.blade.php
+    3. In the same folder DELETE the old live_map_scripts.blade.php and
+       live_map_styles.blade.php (not used any more).
+    4. php artisan view:clear
+       (if your site caches routes: php artisan route:cache as well)
 
 New in v5.0.0:
 
@@ -214,15 +249,15 @@ Installation (no SSH required):
      set `enabled` from 1 to 0. The site comes back immediately.
      Then finish the upload properly and set it back to 1.
 
-2) Upload the three widget blade files into your active theme's widgets folder.
+2) Upload live_map.blade.php into the widgets folder of every theme you use.
    Examples:
+     resources/views/layouts/seven/widgets/
      resources/views/layouts/SPTheme/widgets/
      resources/views/layouts/Disposable_v3/widgets/
    Overwrite:
      live_map.blade.php
-     live_map_styles.blade.php
-     live_map_scripts.blade.php
-   IMPORTANT: all three files together, not just one.
+   From v5.1 live_map_styles.blade.php and live_map_scripts.blade.php are
+   no longer needed - delete them there if they exist.
 
 3) In your browser, open:
      https://<your-site>/update
@@ -238,7 +273,8 @@ Installation (no SSH required):
 
 Troubleshooting:
   "Settings reset every day"        -> upgrade to v4.6.6.
-  "Map loads and loads and loads"   -> redeploy all three widget files.
+  "Map loads and loads and loads"   -> upgrade to v5.1 (no theme scripts any
+                                       more) or redeploy all three old widget files.
   "Mixed-content warnings"          -> this release includes the HTTPS upgrade patch.
   "Weather Proxy: API Key Missing"  -> paste key in Admin -> Live Map, Save.
   "CARTO key will not save/delete"  -> upgrade to v4.7.2, then enter it again.

@@ -2084,7 +2084,9 @@
                     if (cfg.themeModus === 'dark') return true;
                     if (cfg.themeModus === 'light') return false;
                     var h = document.documentElement, b = document.body;
-                    var attr = (h.getAttribute('data-bs-theme') || (b && b.getAttribute('data-bs-theme')) || '').toLowerCase();
+                    // Seven/SPTheme: data-bs-theme; Disposable_v3 (Dunkel-Schalter): body data-theme
+                    var attr = (h.getAttribute('data-bs-theme') || (b && b.getAttribute('data-bs-theme')) ||
+                        h.getAttribute('data-theme') || (b && b.getAttribute('data-theme')) || '').toLowerCase();
                     if (attr) return attr === 'dark';
                     return [h, b].some(function (e) { return e && /(^|\s)(dark|dark-mode|theme-dark|darkmode)(\s|$)/.test(e.className || ''); });
                 }
@@ -2283,8 +2285,8 @@
                         if (vorher !== wrap.classList.contains('ist-dunkel') && window._lmThemeGewechselt) window._lmThemeGewechselt();
                     };
                     var mo = new MutationObserver(beiThemeWechsel);
-                    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme', 'class'] });
-                    if (document.body) mo.observe(document.body, { attributes: true, attributeFilter: ['data-bs-theme', 'class'] });
+                    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme', 'data-theme', 'class'] });
+                    if (document.body) mo.observe(document.body, { attributes: true, attributeFilter: ['data-bs-theme', 'data-theme', 'class'] });
                 }
                 // Spaet geladene Leisten (Cookie-Hinweis) aendern die freie Hoehe.
                 window.addEventListener('load', function () { messeHoehe(); map.invalidateSize(); });

@@ -1,3 +1,65 @@
+## v5.1.0 - Live map: compact again, runs under any theme
+
+Release date: 2026-11-03
+
+---
+
+## English
+
+### What changed
+
+* **Compact look of 4.7.9 again:** flight board at the top ("Active flights | Planned"), columns for flight, route, altitude, ground speed, distance, phase and pilot, and a detail box like the 4.7.9 crew pass. The 5.0 data path through the module stays.
+* **New source "Both":** AeroACARS Live and phpVMS together. The same pilot with the same callsign counts as one flight (registration, PIREP link and logo come from the PIREP). If one source fails, the other is shown with a notice.
+* **Aircraft symbols by class:** seven silhouettes (piston, turboprop, business jet, narrow-body, wide-body, four-engine, helicopter). The nose points in flight direction, aircraft on the ground are drawn smaller.
+* **Works under Seven, SPTheme and Disposable_v3:** the map brings its own Leaflet 1.9.4 (pinned, with integrity check) and no longer depends on the theme's Leaflet. Dark mode follows the theme (or is forced in the settings).
+* **The views now live inside the module.** The theme file `live_map.blade.php` is a single line; future updates only touch `modules/LiveMap`. `live_map_styles.blade.php` and `live_map_scripts.blade.php` are gone.
+* **Cleaner map:** VA aircraft sit on top of controller boxes, callsigns and network aircraft; stacked VA flights show as one symbol with "+n"; VATSIM and IVAO boxes of the same airport sit side by side; the IVAO box has a grey "IVAO" tag instead of an orange frame.
+* **Zooming ends "Follow"** (wheel, buttons, double click, keys, "+n").
+* **No overlapping controls** at any window size; below 760 px widget width the layout switches to one column.
+* **Height follows the window,** between a minimum and a maximum you set (default 420 / 1000 px).
+* **Without a CARTO key the default map is OpenStreetMap;** the CARTO styles are then not offered.
+* **New settings** under Admin → Live Map: source "Both", VA prefix, light/dark/auto, minimum/maximum height, callsign labels on/off.
+
+### Upgrade
+
+1. Copy `LiveMap/` to `modules/`.
+2. Copy `live_map.blade.php` from the package into **every theme you use**: `resources/views/layouts/<Theme>/widgets/live_map.blade.php`.
+3. Delete the old `live_map_scripts.blade.php` and `live_map_styles.blade.php` in that folder.
+4. Run `php artisan view:clear` (if your site caches routes: `php artisan route:cache` as well).
+
+Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
+
+---
+
+## Deutsch
+
+### Was sich geändert hat
+
+* **Wieder die kompakte Optik von 4.7.9:** Flugtafel oben („Aktive Flüge | Geplant“), Spalten für Flug, Route, Höhe, GS, Distanz, Phase und Pilot, und ein Detailkasten wie der 4.7.9-Crew-Pass. Der Datenweg von 5.0 über das Modul bleibt.
+* **Neue Quelle „Beide“:** AeroACARS Live und phpVMS zusammen. Derselbe Pilot mit demselben Rufzeichen zählt als ein Flug (Registrierung, PIREP-Link und Logo kommen vom PIREP). Fällt eine Quelle aus, zeigt die Karte die andere mit einem Hinweis.
+* **Flugzeugsymbole nach Klasse:** sieben Silhouetten (Kolben, Turboprop, Bizjet, Schmalrumpf, Großraum, Vierstrahler, Hubschrauber). Die Nase zeigt in Flugrichtung, Flugzeuge am Boden sind kleiner.
+* **Läuft unter Seven, SPTheme und Disposable_v3:** Die Karte bringt ihr eigenes Leaflet 1.9.4 mit (gepinnt, mit Prüfsumme) und hängt nicht mehr am Leaflet des Themes. Der Dunkelmodus folgt dem Theme (oder wird in den Einstellungen festgelegt).
+* **Die Ansichten liegen jetzt im Modul.** Die Theme-Datei `live_map.blade.php` ist nur noch eine Zeile; künftige Updates betreffen nur `modules/LiveMap`. `live_map_styles.blade.php` und `live_map_scripts.blade.php` entfallen.
+* **Aufgeräumtere Karte:** VA-Flieger liegen vor Lotsenkasten, Rufzeichen und Netz-Fliegern; gestapelte VA-Flüge erscheinen als ein Symbol mit „+n“; VATSIM- und IVAO-Kasten desselben Flughafens stehen nebeneinander; der IVAO-Kasten hat statt des orangen Rahmens den grauen Zusatz „IVAO“.
+* **Zoomen beendet „Folgen“** (Mausrad, Knöpfe, Doppelklick, Tasten, „+n“).
+* **Keine Überlappungen** der Bedienelemente bei allen Fenstergrößen; unter 760 px Widget-Breite schaltet das Layout auf eine Spalte.
+* **Die Höhe folgt dem Fenster,** zwischen einer Mindest- und einer Höchsthöhe, die du einstellst (Standard 420 / 1000 px).
+* **Ohne CARTO-Schlüssel ist die Standardkarte OpenStreetMap;** die CARTO-Stile werden dann nicht angeboten.
+* **Neue Einstellungen** unter Admin → Live Map: Quelle „Beide“, VA-Kennung, Hell/Dunkel/Auto, Mindest-/Höchsthöhe, Rufzeichen an/aus.
+
+### Aktualisieren
+
+1. `LiveMap/` nach `modules/` kopieren.
+2. `live_map.blade.php` aus dem Paket in **jedes benutzte Theme** kopieren: `resources/views/layouts/<Theme>/widgets/live_map.blade.php`.
+3. Die alten Dateien `live_map_scripts.blade.php` und `live_map_styles.blade.php` in diesem Ordner löschen.
+4. `php artisan view:clear` ausführen (bei gecachten Routen zusätzlich `php artisan route:cache`).
+
+Install-ZIP angehängt: `LiveMap-full-package-v5.1.0.zip`.
+
+**Full changelog:** https://github.com/MANFahrer-GF/vatsim-ivao-live-map-phpvms7/compare/v5.0.0...v5.1.0
+
+---
+
 ## v5.0.0 - Live map 3.0: data through the module, new layout
 
 Release date: 2026-10-30
