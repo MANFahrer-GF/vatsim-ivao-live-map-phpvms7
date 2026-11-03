@@ -18,7 +18,12 @@ Release date: 2026-11-03
 * **No overlapping controls** at any window size; below 760 px widget width the layout switches to one column.
 * **Height follows the window,** between a minimum and a maximum you set (default 420 / 1000 px).
 * **Without a CARTO key the default map is OpenStreetMap;** the CARTO styles are then not offered.
-* **New settings** under Admin → Live Map: source "Both", VA prefix, light/dark/auto, minimum/maximum height, callsign labels on/off.
+* **Flight panel position** (new setting, replaces "Layout mode"): top (collapsible over the map), bottom (fixed full-width table below the map, outside the map area) or off. Updating from 4.7.x without the new setting derives the position from the old keys (old style on, or top panel explicitly off = off, otherwise top); the old keys are still written.
+* **Detail box folds to its header row** when a box beside it does not fit (callsign ▾ opens it again); the narrow board shows no logos; the board header has icons as in 4.7.9. Controller boxes and sector labels sit below the controls (board, zoom, tools), as in 4.7.9.
+* **VATSIM/IVAO controllers, the way VATSIM Radar does it:** voice-frequency gate 117–137 MHz (ATIS outside it and observers without a voice frequency do not count; an observer on a voice frequency at a real position shows with a grey "O"), controllers grouped by resolved facility (CLT_GND + KCLT_ATIS = one KCLT box), FIR assignment by longest prefix, sub-sectors, collective positions from [UIRs] and _FSS = oceanic area. IVAO sectors now also appear without VATSIM.
+* **More robust:** fetches have a timeout and retry on the next tick, sources come via jsDelivr (7-day browser cache), sector labels are nudged or hidden instead of overlapping.
+* **Not adopted:** TRACON areas from the SimAware TRACON Project (measured 03.11.2026: the 1.77 MB release asset has no CORS header on GitHub, jsDelivr only has 1389 single files / 4.4 MB without a prefix index; the only way left would be a fetch through every VA's server), so the green TRACON shield stays. Also not adopted: VATGlasses altitude sectors (28 MB, licence CC BY-NC-SA, third-party service).
+* **New settings** under Admin → Live Map: flight panel position, source "Both", VA prefix, light/dark/auto, minimum/maximum height, callsign labels on/off.
 
 ### Upgrade
 
@@ -45,7 +50,12 @@ Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
 * **Keine Überlappungen** der Bedienelemente bei allen Fenstergrößen; unter 760 px Widget-Breite schaltet das Layout auf eine Spalte.
 * **Die Höhe folgt dem Fenster,** zwischen einer Mindest- und einer Höchsthöhe, die du einstellst (Standard 420 / 1000 px).
 * **Ohne CARTO-Schlüssel ist die Standardkarte OpenStreetMap;** die CARTO-Stile werden dann nicht angeboten.
-* **Neue Einstellungen** unter Admin → Live Map: Quelle „Beide“, VA-Kennung, Hell/Dunkel/Auto, Mindest-/Höchsthöhe, Rufzeichen an/aus.
+* **Lage der Flugtafel** (neue Einstellung, ersetzt den „Layout-Modus“): oben (aufklappbar über der Karte), unten (feste Tabelle unter der Karte, ganze Breite, außerhalb des Kartenbereichs) oder aus. Beim Update von 4.7.x ohne die neue Einstellung wird die Lage aus den alten Schlüsseln abgeleitet (alter Stil an oder obere Tafel ausdrücklich aus = aus, sonst oben); die alten Schlüssel werden weiter mitgeschrieben.
+* **Der Detailkasten klappt auf seine Kopfzeile ein,** wenn daneben ein Kasten nicht passt (Rufzeichen ▾ klappt ihn wieder auf); die schmale Tafel zeigt keine Logos; der Tafelkopf hat Symbole wie in 4.7.9. Lotsenkästen und Sektor-Etiketten liegen unter den Bedienelementen (Tafel, Zoom, Werkzeuge), wie in 4.7.9.
+* **VATSIM/IVAO-Lotsen nach dem Verfahren von VATSIM Radar:** Sprechfunk-Riegel 117–137 MHz (ATIS außerhalb und Beobachter ohne Sprechfrequenz zählen nicht; ein Beobachter auf Sprechfrequenz an einem echten Platz erscheint mit grauem „O“), Lotsen nach aufgelöster Stelle gruppiert (CLT_GND + KCLT_ATIS = ein Kasten KCLT), FIR-Zuordnung nach längstem Präfix, Teilsektoren, Sammelpositionen aus [UIRs] und _FSS = ozeanische Fläche. IVAO-Sektoren erscheinen jetzt auch ohne VATSIM.
+* **Robuster:** Abrufe haben eine Zeitgrenze und werden im nächsten Takt neu versucht, die Quellen kommen über jsDelivr (Browser-Puffer 7 Tage), Sektor-Etiketten werden gerückt oder ausgeblendet statt sich zu überlappen.
+* **Bewusst nicht übernommen:** TRACON-Flächen aus dem SimAware-TRACON-Project (gemessen am 03.11.2026: das Release-Asset von 1,77 MB hat bei GitHub keine CORS-Freigabe, jsDelivr hat nur 1389 Einzeldateien / 4,4 MB ohne Präfix-Index; es bliebe nur ein Abruf über den Server jeder VA), daher bleibt der grüne TRACON-Schild. Ebenfalls nicht: VATGlasses-Höhensektoren (28 MB, Lizenz CC BY-NC-SA, Fremddienst).
+* **Neue Einstellungen** unter Admin → Live Map: Lage der Flugtafel, Quelle „Beide“, VA-Kennung, Hell/Dunkel/Auto, Mindest-/Höchsthöhe, Rufzeichen an/aus.
 
 ### Aktualisieren
 

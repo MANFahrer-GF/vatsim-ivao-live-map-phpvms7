@@ -8,7 +8,7 @@ Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR secto
 
 - Dual-network map: VATSIM + IVAO pilots/controllers
 - FIR + UIR sector rendering from VATSpy data
-- VA Active + Planned flights panel with mobile layout support
+- VA Active + Planned flights panel with mobile layout support; position selectable in the admin: top (collapsible over the map), bottom (fixed table below the map) or off
 - Multi-flight follow mode (fit all active aircraft)
 - OpenWeatherMap server-side proxy (API key stays server-side)
 - Admin settings page (`/admin/livemap`) for layout, weather, network, mobile, colors
@@ -18,7 +18,7 @@ Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR secto
 - Bogus 0/0 positions are ignored instead of drawing phantom aircraft
 - Route line to the destination crosses the date line instead of wrapping around the world
 - Pacific ATC sectors (Anchorage, Oakland Oceanic, Magadan …) are shown whole across the date line
-- 5.1: compact 4.7.9 look again, source "Both" (AeroACARS + phpVMS merged), aircraft silhouettes by class, own Leaflet 1.9.4, views inside the module (theme file is a single `@include`), runs under Seven, SPTheme and Disposable_v3
+- 5.1: flight panel position (top / bottom / off) in the admin, VATSIM/IVAO controllers and FIR assignment the VATSIM Radar way, detail box folds beside a controller box, compact 4.7.9 look again, source "Both" (AeroACARS + phpVMS merged), aircraft silhouettes by class, own Leaflet 1.9.4, views inside the module (theme file is a single `@include`), runs under Seven, SPTheme and Disposable_v3
 - 5.0: flight data always fetched through the module (`/livemap/api/fluege`), source phpVMS (default) or AeroACARS Live; own Leaflet map, new layout, map fills the window
 
 ## Package Contents
@@ -175,11 +175,18 @@ Mapping:
 
 Use versioned ZIP file names to avoid browser/CDN cache confusion with generic names.
 
+## Sources and Attribution
+
+- **VATSpy Data Project** ([vatsimnetwork/vatspy-data-project](https://github.com/vatsimnetwork/vatspy-data-project)): FIR/UIR boundaries and airport/position data, loaded in the browser via jsDelivr.
+- **VATSIM Radar:** the rules for assigning controllers to positions and FIRs (voice-frequency gate 117–137 MHz, controllers grouped by resolved facility, longest prefix, sub-sectors, collective positions from `[UIRs]`, `_FSS` = oceanic area) are adopted via AeroACARS live. VATSIM Radar content is licensed CC BY-NC 4.0.
+- Not used: TRACON areas of the SimAware TRACON Project (no CORS header on the release asset; jsDelivr only offers single files without a prefix index) and VATGlasses altitude sectors (28 MB, CC BY-NC-SA, third-party service). TRACONs keep the green shield.
+
 ## Credits
 
 - VATSIM Network
 - IVAO Network
 - VATSpy data project
+- VATSIM Radar (controller/FIR assignment rules)
 - Leaflet
 - OpenWeatherMap
 - phpVMS

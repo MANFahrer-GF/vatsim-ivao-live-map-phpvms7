@@ -30,7 +30,33 @@ New in v5.1.0:
     light/dark in the settings. Height follows the window between a
     minimum and maximum you set. Without a CARTO key the default map is
     OpenStreetMap.
-  - New settings: source "Both", VA prefix, light/dark/auto, minimum and
+  - Flight panel position (Admin -> Live Map, replaces "Layout mode"):
+    top (collapsible over the map), bottom (fixed full-width table below
+    the map, outside the map area) or off. Updating from 4.7.x without the
+    new setting derives the position from the old keys: old_style on, or
+    show_top_flights_panel explicitly off = off, otherwise top. The old
+    keys are still written.
+  - Detail box folds to its header row when a box beside it does not fit
+    (callsign opens it again); narrow board without logos; board header
+    with icons as in 4.7.9. Controller boxes and sector labels sit below
+    the controls (board, zoom, tools), as in 4.7.9.
+  - VATSIM/IVAO controllers the VATSIM Radar way: voice-frequency gate
+    117-137 MHz (ATIS outside it and observers without a voice frequency
+    do not count; observer on a voice frequency at a real position = box
+    with a grey "O"), controllers grouped by resolved facility, FIR
+    assignment by longest prefix, sub-sectors, collective positions from
+    [UIRs], _FSS = oceanic area. IVAO sectors also appear without VATSIM.
+    Fetches have a timeout and retry on the next tick; sources come via
+    jsDelivr; overlapping sector labels are nudged or hidden.
+  - NOT adopted: TRACON areas of the SimAware TRACON Project (measured
+    03.11.2026: the 1.77 MB release asset has no CORS header on GitHub,
+    jsDelivr has 1389 single files / 4.4 MB without a prefix index; only a
+    fetch through every VA's server would remain) - the green TRACON
+    shield stays. VATGlasses altitude sectors: 28 MB, CC BY-NC-SA,
+    third-party service.
+  - Data: VATSpy Data Project (vatsimnetwork/vatspy-data-project); rules
+    for controller/FIR assignment after VATSIM Radar (CC BY-NC 4.0).
+  - New settings: flight panel position, source "Both", VA prefix, light/dark/auto, minimum and
     maximum height, callsign labels on/off.
 
   UPGRADE from 5.0 or older:

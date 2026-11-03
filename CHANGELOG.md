@@ -59,11 +59,67 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
   CARTO-Stile erscheinen dann nicht im Umschalter (Hinweis im Kasten „Kartenstil“).
   *Without a CARTO key the default map is OpenStreetMap.*
 
+- **Lage der Flugtafel statt „Layout-Modus“** (Admin → Live Map, Schlüssel
+  `acars.livemap_flights_panel`): *oben* (aufklappbar über der Karte, wie 4.7.9),
+  *unten* (feste Tabelle unter der Karte, ganze Breite, außerhalb des
+  Kartenbereichs) oder *aus*. Die alten Schlüssel `acars.livemap_old_style` und
+  `acars.livemap_show_top_flights_panel` werden weiter mitgeschrieben. Fehlt die
+  neue Einstellung (Update von 4.7.x), wird die Lage aus den alten Schlüsseln
+  abgeleitet: ist `old_style` an oder `show_top_flights_panel` ausdrücklich aus,
+  gilt *aus*, sonst *oben*. Neue Teildatei `partials/tafel.blade.php`.
+  *Flight panel position replaces "Layout mode": top (collapsible over the map),
+  bottom (fixed full-width table below the map, outside the map area) or off.
+  The old keys are still written; without the new setting (update from 4.7.x)
+  the position is derived from them: old_style on, or show_top_flights_panel
+  explicitly off = off, otherwise top. New partial `partials/tafel.blade.php`.*
+- **Gestaltung:** Reicht die Höhe der rechten Spalte nicht für Kasten und
+  Detail, klappt der Detailkasten auf seine Kopfzeile ein (Klick auf das
+  Rufzeichen ▾ klappt ihn auf, der Kasten daneben geht zu); ein neuer Flug
+  schließt einen Kasten, der nicht mehr daneben passt. Die schmale Tafel zeigt
+  keine Logos, damit das Rufzeichen lesbar bleibt. Der Tafelkopf hat Symbole
+  wie in 4.7.9.
+  *Detail box collapses to its header row when a box beside it does not fit
+  (callsign ▾ expands it); narrow board without logos; board header with icons as in 4.7.9.*
+- **Kartenelemente unter den Bedienelementen:** Lotsenkästen und
+  Sektor-Etiketten liegen unter Tafel, Zoom und Werkzeugen, wie in 4.7.9.
+  *Map elements (controller boxes, sector labels) sit below the controls (board, zoom, tools), as in 4.7.9.*
+- **VATSIM/IVAO — Sprechfunk-Riegel 117–137 MHz:** Ein ATIS außerhalb dieses
+  Bereichs und ein Beobachter ohne Sprechfrequenz zählen nicht. Ein Beobachter
+  auf einer Sprechfrequenz an einem echten Platz erscheint als Kasten mit
+  grauem „O“.
+  *Voice-frequency gate 117–137 MHz: ATIS outside it and observers without a voice frequency do not count; an observer on a voice frequency at a real position shows as a box with a grey "O".*
+- **VATSIM/IVAO — Lotsen nach aufgelöster Stelle gruppiert:** CLT_GND und
+  KCLT_ATIS sind ein Kasten „KCLT“. Beim Auflösen der VATSpy-Plätze steht der
+  Funk-Präfix vor dem ICAO-Code, ein echter Platz vor einem Behelf.
+  *Controllers grouped by resolved facility (CLT_GND + KCLT_ATIS = one KCLT box).*
+- **VATSIM/IVAO — FIR-Zuordnung nach dem Verfahren von VATSIM Radar:**
+  längster Präfix, Teilsektoren, Sammelpositionen aus `[UIRs]` (die längste
+  passende), `_FSS` = ozeanische Fläche. Die alte Grobzuordnung bleibt als
+  Rückfall. IVAO läuft über denselben Weg und lädt VATSpy und Grenzen jetzt
+  selbst (Sektoren erschienen vorher nur mit VATSIM).
+  *FIR assignment as VATSIM Radar does it: longest prefix, sub-sectors, collective positions from [UIRs] (longest match), _FSS = oceanic area; old coarse matching kept as fallback; IVAO uses the same path and loads VATSpy and boundaries itself (sectors used to need VATSIM).*
+- **VATSIM/IVAO — Robustheit:** Abrufe mit Zeitgrenze (20 s), Sektoren werden
+  erst nach geladenen Grenzen geleert, VATSpy und Grenzen werden bei einem
+  Fehlschlag im nächsten Takt neu versucht. Die Quellen kommen über jsDelivr
+  (Browser-Puffer 7 Tage statt 5 min). Sektor-Etiketten werden gerückt und,
+  wenn kein Platz bleibt, ausgeblendet, statt sich zu überlappen.
+  *Fetches with a timeout, sectors cleared only after boundaries have loaded, retry on the next tick; sources via jsDelivr (7-day browser cache instead of 5 min); sector labels are nudged or hidden instead of overlapping.*
+
+### Not adopted / Bewusst nicht übernommen
+- **TRACON-Flächen aus dem SimAware-TRACON-Project.** Gemessen am 03.11.2026:
+  Das Release-Asset (1,77 MB) liefert GitHub ohne CORS-Freigabe, der Browser
+  kann es also nicht laden; jsDelivr hat nur 1389 Einzeldateien (4,4 MB) ohne
+  Präfix-Index; es bliebe nur ein Abruf über den Server jeder VA. Daher bleibt
+  der grüne TRACON-Schild.
+  *TRACON areas from the SimAware TRACON Project are not adopted. Measured 03.11.2026: the release asset (1.77 MB) is served by GitHub without a CORS header, so browsers cannot load it; jsDelivr only has 1389 single files (4.4 MB) without a prefix index; the only way left would be a fetch through every VA's server. The green TRACON shield stays.*
+- **VATGlasses-Höhensektoren:** 28 MB, Lizenz CC BY-NC-SA, Fremddienst.
+  *VATGlasses altitude sectors: 28 MB, licence CC BY-NC-SA, third-party service.*
+
 ### Added / Neu — Einstellungen (Admin → Live Map)
-- Datenquelle „Beide“, VA-Kennung (nur AeroACARS-Flüge dieser VA zeigen, z. B.
+- Lage der Flugtafel (oben / unten / aus), Datenquelle „Beide“, VA-Kennung (nur AeroACARS-Flüge dieser VA zeigen, z. B.
   `gsg`; leer = alle), Hell/Dunkel/Auto, Mindest- und Höchsthöhe der Karte,
   Rufzeichen neben den Flugzeugen ab Zoom 6 (an/aus).
-  *New settings: source "Both", VA prefix, light/dark/auto, min/max height, callsign labels.*
+  *New settings: flight panel position (top / bottom / off), source "Both", VA prefix, light/dark/auto, min/max height, callsign labels.*
 
 ### Upgrade
 1. `LiveMap/` nach `modules/` kopieren (erst hochladen, dann umbenennen, siehe INSTALL.txt).
