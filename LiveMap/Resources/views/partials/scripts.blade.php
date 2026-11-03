@@ -213,11 +213,52 @@
         // Am Boden etwas kleiner, damit sich ein voller Flughafen nicht stapelt.
         var BODEN_PHASEN = { PREFLIGHT: 1, BOARDING: 1, PUSHBACK: 1, TAXI_OUT: 1, TAXI_IN: 1, BLOCKS_ON: 1, ON_BLOCK: 1, ARRIVED: 1, PIREP_SUBMITTED: 1 };
         function amBoden(phase) { return !!BODEN_PHASEN[String(phase || '').toUpperCase()]; }
-        function sortiere(fluege) {
+        // ── Sortierung der Tafel (Spaltenkoepfe) ──
+        // Standard „phase“: Flugreihenfolge (Preflight … Arrived), in der Phase
+        // nach Rest-Strecke. Offline immer unten, fehlende Werte immer hinten,
+        // Rufzeichen mit Zahlen natuerlich (GSG7 vor GSG101). `weg(f)` liefert
+        // die Strecke ({rest}) oder null — die Flughaefen kennt nur das Widget.
+        var SORT_WERT = {
+            flug: function (f) { return f.callsign || f.id; },
+            route: function (f) { return (f.dep || '') + ' ' + (f.arr || ''); },
+            hoehe: function (f) { return f.pos ? f.pos.alt_ft : null; },
+            gs: function (f) { return f.pos ? f.pos.gs_kt : null; },
+            pilot: function (f) { return f.pilot_name || f.pilot; },
+            zeit: function (f) { return f.zeit; }
+        };
+        function phasenRang(p) {
+            p = String(p || '').toUpperCase();
+            if (p === 'ON_BLOCK') p = 'BLOCKS_ON';
+            var i = PHASE_LIST.indexOf(p);
+            return i < 0 ? PHASE_LIST.length : i;
+        }
+        function vergleicheWert(a, b) {
+            var leerA = a == null || a === '' || (typeof a === 'number' && !isFinite(a));
+            var leerB = b == null || b === '' || (typeof b === 'number' && !isFinite(b));
+            if (leerA || leerB) return leerA === leerB ? 0 : (leerA ? 2 : -2);   // ±2: hinten, egal welche Richtung
+            var c = (typeof a === 'number' && typeof b === 'number') ? a - b
+                : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+            return c < 0 ? -1 : (c > 0 ? 1 : 0);
+        }
+        function sortiereNach(fluege, schluessel, richtung, weg) {
+            var rest = function (f) { var w = weg ? weg(f) : null; return w ? w.rest : null; };
+            var dreh = richtung === 'ab' ? -1 : 1;
+            var stufe = function (c) { return Math.abs(c) === 2 ? c : dreh * c; };
+            var nachRufzeichen = function (a, b) { return vergleicheWert(SORT_WERT.flug(a), SORT_WERT.flug(b)); };
             return fluege.slice().sort(function (a, b) {
                 var off = (a.status === 'offline') - (b.status === 'offline');
                 if (off) return off;
-                return String(a.callsign || a.id).localeCompare(String(b.callsign || b.id));
+                var c;
+                if (schluessel === 'phase') {
+                    c = dreh * (phasenRang(a.phase) - phasenRang(b.phase));
+                    if (!c) c = vergleicheWert(rest(a), rest(b));
+                    if (Math.abs(c) === 2) return c;
+                } else if (schluessel === 'rest') {
+                    c = stufe(vergleicheWert(rest(a), rest(b)));
+                } else {
+                    c = stufe(vergleicheWert((SORT_WERT[schluessel] || SORT_WERT.flug)(a), (SORT_WERT[schluessel] || SORT_WERT.flug)(b)));
+                }
+                return c || nachRufzeichen(a, b);
             });
         }
 
@@ -325,7 +366,7 @@
             formatSimLabel: formatSimLabel, fmtQnhBoth: fmtQnhBoth, ageString: ageString, zahl: zahl,
             vsText: vsText, apFlags: apFlags, tonnen: tonnen,
             neben: neben, fortlaufend: fortlaufend, verschiebeNahe: verschiebeNahe,
-            fehlerIstVoruebergehend: fehlerIstVoruebergehend, filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiere: sortiere,
+            fehlerIstVoruebergehend: fehlerIstVoruebergehend, filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiereNach: sortiereNach, phasenRang: phasenRang,
             rufzeichenSchluessel: rufzeichenSchluessel, hoeheText: hoeheText, distanzNm: distanzNm, fortschritt: fortschritt,
             KLASSEN: KLASSEN, flugzeugKlasse: flugzeugKlasse, klassenInfo: klassenInfo, amBoden: amBoden,
             aufSprechfrequenz: aufSprechfrequenz, vatspyLesen: vatspyLesen, firTreffer: firTreffer,
@@ -1385,10 +1426,11 @@
                     if(typeof applyLayerVisibility==='function') applyLayerVisibility();
                     var statsEl=document.getElementById('vatsimStats'), dotEl=document.getElementById('vatsimNetDot');
                     if(statsEl) statsEl.textContent='\u2708'+pilots.length+'  \uD83C\uDFA7'+ctrlDone;
-                    if(dotEl)   dotEl.classList.add('live');
+                    if(dotEl)   { dotEl.classList.add('live'); dotEl.classList.remove('fehler'); }
                     return true;
                 }).catch(function(err){
                     console.error('[VATSIM] Fehler:',err);
+                    var dv=document.getElementById('vatsimNetDot'); if(dv){ dv.classList.remove('live'); dv.classList.add('fehler'); }
                     return false;
                 }).finally(function() {
                     vatsimFetchInFlight = false;
@@ -1404,7 +1446,7 @@
                     var clients=data.clients||{}, pilots=clients.pilots||[], atcs=clients.atcs||[];
                     var statsEl=document.getElementById('ivaoStats'), dotEl=document.getElementById('ivaoNetDot');
                     if(statsEl) statsEl.textContent='\u2708'+pilots.length+'  \uD83C\uDFA7'+atcs.length;
-                    if(dotEl)   dotEl.style.background='#fff';
+                    if(dotEl)   { dotEl.classList.add('live'); dotEl.classList.remove('fehler'); }
                     if(!showIvao) return true;
 
                     ivaoPilotsLayer.clearLayers(); ivaoCtrlLayer.clearLayers();
@@ -1453,6 +1495,7 @@
                     return true;
                 }).catch(function(err){
                     console.error('[IVAO] Error:',err);
+                    var di=document.getElementById('ivaoNetDot'); if(di){ di.classList.remove('live'); di.classList.add('fehler'); }
                     return false;
                 }).finally(function() {
                     ivaoFetchInFlight = false;
@@ -1540,8 +1583,16 @@
                 var cfg = window.LIVE_MAP_UI || {};
                 var zustand = {
                     fluege: [], geplant: [], flughaefen: {}, auswahl: null, phase: 'ALL', tab: 'aktiv',
-                    folgen: !!cfg.defaultFollowFlight, ersteAnsicht: true, fehler: null, geladen: false
+                    folgen: !!cfg.defaultFollowFlight, ersteAnsicht: true, fehler: null, geladen: false,
+                    sort: { aktiv: { k: 'phase', r: 'auf' }, geplant: { k: 'zeit', r: 'auf' } }
                 };
+                // Sortierwahl je Reiter, gilt oben und unten; im Browser gemerkt
+                try {
+                    var gemerkt = JSON.parse(localStorage.getItem('livemap_sort') || 'null');
+                    ['aktiv', 'geplant'].forEach(function (t) {
+                        if (gemerkt && gemerkt[t] && typeof gemerkt[t].k === 'string') zustand.sort[t] = { k: gemerkt[t].k, r: gemerkt[t].r === 'ab' ? 'ab' : 'auf' };
+                    });
+                } catch (e) {}
                 var marker = {};            // id → L.marker
                 var flugEbene = L.layerGroup().addTo(map);
                 var spurEbene = L.layerGroup().addTo(map);
@@ -1628,7 +1679,7 @@
                             } else {
                                 zustand.fehler = null;
                                 zustand.warnung = d.warnung || null;
-                                zustand.fluege = LM3.sortiere(d.fluege);
+                                zustand.fluege = d.fluege;
                                 if (d.flughaefen && typeof d.flughaefen === 'object') zustand.flughaefen = d.flughaefen;
                             }
                         })
@@ -1690,11 +1741,46 @@
                     d.textContent = text;
                     return d;
                 }
-                function logoHtml(url, alt) {
-                    var u = safeAssetUrl(url);
-                    if (!u) return '<span class="lm3-logo ist-leer"></span>';
-                    return '<span class="lm3-logo"><img src="' + lmEsc(u) + '" alt="' + lmEsc(alt || '') + '" loading="lazy" onerror="this.parentNode.classList.add(\'ist-leer\');this.remove();"></span>';
+                // Logo aus den Flugdaten; fehlt es (z. B. Quelle „Beide“), das der
+                // phpVMS-Airline mit den Buchstaben des Rufzeichens (AIRLINE_LOGOS).
+                function logoFuer(f) {
+                    if (f.logo) return f.logo;
+                    var k = (LM3.rufzeichenSchluessel(f.callsign).match(/^[A-Z]{3}/) || [''])[0];
+                    return (k && typeof AIRLINE_LOGOS !== 'undefined' && AIRLINE_LOGOS) ? (AIRLINE_LOGOS[k] || null) : null;
                 }
+                // Ohne Logo (oder wenn es nicht laedt): Airline-Buchstaben aus dem Rufzeichen
+                function logoHtml(url, alt, cs) {
+                    var u = safeAssetUrl(url);
+                    var k = (LM3.rufzeichenSchluessel(cs).match(/^[A-Z]+/) || [''])[0].slice(0, 3);
+                    if (!u) return '<span class="lm3-logo ist-text">' + lmEsc(k) + '</span>';
+                    return '<span class="lm3-logo" data-k="' + lmEsc(k) + '"><img src="' + lmEsc(u) + '" alt="' + lmEsc(alt || '') + '" loading="lazy" onerror="var p=this.parentNode;p.classList.add(\'ist-text\');p.textContent=p.getAttribute(\'data-k\')||\'\';"></span>';
+                }
+
+                function markiereSort() {
+                    ['aktiv', 'geplant'].forEach(function (t) {
+                        var kopf = t === 'aktiv' ? el.kopfAktiv : el.kopfGeplant, s = zustand.sort[t];
+                        if (!kopf) return;
+                        [].forEach.call(kopf.querySelectorAll('[data-sort]'), function (k) {
+                            var an = k.getAttribute('data-sort') === s.k;
+                            k.classList.toggle('ist-sortiert', an);
+                            if (an) k.setAttribute('data-richtung', s.r); else k.removeAttribute('data-richtung');
+                            k.setAttribute('aria-pressed', an ? 'true' : 'false');
+                        });
+                    });
+                }
+                [el.kopfAktiv, el.kopfGeplant].forEach(function (kopf, i) {
+                    if (!kopf) return;
+                    var t = i ? 'geplant' : 'aktiv';
+                    kopf.addEventListener('click', function (ev) {
+                        var k = ev.target.closest && ev.target.closest('[data-sort]');
+                        if (!k) return;
+                        var s = zustand.sort[t], neu = k.getAttribute('data-sort');
+                        zustand.sort[t] = { k: neu, r: s.k === neu && s.r === 'auf' ? 'ab' : 'auf' };
+                        try { localStorage.setItem('livemap_sort', JSON.stringify(zustand.sort)); } catch (e) {}
+                        markiereSort();
+                        zeichneListe();
+                    });
+                });
 
                 function zeichneListe() {
                     if (!el.liste) return;
@@ -1703,12 +1789,14 @@
                     if (!zustand.geladen) { el.liste.appendChild(leer(LM_T.laden)); return; }
                     if (zustand.tab === 'geplant') {
                         if (!zustand.geplant.length) { el.liste.appendChild(leer(LM_T.keineGeplant)); return; }
-                        zustand.geplant.forEach(function (g) { el.liste.appendChild(zeileGeplant(g)); });
+                        LM3.sortiereNach(zustand.geplant, zustand.sort.geplant.k, zustand.sort.geplant.r, null)
+                            .forEach(function (g) { el.liste.appendChild(zeileGeplant(g)); });
                     } else {
                         if (zustand.fehler && !zustand.fluege.length) return;
                         var liste = sichtbareFluege();
                         if (!liste.length) { el.liste.appendChild(leer(zustand.fluege.length ? LM_T.keineFilter : LM_T.keine)); return; }
-                        liste.forEach(function (f) { el.liste.appendChild(zeileAktiv(f)); });
+                        LM3.sortiereNach(liste, zustand.sort.aktiv.k, zustand.sort.aktiv.r, weg)
+                            .forEach(function (f) { el.liste.appendChild(zeileAktiv(f)); });
                     }
                     el.liste.scrollTop = scroll;
                 }
@@ -1723,11 +1811,13 @@
                     b.setAttribute('role', 'listitem');
                     b.style.setProperty('--ph', LM3.phaseColor(phase));
                     b.innerHTML =
-                        '<span class="lm3-flug">' + logoHtml(f.logo, '') + '<b>' + lmEsc(f.callsign || (LM_T.pilot + ' ' + f.pilot)) + '</b></span>' +
+                        '<span class="lm3-flug">' + logoHtml(logoFuer(f), '', f.callsign) + '<b>' + lmEsc(f.callsign || (LM_T.pilot + ' ' + f.pilot)) + '</b></span>' +
                         '<span>' + lmEsc(f.dep || '?') + ' <span class="lm3-pfeil">›</span> ' + lmEsc(f.arr || '?') + '</span>' +
                         '<span class="lm3-sp-alt">' + lmEsc(LM3.hoeheText(pos.alt_ft, LM_SPRACHE)) + '</span>' +
                         '<span class="lm3-sp-gs">' + (pos.gs_kt != null ? Math.round(pos.gs_kt) : '') + '</span>' +
-                        '<span class="lm3-sp-dist">' + (w ? Math.round(w.geflogen) + ' / ' + Math.round(w.gesamt) : '') + '</span>' +
+                        // Rest-Strecke und Fortschritt (Balken = geflogener Anteil)
+                        '<span class="lm3-sp-dist">' + (w ? '<span class="lm3-rest">' + Math.round(w.rest) + ' nm</span>' +
+                            '<i class="lm3-fort" aria-hidden="true"><i style="width:' + Math.round(w.anteil * 100) + '%"></i></i>' : '') + '</span>' +
                         '<span class="lm3-sp-phase"><span class="lm3-pille">' + lmEsc(LM3.phaseLabel(phase)) + '</span></span>' +
                         '<span class="lm3-sp-pilot">' + lmEsc(f.pilot_name || '') + '</span>';
                     b.addEventListener('click', function () { waehle(f.id, true); });
@@ -1738,7 +1828,7 @@
                     d.className = 'lm3-zeile lm3-g-plan';
                     d.setAttribute('role', 'listitem');
                     d.innerHTML =
-                        '<span class="lm3-flug">' + logoHtml(g.logo, '') + '<b>' + lmEsc(g.callsign || '—') + '</b></span>' +
+                        '<span class="lm3-flug">' + logoHtml(logoFuer(g), '', g.callsign) + '<b>' + lmEsc(g.callsign || '—') + '</b></span>' +
                         '<span>' + lmEsc(g.dep || '?') + ' <span class="lm3-pfeil">›</span> ' + lmEsc(g.arr || '?') + '</span>' +
                         '<span class="lm3-sp-zeit">' + lmEsc(g.zeit || '') + '</span>' +
                         '<span class="lm3-sp-pilot">' + lmEsc(g.pilot) + '</span>';
@@ -1789,7 +1879,10 @@
                             m.setLatLng(lage);
                             m.setIcon(icon(f, gew));
                         }
-                        m.setZIndexOffset(gew ? 1000 : 0);
+                        // VA-Flieger immer ueber Netz-Symbolen (Lotsen 400–500): sonst faengt die
+                        // Klickflaeche eines Platzsymbols den Klick auf das Flugzeug ab (gemessen
+                        // 03.11.2026: GSG101 unter LFJL, GSG220 unter EDDV).
+                        m.setZIndexOffset(gew ? 11000 : 10000);
                     });
                     Object.keys(marker).forEach(function (id) {
                         if (!sichtbar[id]) { flugEbene.removeLayer(marker[id]); delete marker[id]; }
@@ -1930,7 +2023,7 @@
                     var warn = (pos.stall_warning ? '<span class="lm3-flag">⚠ STALL</span>' : '') + (pos.overspeed_warning ? '<span class="lm3-flag">⚠ OVERSPEED</span>' : '');
                     var mehrOffen = !!(el.detail.querySelector('details') && el.detail.querySelector('details').open);
 
-                    var logoUrl = safeAssetUrl(f.logo);
+                    var logoUrl = safeAssetUrl(logoFuer(f));
                     var scrollVorher = el.detail.hidden ? 0 : el.detail.scrollTop;
                     el.detail.style.setProperty('--ph', LM3.phaseColor(phase));
                     el.detail.innerHTML =
@@ -2088,6 +2181,7 @@
                     setzeTafel(offen);
                 });
 
+                markiereSort();
                 setzeTab('aktiv');
                 zeichneKopf();
                 zeichneListe();
@@ -2289,6 +2383,14 @@
                         var r = e.getBoundingClientRect();
                         if (r.height > 0 && r.height < window.innerHeight / 2 && r.bottom >= window.innerHeight - 1) untenFest = Math.max(untenFest, r.height);
                     });
+                    // tiefer geschachtelte feste Leiste unten (wie messeObenFrei)
+                    for (var e = document.elementFromPoint && document.elementFromPoint(window.innerWidth / 2, window.innerHeight - 2);
+                        e && e !== document.body && !wrap.contains(e); e = e.parentElement) {
+                        if (getComputedStyle(e).position !== 'fixed') continue;
+                        var r = e.getBoundingClientRect();
+                        if (r.height < window.innerHeight / 2) untenFest = Math.max(untenFest, r.height);
+                        break;
+                    }
                     // Tafel unten: ihre Kopfzeile soll noch im Fenster stehen, damit man
                     // sieht, dass unter der Karte die Flugliste kommt.
                     var kopfUnten = wrap.classList.contains('lm3--tafel-unten') && document.getElementById('lm3-tafel-kopf');
@@ -2312,6 +2414,21 @@
                         if (r.right <= k.left || r.left >= k.right) return;
                         frei = Math.max(frei, Math.min(r.bottom - k.top, k.height / 2));
                     });
+                    // Tiefer geschachtelte feste Koepfe (SPTheme: .page-header ist kein Kind
+                    // von <body>): was an der Kartenoberkante obenauf liegt, bis zum festen
+                    // Vorfahren hochlaufen.
+                    if (k.top >= 0 && k.top < window.innerHeight && document.elementFromPoint) {
+                        [0.2, 0.5, 0.8].forEach(function (anteil) {
+                            var e = document.elementFromPoint(k.left + k.width * anteil, k.top + 2);
+                            for (; e && e !== document.body && !wrap.contains(e); e = e.parentElement) {
+                                var pos = getComputedStyle(e).position;
+                                if (pos !== 'fixed' && pos !== 'sticky') continue;
+                                var r = e.getBoundingClientRect();
+                                if (r.height < window.innerHeight / 2) frei = Math.max(frei, Math.min(r.bottom - k.top, k.height / 2));
+                                break;
+                            }
+                        });
+                    }
                     wrap.style.setProperty('--lm-oben-frei', Math.max(0, Math.round(frei)) + 'px');
                 }
                 // Hell/Dunkel: Einstellung, sonst das Theme (Seven und SPTheme setzen
@@ -2461,6 +2578,11 @@
 
                 // ── Netz-Schalter (wie bisher) ──
                 var btnNetVatsim = document.getElementById('btnNetVatsim'), btnNetIvao = document.getElementById('btnNetIvao');
+                // Punkt am Netz-Knopf: gruen, solange VATSIM oder IVAO eingeschaltet ist
+                function netzPunkt() { var d = document.getElementById('vatsimDot'); if (d) d.classList.toggle('live', showVatsim || showIvao); }
+                netzPunkt();
+                // nach dem eigentlichen Umschalten (dieser Lauscher haengt davor)
+                [btnNetVatsim, btnNetIvao].forEach(function (b) { if (b) b.addEventListener('click', function () { setTimeout(netzPunkt, 0); }); });
                 if (btnNetVatsim) { btnNetVatsim.classList.toggle('active', showVatsim); btnNetVatsim.addEventListener('click', function () { showVatsim = !showVatsim; btnNetVatsim.classList.toggle('active', showVatsim); if (!showVatsim) { map.removeLayer(vatsimPilotsLayer); map.removeLayer(vatsimCtrlLayer); map.removeLayer(vatsimSectorLayer); } else { loadVatsim(map); applyLayerVisibility(); } }); }
                 if (btnNetIvao) { btnNetIvao.classList.toggle('active', showIvao); btnNetIvao.addEventListener('click', function () { showIvao = !showIvao; btnNetIvao.classList.toggle('active', showIvao); if (!showIvao) { map.removeLayer(ivaoPilotsLayer); map.removeLayer(ivaoCtrlLayer); map.removeLayer(ivaoSectorLayer); } else { loadIvao(map); applyLayerVisibility(); } }); }
                 var btnPilots = document.getElementById('btnVatsimPilots'), btnCtrl = document.getElementById('btnVatsimCtrl'), btnSectors = document.getElementById('btnVatsimSectors');

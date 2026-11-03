@@ -168,9 +168,42 @@ test('Geplante Fluege ohne die, die schon live fliegen', () => {
   assert.deepEqual(klar(LM3.geplanteOhneAktive(geplant, aktiv).map((g) => g.callsign)), ['CFG1', '']);
 });
 
-test('Sortierung: offline nach unten, sonst nach Rufzeichen', () => {
-  const s = LM3.sortiere([{ callsign: 'B', status: 'offline' }, { callsign: 'C', status: 'online' }, { callsign: 'A', status: 'online' }]);
-  assert.deepEqual(klar(s.map((x) => x.callsign)), ['A', 'C', 'B']);
+// Sortierung der Tafel (Thomas 03.11.2026: „blöd sortiert“ — GSG7 stand nach GSG650)
+const restVon = (f) => (f.rest == null ? null : { rest: f.rest });
+const cs = (l) => klar(l.map((x) => x.callsign));
+
+test('Sortierung Standard: Phase in Flugreihenfolge, darin Rest-Strecke, offline unten', () => {
+  const fl = [
+    { callsign: 'X1', phase: 'CRUISE', rest: 900 },
+    { callsign: 'X2', phase: 'TAXI_OUT', rest: null },
+    { callsign: 'X3', phase: 'CRUISE', rest: 100, status: 'offline' },
+    { callsign: 'X4', phase: 'APPROACH', rest: 20 },
+    { callsign: 'X5', phase: 'CRUISE', rest: 300 },
+    { callsign: 'X6', phase: 'GANZ_NEU', rest: 5 },
+    { callsign: 'X7', phase: 'ON_BLOCK', rest: null }
+  ];
+  assert.deepEqual(cs(LM3.sortiereNach(fl, 'phase', 'auf', restVon)), ['X2', 'X5', 'X1', 'X4', 'X7', 'X6', 'X3']);
+  // Gegenprobe: umgedreht — Phasen rueckwaerts, offline bleibt trotzdem unten
+  assert.deepEqual(cs(LM3.sortiereNach(fl, 'phase', 'ab', restVon)), ['X6', 'X7', 'X4', 'X5', 'X1', 'X2', 'X3']);
+  assert.equal(LM3.phasenRang('ON_BLOCK'), LM3.phasenRang('BLOCKS_ON'));
+  assert.ok(LM3.phasenRang('LEVEL') > LM3.phasenRang('PIREP_SUBMITTED'), 'unbekannt ans Ende, nicht nach vorn');
+});
+
+test('Sortierung: Rufzeichen mit Zahlen natuerlich, fehlende Werte immer hinten', () => {
+  const fl = [{ callsign: 'GSG650' }, { callsign: 'GSG7' }, { callsign: 'GSG101' }];
+  assert.deepEqual(cs(LM3.sortiereNach(fl, 'flug', 'auf', null)), ['GSG7', 'GSG101', 'GSG650']);
+  assert.deepEqual(cs(LM3.sortiereNach(fl, 'flug', 'ab', null)), ['GSG650', 'GSG101', 'GSG7']);
+  const h = [{ callsign: 'A', pos: { alt_ft: 3000 } }, { callsign: 'B', pos: null }, { callsign: 'C', pos: { alt_ft: 35000 } }];
+  assert.deepEqual(cs(LM3.sortiereNach(h, 'hoehe', 'auf', null)), ['A', 'C', 'B']);
+  assert.deepEqual(cs(LM3.sortiereNach(h, 'hoehe', 'ab', null)), ['C', 'A', 'B']);
+  // Zahlendifferenz 2 darf nicht als „fehlt“ gelten
+  const g = [{ callsign: 'A', pos: { gs_kt: 512 } }, { callsign: 'B', pos: { gs_kt: 510 } }];
+  assert.deepEqual(cs(LM3.sortiereNach(g, 'gs', 'ab', null)), ['A', 'B']);
+  assert.deepEqual(cs(LM3.sortiereNach(g, 'gs', 'auf', null)), ['B', 'A']);
+  // Gleichstand: Rufzeichen entscheidet, Eingabe bleibt unveraendert
+  const gleich = [{ callsign: 'Z', pos: { gs_kt: 1 } }, { callsign: 'Y', pos: { gs_kt: 1 } }];
+  assert.deepEqual(cs(LM3.sortiereNach(gleich, 'gs', 'ab', null)), ['Y', 'Z']);
+  assert.deepEqual(cs(gleich), ['Z', 'Y']);
 });
 
 test('Kurze Stoerung haelt den letzten Stand, falscher Schluessel nicht', () => {

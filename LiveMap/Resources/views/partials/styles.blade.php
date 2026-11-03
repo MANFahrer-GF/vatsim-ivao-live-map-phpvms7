@@ -8,23 +8,30 @@
 <style>
                     /* ══════════════════════════════════════════════════════
                        Live-Karte 5.1 — alle eigenen Regeln unter .lm3
-                       (#lm-root). Optik wie 4.7.9, Farben aus den Einstellungen.
+                       (#lm-root). kompakt wie 4.7.9, Optik 5.1 neu, Farben aus den Einstellungen.
                        ══════════════════════════════════════════════════════ */
                     .lm-hidden { display: none !important; }
                     .lm3 .lm-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
+                    /* Neugestaltung 5.1 (Thomas 03.11.2026: „altbacken“): flache Flaechen mit
+                       Haarlinie statt Verlaufsbalken, ein Akzent, Werkzeuge als eine Gruppe,
+                       getoente Phasen-Pillen. Schriftgroessen und Zeilenhoehen wie 4.7.9. */
                     .lm3 {
                         --lm-primary: {{ $flightsHeaderStart }};
                         --lm-accent: {{ $flightsHeaderEnd }};
                         --lm-flaeche: {{ $boxBackgroundRgba }};
-                        --lm-flaeche-2: #f6f8fb;
-                        --lm-text: #1a2a4a;
-                        --lm-text-2: #667085;
-                        --lm-linie: #e6eaf0;
-                        --lm-zeile-hover: #f0f6ff;
-                        --lm-gewaehlt: #e8f0fd;
-                        --lm-schatten: 0 6px 24px rgba(0,0,0,.22), 0 2px 6px rgba(0,0,0,.10);
+                        --lm-flaeche-2: #f3f5f8;
+                        --lm-text: #101c2e;
+                        --lm-text-2: #5d6b7c;
+                        --lm-linie: rgba(16, 28, 46, .09);
+                        --lm-zeile-hover: rgba(47, 111, 228, .06);
+                        --lm-gewaehlt: rgba(47, 111, 228, .12);
+                        /* Akzent = Verwaltungsfarbe „Kopf der Flugliste“ (frueher der Verlaufsbalken) */
+                        --lm-akzent: var(--lm-primary);
+                        --lm-akzent-text: #fff;
+                        --lm-schatten: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px -6px rgba(16,24,40,.22);
                         --lm-gold: #E8B131;
+                        --lm-r: 12px;
                         --lm-rand: 10px;
                         --lm-unten: 26px;   /* Platz fuer die Leaflet-Quellenzeile */
                         --lm-zoom: 44px;    /* Spalte der Zoom-Knoepfe */
@@ -42,14 +49,16 @@
                         text-align: left;
                     }
                     .lm3.ist-dunkel {
-                        --lm-flaeche: rgba(22, 30, 44, 0.97);
-                        --lm-flaeche-2: #1e2530;
-                        --lm-text: #e3e9f2;
-                        --lm-text-2: #8b9bb0;
-                        --lm-linie: #2a3444;
-                        --lm-zeile-hover: #1e2a3a;
-                        --lm-gewaehlt: #1d2d45;
-                        --lm-schatten: 0 6px 24px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.35);
+                        --lm-flaeche: rgba(20, 27, 39, 0.94);
+                        --lm-flaeche-2: rgba(255, 255, 255, .04);
+                        --lm-text: #e6ebf2;
+                        --lm-text-2: #8d9bae;
+                        --lm-linie: rgba(255, 255, 255, .08);
+                        --lm-zeile-hover: rgba(124, 184, 240, .07);
+                        --lm-gewaehlt: rgba(124, 184, 240, .14);
+                        --lm-akzent: #7cb8f0;
+                        --lm-akzent-text: #0b1f3a;
+                        --lm-schatten: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -6px rgba(0,0,0,.6);
                     }
                     .lm3 *, .lm3 *::before, .lm3 *::after { box-sizing: border-box; }
                     /* Die Kartenflaeche traegt die Hoehe; Startwert, das Skript setzt sie aus
@@ -59,7 +68,12 @@
                     .lm3.ist-dunkel #map { background: #0d1726; }
                     .lm3 .dark-map { filter: brightness(0.55) contrast(1.15) saturate(1.05); }
                     .lm3 button { font: inherit; margin: 0; }
-                    .lm3 button:focus-visible, .lm3 select:focus-visible, .lm3 a:focus-visible { outline: 2px solid var(--lm-gold); outline-offset: 2px; }
+                    .lm3 button:focus-visible, .lm3 select:focus-visible, .lm3 a:focus-visible { outline: 2px solid var(--lm-akzent); outline-offset: 2px; }
+
+                    /* Schwebende Flaechen ueber der Karte: halbdurchsichtig mit Weichzeichner */
+                    .lm3-ui .lm3-tafel, .lm3-werkzeuge, .lm3-box, .lm3-detail, .lm3 .leaflet-control-zoom {
+                        -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
+                    }
 
                     /* ── Raster ueber der Karte ── */
                     .lm3-ui {
@@ -80,53 +94,67 @@
                     }
                     .lm3-tafel, .lm3-wz, .lm3-box, .lm3-detail { pointer-events: auto; }
 
-                    /* ── Tafel (wie 4.7.9: oben mittig, eingeklappt nur die Kopfzeile) ── */
+                    /* ── Tafel oben: schwebende Leiste, aufklappbar (wie 4.7.9) ── */
                     .lm3-tafel {
                         display: flex; flex-direction: column; max-height: 100%; max-width: 100%;
                         width: max-content; min-width: 0;
-                        border-radius: 10px; box-shadow: var(--lm-schatten); overflow: hidden;
-                        background: var(--lm-flaeche);
-                        --lm-sp: 148px 104px 60px 44px 84px 92px minmax(72px, 1fr);
+                        border-radius: var(--lm-r); box-shadow: var(--lm-schatten); overflow: hidden;
+                        background: var(--lm-flaeche); border: 1px solid var(--lm-linie);
+                        --lm-sp: 148px 104px 60px 44px 110px 92px minmax(72px, 1fr);
                     }
                     /* Lage „aus“: das Skript setzt hidden; display:flex oben darf es nicht ueberstimmen */
                     .lm3 .lm3-tafel[hidden] { display: none !important; }
                     .lm3-tafel-kopf {
-                        flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
-                        padding: 9px 16px; border: 0; cursor: pointer; user-select: none; width: 100%;
-                        background: linear-gradient(135deg, var(--lm-primary) 0%, var(--lm-accent) 100%); color: #fff;
-                        font-size: 13px; font-weight: 600; letter-spacing: .2px; white-space: nowrap;
+                        flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
+                        padding: 9px 12px 9px 14px; border: 0; cursor: pointer; user-select: none; width: 100%;
+                        background: transparent; color: var(--lm-text);
+                        font-size: 12.5px; font-weight: 600; white-space: nowrap;
                     }
-                    .lm3-kopf-stat { display: inline-flex; align-items: center; gap: 6px; }
-                    .lm3-kopf-stat svg { width: 14px; height: 14px; fill: currentColor; opacity: .85; flex: 0 0 auto; }
-                    .lm3-kopf-stat b { font-weight: 800; font-size: 15px; }
-                    .lm3-n-aktiv { color: #6fcf7c; }
-                    .lm3-n-geplant { color: #7cb8f0; }
-                    .lm3-kopf-trenner { width: 1px; height: 18px; background: rgba(255,255,255,.25); }
-                    .lm3-chevron { margin-left: auto; font-size: 16px; color: rgba(255,255,255,.7); transition: transform .2s; }
+                    .lm3-tafel-kopf:hover { background: var(--lm-zeile-hover); }
+                    .lm3-kopf-stat { display: inline-flex; align-items: center; gap: 7px; color: var(--lm-text-2); }
+                    .lm3-kopf-stat b { font-weight: 750; font-size: 14px; color: var(--lm-text); }
+                    .lm3-kopf-trenner { width: 1px; height: 16px; background: var(--lm-linie); }
+                    .lm3-chevron { margin-left: auto; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 6px; color: var(--lm-text-2); transition: transform .2s; }
+                    .lm3-chevron svg { width: 16px; height: 16px; }
                     .lm3-tafel-kopf[aria-expanded="true"] .lm3-chevron { transform: rotate(180deg); }
-                    .lm3-punkt { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.45); display: inline-block; }
-                    .lm3-punkt.ist-live { background: #6fcf7c; box-shadow: 0 0 0 3px rgba(111,207,124,.25); }
+                    .lm3-tafel-kopf[aria-expanded="true"] { border-bottom: 1px solid var(--lm-linie); }
+                    .lm3-punkt { width: 8px; height: 8px; border-radius: 50%; background: #98a2b3; display: inline-block; flex: 0 0 auto; }
+                    .lm3-punkt.ist-live { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.22); animation: lm3-puls 2.4s ease-in-out infinite; }
                     .lm3-punkt.ist-fehler { background: #ef4444; }
+                    @keyframes lm3-puls { 50% { box-shadow: 0 0 0 5px rgba(34,197,94,.08); } }
+                    @media (prefers-reduced-motion: reduce) { .lm3-punkt.ist-live { animation: none; } }
                     .lm3-tafel-inhalt { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
                     .lm3-tafel-inhalt[hidden] { display: none; }
 
-                    .lm3-reiter { display: flex; align-items: stretch; border-bottom: 1px solid var(--lm-linie); background: var(--lm-flaeche-2); flex: 0 0 auto; }
+                    /* Reiter als kompakte Segmente; unten ist diese Zeile der Kopf */
+                    .lm3-reiter { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--lm-linie); flex: 0 0 auto; }
+                    .lm3-reiter > .lm3-punkt { margin: 0 6px 0 4px; }
                     .lm3-reiter [role="tab"] {
-                        flex: 1 1 0; padding: 8px 12px; border: 0; white-space: nowrap; border-bottom: 2px solid transparent; background: none; cursor: pointer;
-                        font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--lm-text-2);
+                        flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 8px;
+                        white-space: nowrap; background: none; cursor: pointer;
+                        font-size: 12px; font-weight: 600; color: var(--lm-text-2);
                     }
-                    .lm3-reiter [role="tab"][aria-selected="true"] { color: var(--lm-text); border-bottom-color: #3498db; }
-                    .lm3-tabzahl { display: inline-block; font-size: 9px; font-weight: 800; border-radius: 999px; padding: 2px 7px; margin-left: 4px; background: var(--lm-linie); color: var(--lm-text-2); }
-                    [aria-selected="true"] > .lm3-tabzahl { background: #3498db; color: #fff; }
-                    .lm3-filter { display: flex; align-items: center; padding: 0 8px; margin: 0; }
+                    .lm3-reiter [role="tab"]:hover { color: var(--lm-text); background: var(--lm-zeile-hover); }
+                    .lm3-reiter [role="tab"][aria-selected="true"] { color: var(--lm-text); background: var(--lm-gewaehlt); }
+                    .lm3-tabzahl { display: inline-block; min-width: 18px; text-align: center; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 6px; background: var(--lm-flaeche-2); color: var(--lm-text-2); }
+                    [aria-selected="true"] > .lm3-tabzahl { background: var(--lm-akzent); color: var(--lm-akzent-text); }
+                    .lm3-filter { display: flex; align-items: center; margin: 0 0 0 auto; padding-left: 8px; }
                     .lm3-filter[hidden] { display: none; }
-                    .lm3-filter select { font-size: 11px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--lm-linie); background: var(--lm-flaeche); color: var(--lm-text); max-width: 120px; }
+                    .lm3-filter select { font-size: 11.5px; padding: 3px 6px; border-radius: 7px; border: 1px solid var(--lm-linie); background: var(--lm-flaeche-2); color: var(--lm-text); max-width: 130px; }
+                    .lm3.ist-dunkel .lm3-filter select { color-scheme: dark; }
 
                     .lm3-thead {
-                        flex: 0 0 auto; padding: 6px 14px; background: var(--lm-flaeche-2); border-bottom: 1px solid var(--lm-linie);
-                        font-size: 10px; font-weight: 800; color: var(--lm-text-2); letter-spacing: .6px; text-transform: uppercase;
+                        flex: 0 0 auto; padding: 5px 14px; border-bottom: 1px solid var(--lm-linie);
+                        font-size: 10.5px; font-weight: 600; color: var(--lm-text-2); letter-spacing: .05em; text-transform: uppercase;
                     }
                     .lm3-thead[hidden] { display: none; }
+                    .lm3-th {
+                        display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 2px 0; border: 0; background: none;
+                        color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden;
+                    }
+                    .lm3-th:hover, .lm3-th.ist-sortiert { color: var(--lm-text); }
+                    .lm3-th.ist-sortiert::after { content: ''; flex: 0 0 auto; border: 4px solid transparent; border-top-color: currentColor; margin-top: 4px; }
+                    .lm3-th.ist-sortiert[data-richtung="auf"]::after { border-top-color: transparent; border-bottom-color: currentColor; margin: 0 0 4px; }
                     .lm3-g-akt { display: grid; grid-template-columns: var(--lm-sp); column-gap: 6px; align-items: center; }
                     .lm3-g-plan { display: grid; grid-template-columns: 148px 104px 70px minmax(72px, 1fr); column-gap: 6px; align-items: center; }
                     .lm3-zeilen { overflow-y: auto; overflow-x: hidden; min-height: 0; max-height: 196px; flex: 0 1 auto; }
@@ -136,151 +164,186 @@
                     }
                     .lm3-zeile:last-child { border-bottom: 0; }
                     .lm3-zeile:hover { background: var(--lm-zeile-hover); }
-                    .lm3-zeile.ist-gewaehlt { background: var(--lm-gewaehlt); }
-                    .lm3-zeile.ist-offline { opacity: .55; }
+                    .lm3-zeile.ist-gewaehlt { background: var(--lm-gewaehlt); box-shadow: inset 3px 0 0 var(--lm-akzent); }
+                    .lm3-zeile.ist-offline { opacity: .5; }
                     .lm3-zeile.lm3-g-plan { cursor: default; }
                     .lm3-zeile > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                    .lm3-flug { display: flex !important; align-items: center; gap: 6px; }
+                    .lm3-flug { display: flex !important; align-items: center; gap: 8px; }
                     .lm3-flug b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
-                    .lm3-logo { width: 40px; height: 18px; flex: 0 0 40px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 4px; border: 1px solid rgba(0,0,0,.07); overflow: hidden; }
+                    .lm3-logo { width: 40px; height: 18px; flex: 0 0 40px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(16,28,46,.08); overflow: hidden; }
                     .lm3-logo img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-                    .lm3-logo.ist-leer { background: transparent; border-color: transparent; }
+                    .lm3-logo.ist-text { background: var(--lm-flaeche-2); box-shadow: inset 0 0 0 1px var(--lm-linie); color: var(--lm-text-2); font-size: 9.5px; font-weight: 800; letter-spacing: .06em; }
                     .lm3-pfeil { color: var(--lm-text-2); }
-                    .lm3-pille { display: inline-block; max-width: 100%; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: var(--ph, #94a3b8); color: #0b1f3a; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+                    /* Phase: getoente Pille mit Punkt; ohne color-mix volle Farbe */
+                    .lm3-pille {
+                        display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 2px 8px 2px 7px; border-radius: 999px;
+                        font-size: 11px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+                        background: var(--ph, #94a3b8); color: #0b1f3a;
+                        background: color-mix(in srgb, var(--ph, #94a3b8) 16%, transparent);
+                        color: color-mix(in srgb, var(--ph, #94a3b8) 62%, var(--lm-text));
+                    }
+                    .lm3-pille::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ph, #94a3b8); flex: 0 0 auto; }
+                    .lm3-zeile > .lm3-sp-dist { display: flex; align-items: center; gap: 8px; }
+                    .lm3-rest { flex: 0 0 auto; min-width: 54px; }
+                    .lm3-fort { display: block; flex: 1 1 auto; min-width: 0; max-width: 56px; height: 4px; border-radius: 2px; background: var(--lm-linie); overflow: hidden; }
+                    .lm3-fort > i { display: block; height: 100%; border-radius: 2px; background: var(--ph, #10b981); }
                     .lm3-leer { padding: 14px 12px; margin: 0; text-align: center; font-size: 11.5px; color: var(--lm-text-2); }
                     .lm3-meldung { margin: 0; padding: 7px 14px; font-size: 11.5px; color: #b42318; background: #fef3f2; border-bottom: 1px solid var(--lm-linie); }
                     .lm3.ist-dunkel .lm3-meldung { background: #3a1d1d; color: #fda29b; }
                     .lm3-meldung[hidden] { display: none; }
                     .lm3-nochmal { margin-left: 8px; border: 1px solid currentColor; background: none; color: inherit; border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 11px; }
 
-                    /* ── Tafel unten: feste Tabelle unter der Karte, ganze Breite ── */
+                    /* ── Tafel unten: Liste unter der Karte, ganze Breite, nichts abgeschnitten ── */
                     .lm3-unten { container-type: inline-size; container-name: lmmitte; border-top: 1px solid var(--lm-linie); background: var(--lm-flaeche); }
                     .lm3-unten .lm3-tafel {
-                        width: 100%; max-width: none; max-height: none; border-radius: 0; box-shadow: none;
-                        --lm-sp: minmax(150px, 1.4fr) minmax(110px, 1fr) 70px 54px 96px 110px minmax(100px, 1.2fr);
+                        width: 100%; max-width: none; max-height: none; border-radius: 0; box-shadow: none; border: 0; background: transparent;
+                        --lm-sp: minmax(150px, 1.4fr) minmax(110px, 1fr) 70px 54px 124px 120px minmax(100px, 1.2fr);
                     }
-                    .lm3-unten .lm3-tafel-kopf { cursor: default; user-select: auto; }
+                    .lm3-unten .lm3-reiter { padding: 8px 10px; }
+                    .lm3-unten .lm3-thead { background: var(--lm-flaeche-2); }
                     .lm3-unten .lm3-g-plan { grid-template-columns: minmax(150px, 1.4fr) minmax(110px, 1fr) 96px minmax(100px, 1.2fr); }
-                    .lm3-unten .lm3-zeilen { max-height: 360px; }
+                    .lm3-unten .lm3-zeilen { max-height: none; overflow: visible; }
 
                     /* Tafel gibt Spalten ab, statt ueber die rechte Spalte zu wachsen
                        (Selektoren mit .lm3 davor, damit sie auch die Tafel unten treffen) */
                     @container lmmitte (max-width: 720px) {
-                        .lm3 .lm3-tafel { --lm-sp: 140px 100px 60px 44px 84px minmax(80px, 1fr); }
+                        .lm3 .lm3-tafel { --lm-sp: 140px 100px 60px 44px 110px minmax(80px, 1fr); }
                         .lm3 .lm3-tafel .lm3-sp-pilot { display: none; }
                     }
                     @container lmmitte (max-width: 600px) {
                         .lm3 .lm3-tafel { --lm-sp: 140px 100px 60px 44px minmax(80px, 1fr); }
-                        .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist { display: none; }
+                        .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist { display: none !important; }
                         .lm3 .lm3-g-plan { grid-template-columns: 140px 100px minmax(60px, 1fr); }
                         .lm3 .lm3-g-plan .lm3-sp-pilot { display: none; }
                     }
                     @container lmmitte (max-width: 480px) {
-                        .lm3 .lm3-tafel { --lm-sp: minmax(0, 1fr) 96px minmax(70px, 88px); }
-                        .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist, .lm3-tafel .lm3-sp-alt, .lm3-tafel .lm3-sp-gs { display: none; }
+                        .lm3 .lm3-tafel { --lm-sp: minmax(0, 1fr) 96px minmax(70px, 96px); }
+                        .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist, .lm3-tafel .lm3-sp-alt, .lm3-tafel .lm3-sp-gs { display: none !important; }
                         .lm3 .lm3-g-plan { grid-template-columns: minmax(0, 1fr) 96px; }
                         .lm3 .lm3-g-plan .lm3-sp-zeit { display: none; }
                         .lm3 .lm3-tafel-kopf { gap: 10px; padding: 9px 12px; }
-                        .lm3 .lm3-reiter [role="tab"] { padding: 8px 6px; }
+                        .lm3 .lm3-reiter [role="tab"] { padding: 5px 7px; }
                         /* Rufzeichen vor Logo: schmal bleibt das Rufzeichen lesbar */
                         .lm3 .lm3-zeile .lm3-logo { display: none; }
                     }
 
-                    /* ── Werkzeuge (oben rechts) ── */
-                    .lm3-werkzeuge { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 6px; pointer-events: none; }
+                    /* ── Werkzeuge (oben rechts): eine Knopfgruppe ── */
+                    .lm3-werkzeuge {
+                        flex: 0 0 auto; align-self: flex-end; display: inline-flex; gap: 2px; padding: 3px;
+                        border-radius: var(--lm-r); background: var(--lm-flaeche); border: 1px solid var(--lm-linie); box-shadow: var(--lm-schatten);
+                        pointer-events: auto;
+                    }
                     .lm3-wz {
                         position: relative; display: inline-flex; align-items: center; justify-content: center;
-                        width: 36px; height: 36px; padding: 0; border-radius: 10px; cursor: pointer;
-                        border: 1px solid var(--lm-linie); background: var(--lm-flaeche); color: var(--lm-text); box-shadow: var(--lm-schatten);
+                        width: 34px; height: 34px; padding: 0; border-radius: 9px; cursor: pointer;
+                        border: 0; background: transparent; color: var(--lm-text-2);
+                        transition: background-color .15s, color .15s;
                     }
                     .lm3-wz svg { width: 18px; height: 18px; }
                     .lm3-wz-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-                    .lm3-wz:hover { border-color: var(--lm-gold); }
-                    .lm3-wz[aria-expanded="true"], .lm3-wz.active { background: var(--lm-primary); border-color: var(--lm-primary); color: #fff; }
+                    .lm3-wz:hover { background: var(--lm-zeile-hover); color: var(--lm-text); }
+                    .lm3-wz[aria-expanded="true"], .lm3-wz.active { background: var(--lm-akzent); color: var(--lm-akzent-text); }
                     .lm3-wz[hidden] { display: none; }
-                    .lm3-wz .vatsim-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #98a2b3; }
+                    .lm3-wz .vatsim-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 2px var(--lm-flaeche); display: none; }
+                    .lm3-wz .vatsim-dot.live { display: block; }
 
                     /* ── Kaesten Netz / Wetter / Kartenstil ── */
                     .lm3-box {
                         flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 12px;
-                        background: var(--lm-flaeche); border-radius: 10px; box-shadow: var(--lm-schatten); border: 1px solid var(--lm-linie);
+                        background: var(--lm-flaeche); border-radius: var(--lm-r); box-shadow: var(--lm-schatten); border: 1px solid var(--lm-linie);
                     }
                     .lm3-box[hidden] { display: none; }
-                    .lm3-box-titel { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--lm-text-2); margin-bottom: 8px; }
+                    .lm3-box-titel { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--lm-text-2); margin-bottom: 8px; }
                     .lm3-reihe { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
                     .lm3-raster { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
                     .lm3-breit { grid-column: 1 / -1; }
                     .lm3-schalter {
                         display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-                        min-height: 30px; padding: 4px 8px; border-radius: 7px; cursor: pointer;
-                        border: 1px solid var(--lm-linie); background: transparent; color: var(--lm-text); font-size: 12px; font-weight: 600;
+                        min-height: 30px; padding: 4px 8px; border-radius: 8px; cursor: pointer;
+                        border: 1px solid var(--lm-linie); background: var(--lm-flaeche-2); color: var(--lm-text); font-size: 12px; font-weight: 600;
+                        transition: background-color .15s, border-color .15s;
                     }
-                    .lm3-schalter:hover { border-color: var(--lm-gold); }
-                    .lm3-schalter.active { background: var(--lm-primary); border-color: var(--lm-primary); color: #fff; }
-                    .lm3.ist-dunkel .lm3-schalter.active { background: #7cb8f0; border-color: #7cb8f0; color: #0b1f3a; }
-                    .lm3 .map-network-dot { width: 8px; height: 8px; border-radius: 50%; background: #98a2b3; display: inline-block; }
+                    .lm3-schalter:hover { border-color: var(--lm-akzent); }
+                    .lm3-schalter.active { background: var(--lm-akzent); border-color: var(--lm-akzent); color: var(--lm-akzent-text); }
+                    /* Status-Punkt im Netz-Schalter: nur wenn das Netz an ist; grau = laedt,
+                       gruen = Daten da, rot = Abruf fehlgeschlagen */
+                    .lm3 .map-network-dot { width: 7px; height: 7px; border-radius: 50%; background: #98a2b3; display: none; box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
+                    .lm3 .lm3-schalter.active .map-network-dot { display: inline-block; }
+                    .lm3 .map-network-dot.live { background: #22c55e; }
+                    .lm3 .map-network-dot.fehler { background: #ef4444; }
                     .lm3-statistik { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--lm-text-2); text-align: center; }
                     .lm3-regler { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--lm-text-2); }
                     .lm3-regler label { margin: 0; }
-                    .lm3-regler input { flex: 1 1 auto; min-width: 0; }
+                    .lm3-regler input { flex: 1 1 auto; min-width: 0; accent-color: var(--lm-akzent); }
                     .lm3-hinweis { margin: 8px 0 0; font-size: 11px; color: var(--lm-text-2); }
                     .lm3 #weather-unavailable-note { margin-top: 8px; font-size: 11.5px; line-height: 1.4; }
-                    .lm3.ist-dunkel .map-network-legend { border-top-color: var(--lm-linie); }
-                    .lm3.ist-dunkel .map-network-legend-label { color: var(--lm-text-2); }
+                    .lm3 .map-network-legend { border-top-color: var(--lm-linie); }
+                    .lm3 .map-network-legend-label { color: var(--lm-text-2); }
 
-                    /* ── Detailkasten (wie der 4.7.9-„Crew Pass“, rechts) ── */
+                    /* ── Detailkasten rechts: Kopf mit Phasen-Streifen statt Verlauf ── */
                     .lm3-detail {
                         flex: 0 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
-                        background: var(--lm-flaeche); border-radius: 10px; box-shadow: var(--lm-schatten);
+                        background: var(--lm-flaeche); border-radius: var(--lm-r); box-shadow: var(--lm-schatten); border: 1px solid var(--lm-linie);
                     }
                     .lm3-detail[hidden] { display: none; }
-                    .lm3-d-kopf { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: linear-gradient(135deg, var(--lm-primary) 0%, var(--lm-accent) 100%); color: #fff; position: sticky; top: 0; z-index: 1; }
-                    .lm3-d-logo { height: 30px; min-width: 56px; max-width: 96px; padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.95); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
-                    .lm3-d-logo img { max-height: 24px; max-width: 82px; object-fit: contain; display: block; }
-                    .lm3-d-cs { font-size: 14px; font-weight: 800; letter-spacing: .3px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto;
+                    .lm3-d-kopf {
+                        display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 10px; color: var(--lm-text);
+                        background: var(--lm-flaeche); border-bottom: 1px solid var(--lm-linie); box-shadow: inset 0 3px 0 var(--ph, var(--lm-akzent));
+                        position: sticky; top: 0; z-index: 1;
+                    }
+                    .lm3-d-logo { height: 34px; min-width: 56px; max-width: 132px; padding: 3px 8px; border-radius: 7px; background: #fff; box-shadow: inset 0 0 0 1px rgba(16,28,46,.08); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+                    .lm3-d-logo img { max-height: 28px; max-width: 116px; object-fit: contain; display: block; }
+                    .lm3-d-cs { font-size: 14px; font-weight: 750; letter-spacing: .2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto;
                         border: 0; padding: 0; background: none; color: inherit; text-align: left; cursor: default; }
                     /* Eingeklappt: nur die Kopfzeile, Rufzeichen klappt wieder auf */
                     .lm3-detail.ist-klein > :not(.lm3-d-kopf) { display: none !important; }
+                    .lm3-detail.ist-klein .lm3-d-kopf { border-bottom: 0; }
                     .lm3-detail.ist-klein .lm3-d-cs { cursor: pointer; }
-                    .lm3-detail.ist-klein .lm3-d-cs::after { content: ' ▾'; opacity: .75; }
-                    .lm3-zu { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 6px; border: 0; background: rgba(255,255,255,.14); color: #fff; cursor: pointer; font-size: 15px; line-height: 1; }
-                    .lm3-zu:hover { background: rgba(255,255,255,.26); }
-                    .lm3-d-route { display: flex; align-items: center; padding: 10px 12px; background: var(--lm-flaeche-2); border-bottom: 1px solid var(--lm-linie); }
+                    .lm3-detail.ist-klein .lm3-d-cs::after { content: ' ▾'; opacity: .6; }
+                    .lm3-zu { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 7px; border: 0; background: transparent; color: var(--lm-text-2); cursor: pointer; font-size: 16px; line-height: 1; }
+                    .lm3-zu:hover { background: var(--lm-zeile-hover); color: var(--lm-text); }
+                    .lm3-d-route { display: flex; align-items: center; padding: 10px 12px; }
                     .lm3-d-ap { flex: 1 1 0; min-width: 0; text-align: center; }
-                    .lm3-d-icao { font-size: 20px; font-weight: 900; letter-spacing: 1px; line-height: 1; color: var(--lm-text); }
-                    .lm3-d-name { font-size: 9.5px; font-weight: 600; text-transform: uppercase; color: var(--lm-text-2); margin-top: 3px; line-height: 1.25; overflow-wrap: anywhere; }
-                    .lm3-d-mitte { flex: 0 0 auto; padding: 0 6px; text-align: center; color: var(--lm-text-2); font-size: 16px; }
-                    .lm3-d-mitte small { display: block; font-size: 9.5px; font-weight: 700; }
-                    .lm3-d-raster { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; padding: 8px 12px 10px; margin: 0; }
+                    .lm3-d-icao { font-size: 19px; font-weight: 800; letter-spacing: .5px; line-height: 1; color: var(--lm-text); }
+                    .lm3-d-name { font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .03em; color: var(--lm-text-2); margin-top: 4px; line-height: 1.25; overflow-wrap: anywhere; }
+                    .lm3-d-mitte { flex: 0 0 auto; padding: 0 6px; text-align: center; color: var(--ph, var(--lm-text-2)); font-size: 15px; }
+                    .lm3-d-mitte small { display: block; font-size: 10px; font-weight: 600; color: var(--lm-text-2); }
+                    .lm3-d-raster { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; padding: 8px 12px 10px; margin: 0; border-top: 1px solid var(--lm-linie); }
                     .lm3-d-raster > div { min-width: 0; }
-                    .lm3-d-raster dt { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--lm-text-2); margin: 0 0 1px; }
-                    .lm3-d-raster dd { font-size: 12px; font-weight: 700; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                    .lm3-d-raster dt { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--lm-text-2); margin: 0 0 1px; }
+                    .lm3-d-raster dd { font-size: 12.5px; font-weight: 650; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
                     .lm3-d-breit { grid-column: 1 / -1; }
-                    .lm3-balken { height: 5px; border-radius: 3px; background: var(--lm-linie); margin-top: 3px; overflow: hidden; }
-                    .lm3-balken i { display: block; height: 100%; background: var(--ph, #10b981); border-radius: 3px; }
+                    .lm3-balken { height: 4px; border-radius: 2px; background: var(--lm-linie); margin-top: 4px; overflow: hidden; }
+                    .lm3-balken i { display: block; height: 100%; background: var(--ph, #10b981); border-radius: 2px; }
                     .lm3-d-mehr { border-top: 1px solid var(--lm-linie); padding: 0 12px; }
-                    .lm3-d-mehr summary { cursor: pointer; padding: 6px 0; font-size: 11px; font-weight: 700; color: var(--lm-text-2); }
-                    .lm3-d-mehr .lm3-d-raster { padding: 0 0 8px; }
+                    .lm3-d-mehr summary { cursor: pointer; padding: 6px 0; font-size: 11px; font-weight: 600; color: var(--lm-text-2); }
+                    .lm3-d-mehr .lm3-d-raster { padding: 0 0 8px; border-top: 0; }
                     .lm3-badges { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 8px; }
-                    .lm3-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--lm-linie); color: var(--lm-text-2); }
-                    .lm3-badge.ist-an { background: #10b981; border-color: #10b981; color: #fff; }
+                    .lm3-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--lm-linie); color: var(--lm-text-2); }
+                    .lm3-badge.ist-an { background: rgba(16,185,129,.14); border-color: transparent; color: #059669; }
+                    .lm3.ist-dunkel .lm3-badge.ist-an { color: #34d399; }
                     .lm3-flag { display: inline-block; margin: 6px 12px 0; padding: 2px 8px; border-radius: 5px; background: #ef4444; color: #fff; font-size: 10.5px; font-weight: 800; }
-                    .lm3-d-fuss { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--lm-flaeche-2); border-top: 1px solid var(--lm-linie); font-size: 11px; color: var(--lm-text-2); }
-                    .lm3-d-fuss .lm3-pille { font-size: 11px; padding: 2px 10px; }
+                    .lm3-d-fuss { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-top: 1px solid var(--lm-linie); font-size: 11px; color: var(--lm-text-2); }
+                    .lm3-d-fuss .lm3-pille { font-size: 11px; }
                     .lm3-d-fuss .lm3-weit { margin-left: auto; }
-                    .lm3-d-link { color: var(--lm-text); font-weight: 700; text-decoration: none; white-space: nowrap; }
+                    .lm3-d-link { color: var(--lm-text); font-weight: 650; text-decoration: none; white-space: nowrap; }
                     .lm3-d-link:hover { text-decoration: underline; }
-                    .lm3-knopf { border: 1px solid var(--lm-linie); background: var(--lm-flaeche); color: var(--lm-text); border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-weight: 700; white-space: nowrap; }
-                    .lm3-knopf.active { background: var(--lm-primary); border-color: var(--lm-primary); color: #fff; }
+                    .lm3-knopf { border: 1px solid var(--lm-linie); background: var(--lm-flaeche-2); color: var(--lm-text); border-radius: 7px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-weight: 600; white-space: nowrap; }
+                    .lm3-knopf.active { background: var(--lm-akzent); border-color: var(--lm-akzent); color: var(--lm-akzent-text); }
 
                     /* ── Leaflet im Widget ── */
-                    .lm3 .leaflet-control-zoom { border: 1px solid var(--lm-linie) !important; border-radius: 10px !important; box-shadow: var(--lm-schatten) !important; overflow: hidden; }
-                    .lm3 .leaflet-control-zoom a { width: 32px !important; height: 32px !important; line-height: 32px !important; }
-                    .lm3.ist-dunkel .leaflet-control-zoom a { background: #1e2530; color: #e3e9f2; border-color: #2a3444; }
+                    .lm3 .leaflet-control-zoom { border: 1px solid var(--lm-linie) !important; border-radius: var(--lm-r) !important; box-shadow: var(--lm-schatten) !important; overflow: hidden; background: var(--lm-flaeche); padding: 3px; }
+                    .lm3 .leaflet-control-zoom a { width: 30px !important; height: 30px !important; line-height: 30px !important; border: 0 !important; border-radius: 8px !important; background: transparent; color: var(--lm-text-2); font-weight: 500; }
+                    .lm3 .leaflet-control-zoom a:hover { background: var(--lm-zeile-hover); color: var(--lm-text); }
+                    .lm3 .leaflet-control-zoom a.leaflet-disabled { opacity: .35; background: transparent; }
                     .lm3 .leaflet-top.leaflet-left .leaflet-control { margin: calc(var(--lm-rand) + var(--lm-oben-frei, 0px)) 0 0 var(--lm-rand); }
-                    .lm3 .leaflet-control-attribution { font-size: 10px; line-height: 16px; }
-                    .lm3.ist-dunkel .leaflet-control-attribution { background: rgba(22,30,44,.8); color: #8b9bb0; }
+                    .lm3 .leaflet-control-attribution { font-size: 10px; line-height: 16px; border-radius: 6px 0 0 0; }
+                    .lm3.ist-dunkel .leaflet-control-attribution { background: rgba(20,27,39,.8); color: #8d9bae; }
                     .lm3.ist-dunkel .leaflet-control-attribution a { color: #a9c3e0; }
+                    /* Popups (eigene und VATSIM/IVAO) im gleichen Stil, auch dunkel */
+                    .lm3 .leaflet-popup-content-wrapper { border-radius: var(--lm-r); box-shadow: var(--lm-schatten); padding: 0; }
+                    .lm3.ist-dunkel .leaflet-popup-content-wrapper, .lm3.ist-dunkel .leaflet-popup-tip { background: #18202d; color: var(--lm-text); }
+                    .lm3.ist-dunkel .leaflet-container a.leaflet-popup-close-button { color: var(--lm-text-2); }
 
                     /* ── Flugzeugsymbole: Silhouette nach Klasse, Fuellung = Phase ── */
                     .lm3-marker { background: none; border: 0; }
@@ -313,6 +376,7 @@
                     .lm3[data-grundkarte="dark"] path.lm3-route, .lm3[data-grundkarte="satellite"] path.lm3-route { stroke: #8FB4D6; stroke-opacity: .8; }
                     .lm3[data-grundkarte="dark"] path.lm3-spur-schatten { stroke: #0B1F3A; }
 
+
                     /* ── schmal (< 760 px Widget-Breite): eine Spalte, Blatt unten ── */
                     .lm3--schmal { --lm-unten: 22px; }
                     .lm3--schmal .lm3-ui { display: flex; flex-direction: column; gap: 8px; padding: calc(8px + var(--lm-oben-frei, 0px)) 8px var(--lm-unten) 8px; }
@@ -320,16 +384,31 @@
                     /* display: contents erzeugt keinen Container, deshalb misst hier die ganze Ebene */
                     .lm3--schmal .lm3-ui { container-type: inline-size; container-name: lmmitte; }
                     .lm3--schmal .lm3-mitte { container-type: normal; container-name: none; }
-                    /* Werkzeuge neben dem Zoom, nicht darueber; die Zeile ist so hoch wie
-                       der Zoom, damit nichts Folgendes (Kasten, Tafel) an ihn heranwaechst. */
-                    .lm3--schmal .lm3-werkzeuge { order: 1; margin-left: var(--lm-zoom); min-height: 70px; align-items: flex-start; }
+                    /* Werkzeuge rechts neben dem Zoom, nicht darueber; der Abstand darunter
+                       haelt die Zeile so hoch wie der Zoom (72 px), damit nichts Folgendes
+                       (Kasten, Tafel) an ihn heranwaechst. */
+                    .lm3--schmal .lm3-werkzeuge { order: 1; align-self: flex-end; margin: 0 0 30px var(--lm-zoom); }
                     .lm3--schmal .lm3-box { order: 2; margin-left: var(--lm-zoom); flex: 0 1 auto; }
                     .lm3--schmal .lm3-ui::after { content: ''; order: 3; flex: 1 1 0; min-height: 0; }
                     .lm3--schmal .lm3-tafel { order: 4; width: 100%; flex: 0 1 auto; }
                     .lm3--schmal .lm3-detail { order: 5; flex: 0 1 auto; max-height: 58%; }
                     .lm3--schmal .lm3-zeilen { max-height: none; }
-                    .lm3--schmal .lm3-unten .lm3-zeilen { max-height: 360px; }
+                    .lm3--schmal .lm3-unten .lm3-zeilen { max-height: none; }
                     .lm3--schmal.ohne-tafel-mobil .lm3-tafel { display: none; }
+                    /* VATSIM/IVAO-Popups dunkel (Grundstil weiter unten, uebernommen) */
+                    .lm3.ist-dunkel .vatsim-popup-header { background: rgba(255,255,255,.04); border-bottom-color: var(--lm-linie); }
+                    .lm3.ist-dunkel .vatsim-popup-callsign, .lm3.ist-dunkel .vatsim-popup-row .value { color: var(--lm-text); }
+                    .lm3.ist-dunkel .vatsim-popup-route, .lm3.ist-dunkel .vatsim-popup-row .label { color: var(--lm-text-2); }
+                    .lm3.ist-dunkel .vatsim-popup-row { border-bottom-color: var(--lm-linie); }
+                    .lm3 .vatsim-popup-header { border-radius: var(--lm-r) var(--lm-r) 0 0; }
+                    /* Popup-Bausteine haben feste Hell-Farben im style-Attribut: dunkel umfaerben */
+                    .lm3.ist-dunkel .vatsim-popup [style*="color:#1a1a1a"], .lm3.ist-dunkel .vatsim-popup [style*="color:#333"] { color: var(--lm-text) !important; }
+                    .lm3.ist-dunkel .vatsim-popup [style*="color:#555"], .lm3.ist-dunkel .vatsim-popup [style*="color:#777"],
+                    .lm3.ist-dunkel .vatsim-popup [style*="color:#888"], .lm3.ist-dunkel .vatsim-popup [style*="color:#aaa"],
+                    .lm3.ist-dunkel .vatsim-popup [style*="color:#5b6472"] { color: var(--lm-text-2) !important; }
+                    .lm3.ist-dunkel .vatsim-popup [style*="background:#f8faff"] { background: rgba(255,255,255,.05) !important; }
+                    .lm3.ist-dunkel .vatsim-popup [style*="solid #f0f0f0"], .lm3.ist-dunkel .vatsim-popup [style*="solid #eee"] { border-bottom-color: var(--lm-linie) !important; }
+                    .lm3.ist-dunkel .vatsim-popup [style*="dashed #"] { border-top-color: var(--lm-linie) !important; }
                     /* ── uebernommen: Wetterebenen, Netz-Legende, VATSIM/IVAO-Popups ── */
                     .owm-clouds-layer,
                     .owm-precip-layer,
