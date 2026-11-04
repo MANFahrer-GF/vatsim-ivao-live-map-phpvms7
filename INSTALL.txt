@@ -34,8 +34,8 @@ New in v5.1.0:
     top (collapsible over the map), bottom (fixed full-width table below
     the map, outside the map area) or off. Updating from 4.7.x without the
     new setting derives the position from the old keys: old_style on, or
-    show_top_flights_panel explicitly off = off, otherwise top. The old
-    keys are still written.
+    show_top_flights_panel explicitly off = off, otherwise top. A new
+    install starts at bottom (recommended). The old keys are still written.
   - Detail box folds to its header row when a box beside it does not fit
     (callsign opens it again); narrow board without logos; board header
     with icons as in 4.7.9. Controller boxes and sector labels sit below

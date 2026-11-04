@@ -644,7 +644,10 @@ $lage = [\Modules\LiveMap\Http\Controllers\Admin\SettingsController::class, 'taf
 pruefe('Tafel-Lage alt: Modern (old_style aus, Tafel an) → top', $lage(false, true) === 'top');
 pruefe('Tafel-Lage alt: Old Style (old_style an) → off', $lage('1', '0') === 'off');
 pruefe('Tafel-Lage alt: Tafel-Schalter aus → off', $lage('0', '0') === 'off');
-pruefe('Tafel-Lage alt: nichts gesetzt → top', $lage(false, null) === 'top');
+pruefe('Tafel-Lage alt: nur old_style aus gesetzt → top', $lage(false, null) === 'top');
+pruefe('Tafel-Lage: frische Installation (beide Altschluessel fehlen) → bottom', $lage(null, null) === 'bottom');
+pruefe('Tafel-Lage: leere Altschluessel wie fehlend → bottom', $lage('', '') === 'bottom');
+pruefe('Tafel-Lage alt: nur Tafel-Schalter an gesetzt → top', $lage(null, '1') === 'top');
 pruefe('Tafel unten: Teil tafel.blade.php in markup oben UND unten eingebunden',
     substr_count(file_get_contents(dirname(__DIR__).'/LiveMap/Resources/views/partials/markup.blade.php'), "@include('livemap::partials.tafel')") === 2);
 

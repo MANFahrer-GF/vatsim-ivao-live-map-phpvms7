@@ -189,9 +189,18 @@ class SettingsController extends Controller
         return redirect('/admin/livemap')->with('status', $meldung);
     }
 
-    /** Tafel-Lage aus den 4.7.x-Schluesseln: ausgeschaltet → off, sonst top. */
+    /**
+     * Tafel-Lage, solange `acars.livemap_flights_panel` fehlt. Fehlen auch beide
+     * 4.7.x-Schluessel (null/leer), ist es eine frische Installation → bottom
+     * (Standard seit 5.1, Thomas 04.11.2026). Sonst Update von 4.7.x: aus → off,
+     * sonst top, damit eine bestehende VA ihre gewohnte Lage behaelt.
+     */
     public static function tafelLageAusAlt($oldStyle, $showTop): string
     {
+        $fehlt = fn ($v) => $v === null || $v === '';
+        if ($fehlt($oldStyle) && $fehlt($showTop)) {
+            return 'bottom';
+        }
         $an = fn ($v) => is_bool($v) ? $v : in_array(strtolower(trim((string) $v)), ['1', 'true', 'yes', 'on'], true);
         if ($an($oldStyle) || ($showTop !== null && $showTop !== '' && !$an($showTop))) {
             return 'off';
@@ -211,8 +220,8 @@ class SettingsController extends Controller
         // Installation, die die Tafel ausgeschaltet hatte.
         if ($this->lmGet('acars.livemap_flights_panel', null) === null) {
             $values['acars.livemap_flights_panel'] = self::tafelLageAusAlt(
-                $values['acars.livemap_old_style'] ?? false,
-                $values['acars.livemap_show_top_flights_panel'] ?? true,
+                $this->lmGet('acars.livemap_old_style', null),
+                $this->lmGet('acars.livemap_show_top_flights_panel', null),
             );
         }
 
@@ -625,7 +634,7 @@ class SettingsController extends Controller
                 'name'        => 'Live Map: Flights Panel Position',
                 'description' => 'top = collapsible panel over the map, bottom = table below the map, off = hidden',
                 'type'        => 'string',
-                'default'     => 'top',
+                'default'     => 'bottom',
             ],
             'acars.livemap_old_style' => [
                 'name'        => 'Live Map: Old Style',

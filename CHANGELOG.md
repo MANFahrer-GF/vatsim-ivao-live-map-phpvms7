@@ -83,12 +83,14 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
   `acars.livemap_show_top_flights_panel` werden weiter mitgeschrieben. Fehlt die
   neue Einstellung (Update von 4.7.x), wird die Lage aus den alten Schlüsseln
   abgeleitet: ist `old_style` an oder `show_top_flights_panel` ausdrücklich aus,
-  gilt *aus*, sonst *oben*. Neue Teildatei `partials/tafel.blade.php`.
+  gilt *aus*, sonst *oben*. **Neue Installation (keiner der Schlüssel gesetzt): *unten*,
+  der empfohlene Standard** (Thomas 04.11.2026). Neue Teildatei `partials/tafel.blade.php`.
   *Flight panel position replaces "Layout mode": top (collapsible over the map),
   bottom (fixed full-width table below the map, outside the map area) or off.
   The old keys are still written; without the new setting (update from 4.7.x)
   the position is derived from them: old_style on, or show_top_flights_panel
-  explicitly off = off, otherwise top. New partial `partials/tafel.blade.php`.*
+  explicitly off = off, otherwise top. **A new install (none of the keys set) starts at
+  bottom, the recommended default.** New partial `partials/tafel.blade.php`.*
 - **Gestaltung:** Reicht die Höhe der rechten Spalte nicht für Kasten und
   Detail, klappt der Detailkasten auf seine Kopfzeile ein (Klick auf das
   Rufzeichen ▾ klappt ihn auf, der Kasten daneben geht zu); ein neuer Flug

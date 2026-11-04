@@ -10,8 +10,8 @@
     $lmAn = function (string $key, bool $default) use ($lmS) {
       return filter_var($lmS($key, $default), FILTER_VALIDATE_BOOLEAN);
     };
-    $tafelLage = (string) $lmS('acars.livemap_flights_panel', 'top');
-    if (!in_array($tafelLage, ['top', 'bottom', 'off'], true)) $tafelLage = 'top';
+    $tafelLage = (string) $lmS('acars.livemap_flights_panel', 'bottom');
+    if (!in_array($tafelLage, ['top', 'bottom', 'off'], true)) $tafelLage = 'bottom';
     $lmQuelle = old('flight_source', $lmS('acars.livemap_quelle', 'phpvms'));
     $lmModus = old('theme_mode', $lmS('acars.livemap_theme_mode', 'auto'));
     $currentBasemap = $lmS('acars.livemap_default_basemap', 'positron');
@@ -202,7 +202,7 @@
             <div>
               <select id="flights_panel" name="flights_panel" class="form-control">
                 <option value="top" {{ $tafelLage === 'top' ? 'selected' : '' }}>Top — collapsible panel over the map</option>
-                <option value="bottom" {{ $tafelLage === 'bottom' ? 'selected' : '' }}>Bottom — table below the map</option>
+                <option value="bottom" {{ $tafelLage === 'bottom' ? 'selected' : '' }}>Bottom — table below the map (recommended)</option>
                 <option value="off" {{ $tafelLage === 'off' ? 'selected' : '' }}>Off — no flights list</option>
               </select>
             </div>

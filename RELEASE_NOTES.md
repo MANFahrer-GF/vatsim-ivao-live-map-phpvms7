@@ -38,6 +38,8 @@ Release date: 2026-11-03
 3. Delete the old `live_map_scripts.blade.php` and `live_map_styles.blade.php` in that folder.
 4. Run `php artisan view:clear` (if your site caches routes: `php artisan route:cache` as well).
 
+A new install shows the flights list **below the map** (recommended). An update from 4.7.x keeps its layout (top, or off); switch to *Bottom* under Admin → Live Map → Flights list.
+
 Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
 
 ---
@@ -75,6 +77,8 @@ Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
 2. `live_map.blade.php` aus dem Paket in **jedes benutzte Theme** kopieren: `resources/views/layouts/<Theme>/widgets/live_map.blade.php`.
 3. Die alten Dateien `live_map_scripts.blade.php` und `live_map_styles.blade.php` in diesem Ordner löschen.
 4. `php artisan view:clear` ausführen (bei gecachten Routen zusätzlich `php artisan route:cache`).
+
+Eine neue Installation zeigt die Flugliste **unter der Karte** (empfohlen). Ein Update von 4.7.x behält seine Lage (oben oder aus); umstellen unter Admin → Live Map → Flights list auf *Bottom*.
 
 Install-ZIP angehängt: `LiveMap-full-package-v5.1.0.zip`.
 

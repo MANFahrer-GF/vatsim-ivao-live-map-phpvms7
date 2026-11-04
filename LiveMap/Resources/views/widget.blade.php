@@ -91,8 +91,8 @@
                     $lmTafelLage = strtolower($lmString($lmSetting('acars.livemap_flights_panel', ''), ''));
                     if (!in_array($lmTafelLage, ['top', 'bottom', 'off'], true)) {
                         $lmTafelLage = \Modules\LiveMap\Http\Controllers\Admin\SettingsController::tafelLageAusAlt(
-                            $lmSetting('acars.livemap_old_style', false),
-                            $lmSetting('acars.livemap_show_top_flights_panel', true)
+                            $lmSetting('acars.livemap_old_style', null),
+                            $lmSetting('acars.livemap_show_top_flights_panel', null)
                         );
                     }
                     $oldStyle = $lmTafelLage === 'off';
