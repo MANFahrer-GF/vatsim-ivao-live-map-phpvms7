@@ -1,6 +1,6 @@
 ## v5.1.0 - Live map: compact again, runs under any theme
 
-Release date: 2026-11-03
+Release date: 2026-11-04
 
 ---
 
@@ -31,13 +31,24 @@ Release date: 2026-11-03
 * **Your colours:** accent colour for light and dark mode; tabs, switches, selected and hovered rows follow it, so a green site gets a green map. Text on the accent turns white or dark automatically.
 * **AeroACARS Live is German Sky Group only:** it needs a read key that only German Sky Group has. Every other VA uses the source phpVMS.
 * A small credit line below the map: "Crafted with ♥ in Germany by Thomas Kant".
+* **Admin → Live Map for all VA admins:** the settings page now opens for every user with admin panel access (role "admin" or the permission "Admin Panel"), not only for the role "admin".
 
-### Upgrade
+### Install / upgrade (FTP and phpVMS admin, no SSH)
 
-1. Copy `LiveMap/` to `modules/`.
-2. Copy `live_map.blade.php` from the package into **every theme you use**: `resources/views/layouts/<Theme>/widgets/live_map.blade.php`.
-3. Delete the old `live_map_scripts.blade.php` and `live_map_styles.blade.php` in that folder.
-4. Run `php artisan view:clear` (if your site caches routes: `php artisan route:cache` as well).
+The step-by-step guide is `INSTALL.txt` in the ZIP. In short:
+
+1. **Module:** upload `LiveMap/` with FTP as `<phpvms-root>/modules/LiveMap_new/`, check that the upload is complete, rename the old `modules/LiveMap` to `LiveMap_old`, then `LiveMap_new` to `LiveMap`. Never overwrite the live folder while the site runs. First install: Admin → Modules → *Activate Module*.
+2. **Theme file:** upload `live_map.blade.php` into the `widgets/` folder of **every theme you use** (active theme: Admin → Settings → General → *Current Theme*):
+   * Seven: `resources/views/layouts/seven/widgets/`
+   * SPTheme: `resources/views/layouts/SPTheme/widgets/`
+   * Disposable_v3: `resources/views/layouts/Disposable_v3/widgets/`
+   * default / beta: `resources/views/layouts/beta/widgets/`
+   * any other theme: `resources/views/layouts/<Theme>/widgets/` (create `widgets/` if missing)
+   
+   Then delete the old `live_map_scripts.blade.php` and `live_map_styles.blade.php` in that folder.
+3. **Caches:** Admin → Maintenance → *Clear all caches* (use "all", it also rebuilds a cached route list).
+4. **Settings:** Admin → Live Map, open once and save. Source *phpVMS*.
+5. **Check:** open `/livemap` and hard-refresh (`Ctrl+F5`) in every theme you uploaded to.
 
 A new install shows the flights list **below the map** (recommended). An update from 4.7.x keeps its layout (top, or off); switch to *Bottom* under Admin → Live Map → Flights list.
 
@@ -72,13 +83,24 @@ Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
 * **Eigene Farben:** Akzentfarbe für hell und dunkel; Reiter, Schalter, gewählte und überfahrene Zeilen folgen ihr, eine grüne Seite bekommt also eine grüne Karte. Die Schrift auf dem Akzent wird automatisch weiß oder dunkel.
 * **AeroACARS Live nur für German Sky Group:** Der Lese-Schlüssel kommt nur von German Sky Group. Alle anderen VAs nutzen die Quelle phpVMS.
 * Eine dezente Signatur unter der Karte: „Crafted with ♥ in Germany by Thomas Kant“.
+* **Admin → Live Map für alle VA-Admins:** Die Einstellungsseite öffnet jetzt für jeden mit Zugang zum Admin-Bereich (Rolle „admin“ oder Recht „Admin Panel“), nicht mehr nur für die Rolle „admin“.
 
-### Aktualisieren
+### Installieren / aktualisieren (FTP und phpVMS-Admin, ohne SSH)
 
-1. `LiveMap/` nach `modules/` kopieren.
-2. `live_map.blade.php` aus dem Paket in **jedes benutzte Theme** kopieren: `resources/views/layouts/<Theme>/widgets/live_map.blade.php`.
-3. Die alten Dateien `live_map_scripts.blade.php` und `live_map_styles.blade.php` in diesem Ordner löschen.
-4. `php artisan view:clear` ausführen (bei gecachten Routen zusätzlich `php artisan route:cache`).
+Die Schritt-für-Schritt-Anleitung steht in `INSTALL.txt` im ZIP. Kurz:
+
+1. **Modul:** `LiveMap/` per FTP als `<phpvms-root>/modules/LiveMap_new/` hochladen, prüfen, ob alles angekommen ist, dann das alte `modules/LiveMap` in `LiveMap_old` umbenennen und `LiveMap_new` in `LiveMap`. Den laufenden Ordner nie direkt überschreiben. Erstinstallation: Admin → Modules → *Activate Module*.
+2. **Theme-Datei:** `live_map.blade.php` in den Ordner `widgets/` **jedes benutzten Themes** hochladen (aktives Theme: Admin → Settings → General → *Current Theme*):
+   * Seven: `resources/views/layouts/seven/widgets/`
+   * SPTheme: `resources/views/layouts/SPTheme/widgets/`
+   * Disposable_v3: `resources/views/layouts/Disposable_v3/widgets/`
+   * default / beta: `resources/views/layouts/beta/widgets/`
+   * jedes andere Theme: `resources/views/layouts/<Theme>/widgets/` (fehlt `widgets/`, anlegen)
+   
+   Danach im selben Ordner die alten Dateien `live_map_scripts.blade.php` und `live_map_styles.blade.php` löschen.
+3. **Caches:** Admin → Maintenance → *Clear all caches* („all“ nehmen, das baut auch eine gecachte Routenliste neu).
+4. **Einstellungen:** Admin → Live Map einmal öffnen und speichern. Quelle *phpVMS*.
+5. **Prüfen:** `/livemap` öffnen und hart neu laden (`Strg+F5`), in jedem Theme, in das hochgeladen wurde.
 
 Eine neue Installation zeigt die Flugliste **unter der Karte** (empfohlen). Ein Update von 4.7.x behält seine Lage (oben oder aus); umstellen unter Admin → Live Map → Flights list auf *Bottom*.
 

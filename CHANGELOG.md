@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [5.1.0] — 2026-11-03
+## [5.1.0] — 2026-11-04
 
 Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und Disposable_v3.
 *Compact look of 4.7.9 again, on the 5.0 technology; works under Seven, SPTheme and Disposable_v3.*
@@ -190,19 +190,25 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
   Thomas Kant“ (ohne Spendenlink; der bleibt in der Verwaltung).
   *A small credit line below the map, without the donation link.*
 
-### Upgrade
-1. `LiveMap/` nach `modules/` kopieren (erst hochladen, dann umbenennen, siehe INSTALL.txt).
-2. Die Theme-Datei `live_map.blade.php` aus dem Paket in **jedes benutzte Theme**
-   kopieren: `resources/views/layouts/<Theme>/widgets/live_map.blade.php`.
+### Changed / Geändert — Zugang zur Verwaltung
+- **Admin → Live Map für alle VA-Admins:** öffnet jetzt für jeden mit Zugang zum
+  Admin-Bereich (`ability:admin,admin-access`, wie der phpVMS-Kern), vorher nur Rolle `admin`.
+  *Admin → Live Map now opens for every user with admin panel access, not only the role "admin".*
+
+### Upgrade (FTP + phpVMS-Admin, ohne SSH)
+1. `LiveMap/` per FTP als `modules/LiveMap_new/` hochladen, dann umbenennen
+   (Schritte in INSTALL.txt). Erstinstallation: Admin → Modules → *Activate Module*.
+2. Die Theme-Datei `live_map.blade.php` in den Ordner `widgets/` **jedes benutzten
+   Themes** hochladen (`resources/views/layouts/<Theme>/widgets/`, Pfade für Seven,
+   SPTheme, Disposable_v3 und beta in INSTALL.txt).
 3. Die alten Dateien `live_map_scripts.blade.php` und `live_map_styles.blade.php`
    im selben Ordner löschen (werden nicht mehr benutzt).
-4. `php artisan view:clear` (bei gecachten Routen wie bei 5.0 zusätzlich
-   `php artisan route:cache`).
+4. Admin → Maintenance → *Clear all caches*.
 
-*Upgrade: copy `LiveMap/` to `modules/`; copy `live_map.blade.php` into every
-theme in use (`resources/views/layouts/<Theme>/widgets/`); delete the old
-`live_map_scripts.blade.php` and `live_map_styles.blade.php` there; run
-`php artisan view:clear`.*
+*Upgrade (FTP and phpVMS admin, no SSH): upload `LiveMap/` as `modules/LiveMap_new/`
+and rename it (see INSTALL.txt); upload `live_map.blade.php` into the `widgets/`
+folder of every theme in use; delete the old `live_map_scripts.blade.php` and
+`live_map_styles.blade.php` there; Admin → Maintenance → "Clear all caches".*
 
 ---
 

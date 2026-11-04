@@ -43,7 +43,7 @@ class LiveMapServiceProvider extends ServiceProvider
         Route::group([
             'as'         => 'livemap.',
             'prefix'     => 'admin/livemap',
-            'middleware' => ['web', 'role:admin'],
+            'middleware' => ['web', 'auth', 'ability:admin,admin-access'],
             'namespace'  => 'Modules\LiveMap\Http\Controllers\Admin',
         ], function () {
             $this->loadRoutesFrom(__DIR__.'/../Http/Routes/admin.php');

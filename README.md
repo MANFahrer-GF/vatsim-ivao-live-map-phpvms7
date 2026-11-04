@@ -32,44 +32,42 @@ For convenience, versioned full packages contain both, for example:
 
 - `LiveMap-full-package-v5.1.0.zip`
 
-## Installation (No SSH)
+## Installation (FTP + phpVMS admin, no SSH)
 
-Install this release as a **full package**: the module and the theme file belong together.
+Install this release as a **full package**: the module and the theme file belong together. The full step-by-step guide is `INSTALL.txt` in the ZIP. `<phpvms-root>` is the folder that contains `.env`, `app/`, `modules/` and `resources/`.
 
-### 1. Deploy the module
+### 1. Upload the module (upload first, swap last)
 
-Copy the `LiveMap/` directory to your phpVMS installation:
+1. Upload `LiveMap/` with FTP as `<phpvms-root>/modules/LiveMap_new/`.
+2. Check that `modules/LiveMap_new/module.json` and `modules/LiveMap_new/Providers/LiveMapServiceProvider.php` exist.
+3. Rename `modules/LiveMap` to `modules/LiveMap_old` (first install: skip), then `modules/LiveMap_new` to `modules/LiveMap`.
+4. First install only: **Admin → Modules**, LiveMap under *Not Installed Modules* → **Activate Module**.
 
-```
-<phpvms-root>/modules/LiveMap/
-```
+Never overwrite the live `LiveMap/` folder while the site is running: a half-uploaded module stops every page.
 
-### 2. Deploy the theme file
+### 2. Upload the theme file into every theme you use
 
-Copy `live_map.blade.php` into the widgets directory of **every theme you use**:
+The active theme is shown under **Admin → Settings → General → Current Theme**. phpVMS draws the map wherever a theme calls `{{ Widget::liveMap() }}` (in every standard theme: the page `/livemap`) and takes `widgets/live_map.blade.php` from the active theme; this one-line file hands everything over to the module.
 
-```
-resources/views/layouts/<Theme>/widgets/live_map.blade.php
-```
+| Theme | Upload `live_map.blade.php` to |
+|---|---|
+| Seven | `<phpvms-root>/resources/views/layouts/seven/widgets/` |
+| SPTheme | `<phpvms-root>/resources/views/layouts/SPTheme/widgets/` |
+| Disposable_v3 | `<phpvms-root>/resources/views/layouts/Disposable_v3/widgets/` |
+| default / beta | `<phpvms-root>/resources/views/layouts/beta/widgets/` |
+| any other | `<phpvms-root>/resources/views/layouts/<Theme>/widgets/` (create `widgets/` if missing) |
 
-Supported themes: **Seven, SPTheme, Disposable_v3**. For any other theme copy the same file into that theme's `widgets/` folder.
+Folder names are case-sensitive. A theme that extends another one still gets its own copy. From 5.1 on, `live_map_styles.blade.php` and `live_map_scripts.blade.php` are **no longer needed** — delete them in that `widgets/` folder.
 
-From 5.1 on, `live_map_styles.blade.php` and `live_map_scripts.blade.php` are **no longer needed**. If they still exist in your theme's `widgets/` folder from an older version, delete them.
+### 3. Clear caches
 
-### 3. Run phpVMS update + cache clear
-
-In the browser, open:
-
-```
-https://<your-site>/update
-```
-
-Then in **Admin → Maintenance** click **Clear Caches**.
+**Admin → Maintenance → Clear all caches** (use "all": it also rebuilds a cached route list, otherwise the map can stay empty).
 
 ### 4. Configure Live Map
 
-Open **Admin → Live Map**:
+Open **Admin → Live Map** (open for every user with admin panel access):
 
+1. Keep the source **phpVMS** (AeroACARS Live is German Sky Group only).
 1. Paste your OpenWeatherMap API key (or leave empty and disable the weather box).
 2. Keep **Enable server-side weather proxy** ON (recommended — your key never reaches the browser).
 3. Pick your default basemap, weather layer, network toggles, and UI colors.
@@ -83,7 +81,7 @@ No SSH/CLI commands are required for any of the above.
 
 - If you were on v4.6.1 – v4.6.4, your existing settings live in `storage/app/kvp.json`. On the **first** visit to Admin → Live Map after upgrading, the module promotes those values into the DB automatically. Nothing to do.
 - If you were on v4.6.0 or earlier, your settings live in the legacy phpVMS settings rows. They are picked up by the same read path — no action required.
-- **From 4.x / 5.0 to 5.1:** deploy `LiveMap/`, copy the new `live_map.blade.php` into every theme in use, delete the old `live_map_scripts.blade.php` and `live_map_styles.blade.php` there, then run `php artisan view:clear` (or Admin → Maintenance → Clear Caches). Hard-refresh the browser (`Ctrl+F5`).
+- **From 4.x / 5.0 to 5.1:** deploy `LiveMap/`, copy the new `live_map.blade.php` into every theme in use, delete the old `live_map_scripts.blade.php` and `live_map_styles.blade.php` there, then Admin → Maintenance → **Clear all caches**. Hard-refresh the browser (`Ctrl+F5`).
 - Before 5.1, `LiveMap/` and all three widget files had to be deployed together; with 5.1 only `LiveMap/` plus the one-line `live_map.blade.php` are needed.
 
 ## Troubleshooting

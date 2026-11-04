@@ -1,29 +1,26 @@
 # LiveMap Module (phpVMS 7)
 
-Version: **4.6.3**
+Version: **5.1.0**
 
 This module provides:
 
-1. Admin settings page at `/admin/livemap`
-2. Server-side OpenWeatherMap tile proxy at `/livemap/weather-tile/{layer}/{z}/{x}/{y}.png`
+1. The live map itself (views inside the module, theme file is a single `@include`)
+2. Admin settings page at `/admin/livemap` (every user with admin panel access)
+3. Flight data at `/livemap/api/fluege` and a server-side OpenWeatherMap tile proxy
 
-## Install
+## Install (FTP + phpVMS admin, no SSH)
 
-1. Copy folder `LiveMap` to your phpVMS installation:
-   - `Modules/LiveMap`
-2. Deploy matching blade widget files from this release:
-   - `live_map.blade.php`
-   - `live_map_styles.blade.php`
-   - `live_map_scripts.blade.php`
-3. Open `/update` in your browser to refresh modules/routes.
+1. Upload this folder as `modules/LiveMap_new/`, then rename it to `modules/LiveMap`
+   (old folder first to `LiveMap_old`). First install: Admin -> Modules -> Activate Module.
+2. Upload `live_map.blade.php` from the package into
+   `resources/views/layouts/<Theme>/widgets/` of every theme you use, and delete
+   `live_map_styles.blade.php` / `live_map_scripts.blade.php` there.
+3. Admin -> Maintenance -> Clear all caches.
 4. Open Admin -> Live Map and save once.
-5. Use Admin -> Clear Caches (no SSH required).
+
+Full guide: `INSTALL.txt` in the release ZIP.
 
 ## Important
 
 - For secure weather usage, keep **Weather Proxy** enabled.
 - In phpVMS ACARS settings, keep **Live Time >= 1** (avoid `0` on production).
-
-## Key Benefit
-
-With weather proxy enabled, the OWM key remains server-side and is not exposed in browser DevTools.

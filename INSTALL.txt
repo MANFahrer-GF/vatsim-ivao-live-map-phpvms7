@@ -59,14 +59,12 @@ New in v5.1.0:
   - New settings: flight panel position, source "Both", VA prefix, light/dark/auto, minimum and
     maximum height, callsign labels on/off.
 
-  UPGRADE from 5.0 or older:
-    1. Copy LiveMap/ to modules/ (steps below: upload first, swap last).
-    2. Copy live_map.blade.php into every theme you use:
-         resources/views/layouts/<Theme>/widgets/live_map.blade.php
-    3. In the same folder DELETE the old live_map_scripts.blade.php and
-       live_map_styles.blade.php (not used any more).
-    4. php artisan view:clear
-       (if your site caches routes: php artisan route:cache as well)
+  - Admin -> Live Map now opens for every staff member with access to the
+    admin panel (role "admin" or the permission "Admin Panel"), not only
+    for the role "admin".
+
+  UPGRADE from 5.0 or older: follow "Installation" at the end of this
+  file - everything is done with FTP and the phpVMS admin, no SSH.
 
 New in v5.0.0:
 
@@ -93,12 +91,10 @@ New in v5.0.0:
   flight across 180 degrees stay in the world copy currently shown; a
   short outage of the source keeps the last good state (marked stale).
 
-  UPGRADE: the module adds routes. If your site caches routes
-  (bootstrap/cache/routes-v7.php exists), run "php artisan route:cache"
-  after copying, otherwise /livemap/api/fluege answers 404 and the map
-  stays empty. Then "php artisan view:clear". Replace ALL THREE widget
-  files - the 5.0 widget does not work with the old module and vice
-  versa.
+  UPGRADE: the module adds routes. After copying, click
+  Admin -> Maintenance -> "Clear all caches" (this also rebuilds a cached
+  route list), otherwise /livemap/api/fluege answers 404 and the map
+  stays empty.
 
 Fixed in v4.7.7 (reported by ProAvia):
 
@@ -151,11 +147,8 @@ Where to put the CARTO key - two ways:
 
          CARTO_API_KEY=cb1_...
 
-     Then clear the config cache so the value is read:
-
-         php artisan config:clear
-
-     or Admin -> Maintenance -> Clear Caches.
+     Then click Admin -> Maintenance -> "Clear all caches" so the value
+     is read.
 
   Precedence: a key entered in the admin page ALWAYS wins over .env -
   including one you deliberately removed there. The .env value applies
@@ -239,7 +232,20 @@ Older fixes still included:
   (v4.6.6) Mixed-content warnings silenced (HTTPS upgrade).
   (v4.6.5) Settings persist in the phpVMS database.
 
-Installation (no SSH required):
+Installation and update (FTP + phpVMS admin, no SSH)
+=====================================================
+
+You need: an FTP client (FileZilla, WinSCP, Cyberduck ...) or the file
+manager of your hosting panel, and an admin login to phpVMS.
+
+<phpvms-root> below is the phpVMS folder on your server: the one that
+contains .env, app/, modules/ and resources/. On some hosts it is the web
+root itself, on others a sub folder (for example httpdocs/phpvms).
+
+Unpack the ZIP on your computer first. You get:
+  LiveMap/              the module
+  live_map.blade.php    the theme file (one line)
+  INSTALL.txt           this file
 
 1) Upload the module folder - UPLOAD FIRST, SWAP LAST
 
@@ -266,8 +272,12 @@ Installation (no SSH required):
           modules/LiveMap_new/Providers/LiveMapServiceProvider.php
           modules/LiveMap_new/Http/Controllers/Admin/SettingsController.php
      c) Rename modules/LiveMap  ->  modules/LiveMap_old
+        (first install: there is no modules/LiveMap yet - skip this)
      d) Rename modules/LiveMap_new  ->  modules/LiveMap
      e) Delete modules/LiveMap_old once the site is confirmed working
+
+   First install only: Admin -> Modules. LiveMap is listed under
+   "Not Installed Modules" - click "Activate Module".
 
    If your site is down with "LiveMapServiceProvider not found":
 
@@ -275,27 +285,66 @@ Installation (no SSH required):
      set `enabled` from 1 to 0. The site comes back immediately.
      Then finish the upload properly and set it back to 1.
 
-2) Upload live_map.blade.php into the widgets folder of every theme you use.
-   Examples:
-     resources/views/layouts/seven/widgets/
-     resources/views/layouts/SPTheme/widgets/
-     resources/views/layouts/Disposable_v3/widgets/
-   Overwrite:
-     live_map.blade.php
-   From v5.1 live_map_styles.blade.php and live_map_scripts.blade.php are
-   no longer needed - delete them there if they exist.
+2) Upload the theme file into EVERY theme your site uses
 
-3) In your browser, open:
-     https://<your-site>/update
+   Which theme is active: Admin -> Settings -> General -> "Current Theme".
+   If pilots can pick other themes, or you keep a second theme for
+   testing, do this for those as well. It does no harm in an unused theme.
 
-4) In phpVMS: Admin -> Maintenance -> Clear Caches
+   phpVMS draws the map wherever a theme page calls {{ Widget::liveMap() }}
+   - in every standard theme that is the page /livemap ("Live Map" in the
+   menu). phpVMS takes the file widgets/live_map.blade.php from the
+   active theme. Our file in that place hands everything over to the
+   module, so the map looks and works the same in every theme.
 
-5) In phpVMS: Admin -> Live Map
-   - Paste your OpenWeatherMap API key (or leave empty and disable weather box)
-   - Keep "Enable server-side weather proxy" ON (recommended)
-   - Click Save Settings
+   Upload live_map.blade.php with FTP to the theme's widgets folder and
+   overwrite the file that is there:
 
-6) Hard-refresh your browser (clear site data or Ctrl+F5).
+     Theme           Upload to
+     -------------   -----------------------------------------------------
+     seven           <phpvms-root>/resources/views/layouts/seven/widgets/
+     SPTheme         <phpvms-root>/resources/views/layouts/SPTheme/widgets/
+     Disposable_v3   <phpvms-root>/resources/views/layouts/Disposable_v3/widgets/
+     default / beta  <phpvms-root>/resources/views/layouts/beta/widgets/
+                     ("default" is only an alias of "beta")
+     any other       <phpvms-root>/resources/views/layouts/<Theme>/widgets/
+
+   - The folder name must match exactly, including upper and lower case
+     (SPTheme, Disposable_v3).
+   - The file name must be exactly live_map.blade.php.
+   - No widgets/ folder in that theme? Create it, then upload the file.
+   - Themes that extend another theme (theme.json, "extends") still get
+     their own copy: put the file into the theme you actually use.
+   - Then delete these two old files in the same widgets/ folder, if they
+     are there (not used from 5.1 on):
+       live_map_scripts.blade.php
+       live_map_styles.blade.php
+
+   Want the map on another page too (for example the dashboard)? Put
+   {{ Widget::liveMap() }} into that page of your theme.
+
+3) Clear the caches
+   Admin -> Maintenance -> "Clear all caches".
+   Use "all": it also rebuilds a cached route list. Without it the map
+   can stay empty (the flight data address answers 404).
+
+4) Settings
+   Admin -> Live Map. Open it once and click Save.
+   - Source: phpVMS. (AeroACARS Live is for German Sky Group only.)
+   - OpenWeatherMap key: paste it, or leave it empty - the map then just
+     shows no weather.
+   - Keep "server-side weather proxy" ON (the key never reaches the
+     browser).
+   - Flights list: "Bottom" is recommended. An update from 4.7.x keeps
+     its old position (top or off) until you change it here.
+   - Accent colour for light and dark mode, so the map matches your site.
+   The page opens for every user with admin panel access (role "admin" or
+   the permission "Admin Panel").
+
+5) Check
+   Open https://<your-site>/livemap and hard-refresh (Ctrl+F5, on a Mac
+   Cmd+Shift+R). The map, the flights list below it and the credit line
+   under the map must appear. Check every theme you uploaded to.
 
 Troubleshooting:
   "Settings reset every day"        -> upgrade to v4.6.6.
