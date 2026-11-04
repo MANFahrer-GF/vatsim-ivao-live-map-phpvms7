@@ -7,24 +7,87 @@
     $lmS = function (string $key, $default = null) use ($settings) {
       return array_key_exists($key, $settings) ? $settings[$key] : $default;
     };
+    $lmAn = function (string $key, bool $default) use ($lmS) {
+      return filter_var($lmS($key, $default), FILTER_VALIDATE_BOOLEAN);
+    };
     $tafelLage = (string) $lmS('acars.livemap_flights_panel', 'top');
     if (!in_array($tafelLage, ['top', 'bottom', 'off'], true)) $tafelLage = 'top';
+    $lmQuelle = old('flight_source', $lmS('acars.livemap_quelle', 'phpvms'));
+    $lmModus = old('theme_mode', $lmS('acars.livemap_theme_mode', 'auto'));
+    $currentBasemap = $lmS('acars.livemap_default_basemap', 'positron');
+    $currentLayer = $lmS('acars.livemap_weather_default_layer', 'combo');
+    $lmQuellenName = ['phpvms' => 'phpVMS', 'aeroacars' => 'AeroACARS Live', 'beide' => 'AeroACARS Live + phpVMS'][$lmQuelle] ?? 'phpVMS';
+    $lmLiveKey = trim((string) $lmS('acars.livemap_live_key', '')) !== '';
+    // Ampel je Statuszeile: ok | warn | bad | off
+    $lmWetterAmpel = ['success' => 'ok', 'warning' => 'warn', 'danger' => 'bad', 'info' => 'off'][(string) $weatherProxyStatus['badgeClass']] ?? 'off';
+    $lmCartoAmpel = ['success' => 'ok', 'warning' => 'warn', 'danger' => 'bad', 'info' => 'off'][(string) $cartoStatus['badgeClass']] ?? 'off';
   @endphp
+
+  <style>
+    /* LiveMap 5.1 settings — flat panels with a hairline, one accent, scoped to .lm-admin */
+    .lm-admin { --lma-linie: rgba(16, 28, 46, .10); --lma-text-2: #5d6b7c; --lma-flaeche-2: #f6f8fb; --lma-akzent: #2f6fe4; color: #101c2e; }
+    .lm-admin .lma-kopf { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin: 0 0 16px; }
+    .lm-admin .lma-kopf h4 { margin: 0; font-size: 22px; }
+    .lm-admin .lma-kopf p { margin: 0; color: var(--lma-text-2); font-size: 13px; }
+    .lm-admin .lma-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0 0 22px; }
+    .lm-admin .lma-kachel { border: 1px solid var(--lma-linie); border-radius: 10px; padding: 10px 12px; background: #fff; font-size: 12.5px; line-height: 1.45; }
+    .lm-admin .lma-kachel b { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--lma-text-2); font-weight: 700; margin-bottom: 3px; }
+    .lm-admin .lma-kachel span { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; }
+    .lm-admin .lma-kachel small { display: block; color: var(--lma-text-2); margin-top: 2px; }
+    .lm-admin .lma-punkt { width: 8px; height: 8px; border-radius: 50%; flex: none; background: #98a2b3; }
+    .lm-admin .lma-punkt.ok { background: #16a34a; }
+    .lm-admin .lma-punkt.warn { background: #e8a317; }
+    .lm-admin .lma-punkt.bad { background: #dc2626; }
+    .lm-admin .lma-sek { border: 1px solid var(--lma-linie); border-radius: 12px; background: #fff; margin: 0 0 18px; overflow: hidden; }
+    .lm-admin .lma-sek > header { padding: 14px 18px 12px; border-bottom: 1px solid var(--lma-linie); background: var(--lma-flaeche-2); }
+    .lm-admin .lma-sek > header h5 { margin: 0; font-size: 15px; font-weight: 700; text-transform: none; letter-spacing: 0; }
+    .lm-admin .lma-sek > header p { margin: 4px 0 0; color: var(--lma-text-2); font-size: 12.5px; line-height: 1.5; }
+    .lm-admin .lma-zeile { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 6px 28px; padding: 14px 18px; border-top: 1px solid var(--lma-linie); align-items: start; }
+    .lm-admin .lma-zeile:first-of-type { border-top: 0; }
+    .lm-admin .lma-zeile[hidden] { display: none; }
+    .lm-admin .lma-zeile > div:first-child label { display: block; margin: 0 0 2px; font-weight: 600; font-size: 13.5px; text-transform: none; letter-spacing: 0; color: inherit; }
+    .lm-admin .lma-hilfe { margin: 0; color: var(--lma-text-2); font-size: 12.5px; line-height: 1.5; }
+    .lm-admin .lma-hilfe + .lma-hilfe { margin-top: 6px; }
+    .lm-admin .lma-hilfe code, .lm-admin .lma-kachel code { font-size: 11.5px; }
+    .lm-admin .lma-schalter { display: flex; align-items: flex-start; gap: 10px; margin: 0; font-weight: 600; font-size: 13.5px; text-transform: none; letter-spacing: 0; cursor: pointer; }
+    .lm-admin .lma-schalter input { margin: 3px 0 0; flex: none; width: 16px; height: 16px; accent-color: var(--lma-akzent); }
+    .lm-admin .lma-paar { display: flex; gap: 8px; align-items: center; max-width: 340px; }
+    .lm-admin .lma-paar span { color: var(--lma-text-2); font-size: 12px; }
+    .lm-admin .lma-farbe { display: flex; gap: 10px; align-items: center; }
+    .lm-admin .lma-farbe input[type=color] { width: 56px; height: 34px; padding: 2px; border: 1px solid var(--lma-linie); border-radius: 8px; background: #fff; cursor: pointer; }
+    .lm-admin code { color: #344054; background: var(--lma-flaeche-2); border: 1px solid var(--lma-linie); border-radius: 5px; padding: 1px 5px; }
+    .lm-admin .lma-fehler { margin: 6px 0 0; color: #b42318; font-size: 12.5px; }
+    .lm-admin .lma-nebenbei { margin-top: 8px; font-size: 12.5px; font-weight: 400; }
+    .lm-admin .lma-nebenbei input { width: 14px; height: 14px; margin: 0 6px 0 0; vertical-align: -2px; }
+    .lm-admin details { margin-top: 8px; font-size: 12.5px; color: var(--lma-text-2); }
+    .lm-admin details summary { cursor: pointer; color: var(--lma-akzent); font-weight: 600; }
+    .lm-admin details pre { margin: 8px 0; padding: 10px 12px; font-size: 12px; border-radius: 8px; background: var(--lma-flaeche-2); border: 1px solid var(--lma-linie); }
+    .lm-admin .lma-hinweis { border-radius: 10px; padding: 10px 12px; margin: 0 0 16px; font-size: 13px; line-height: 1.5; }
+    .lm-admin .lma-hinweis.ok { background: #ecfdf3; border: 1px solid #abefc6; color: #05603a; }
+    .lm-admin .lma-hinweis.bad { background: #fef3f2; border: 1px solid #fecdca; color: #912018; }
+    .lm-admin .lma-hinweis.warn { background: #fffaeb; border: 1px solid #fedf89; color: #93370d; }
+    .lm-admin .lma-hinweis ul { margin: 0; padding-left: 18px; }
+    .lm-admin .lma-fuss { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 18px; margin-top: 4px; border: 1px solid var(--lma-linie); border-radius: 12px; background: rgba(255,255,255,.96); box-shadow: 0 -6px 18px -12px rgba(16,24,40,.35); }
+    .lm-admin .lma-fuss p { margin: 0; font-size: 12px; color: var(--lma-text-2); }
+    @media (max-width: 760px) {
+      .lm-admin .lma-zeile { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+
   <div class="card border-blue-bottom">
-    <div class="content">
-      <div class="header">
+    <div class="content lm-admin">
+      <div class="lma-kopf">
         <h4 class="title">Live Map Settings</h4>
+        <p>Changes apply the next time the map page is loaded.</p>
       </div>
 
       @if (session('status'))
-        <div class="alert alert-success">
-          {{ session('status') }}
-        </div>
+        <div class="lma-hinweis ok" role="status">{{ session('status') }}</div>
       @endif
 
       @if ($errors->any())
-        <div class="alert alert-danger">
-          <ul style="margin:0; padding-left:18px">
+        <div class="lma-hinweis bad" role="alert">
+          <ul>
             @foreach ($errors->all() as $error)
               <li>{{ $error }}</li>
             @endforeach
@@ -32,455 +95,398 @@
         </div>
       @endif
 
-      <div class="alert alert-{{ $weatherProxyStatus['badgeClass'] }}" style="margin-bottom:14px;">
-        <strong>Weather Proxy Status:</strong>
-        {{ $weatherProxyStatus['title'] }}<br>
-        <span style="font-size:12px">{{ $weatherProxyStatus['message'] }}</span>
-        <div style="margin-top:8px; font-size:12px;">
-          <span>Proxy: <strong>{{ $weatherProxyStatus['proxyEnabled'] ? 'ON' : 'OFF' }}</strong></span>
-          <span style="margin-left:10px;">API Key: <strong>{{ $weatherProxyStatus['hasApiKey'] ? 'SET' : 'MISSING' }}</strong></span>
-          <span style="margin-left:10px;">Fallback: <strong>{{ $weatherProxyStatus['fallbackActive'] ? 'ACTIVE' : 'NO' }}</strong></span>
+      {{-- Overview: what the map currently runs on --}}
+      <div class="lma-status">
+        <div class="lma-kachel">
+          <b>Flights</b>
+          <span><i class="lma-punkt {{ ($lmQuelle !== 'phpvms' && !$lmLiveKey) ? 'bad' : 'ok' }}"></i>{{ $lmQuellenName }}</span>
+          <small>{{ ($lmQuelle !== 'phpvms' && !$lmLiveKey) ? 'AeroACARS Live read key missing.' : 'Flight data source.' }}</small>
         </div>
-        <div style="margin-top:10px; font-size:12px; border-top:1px solid rgba(0,0,0,0.08); padding-top:8px;">
-          <div>
-            <strong>Last OWM Error Code:</strong>
-            {{ $weatherProxyStatus['errorInfo']['code'] ?? 'none' }}
-            @if(!empty($weatherProxyStatus['lastErrorAt']))
-              <span style="color:#777;">(at {{ $weatherProxyStatus['lastErrorAt'] }})</span>
+        <div class="lma-kachel">
+          <b>Basemap</b>
+          <span><i class="lma-punkt {{ $cartoStatus['hasApiKey'] ? $lmCartoAmpel : 'off' }}"></i>{{ $cartoStatus['hasApiKey'] ? $cartoStatus['title'] : 'OpenStreetMap (no CARTO key)' }}</span>
+          <small>{{ $cartoStatus['hasApiKey'] ? 'CARTO light and dark styles available.' : 'Works as is. Add a CARTO key for the light and dark styles.' }}</small>
+        </div>
+        <div class="lma-kachel">
+          <b>Weather</b>
+          <span><i class="lma-punkt {{ $lmWetterAmpel }}"></i>{{ $weatherProxyStatus['title'] }}</span>
+          <small>{{ $weatherProxyStatus['message'] }}</small>
+        </div>
+        <div class="lma-kachel">
+          <b>phpVMS ACARS live time</b>
+          <span><i class="lma-punkt {{ $acarsLiveTimeStatus['isSafe'] ? 'ok' : 'warn' }}"></i>{{ $acarsLiveTimeStatus['value'] }} {{ $acarsLiveTimeStatus['value'] === 1 ? 'hour' : 'hours' }}</span>
+          <small>
+            @if($acarsLiveTimeStatus['isSafe'])
+              Fine. Set in Admin → Settings → ACARS.
+            @else
+              Set it to 1 or higher in Admin → Settings → ACARS. phpVMS also uses it to clean up stuck PIREPs.
             @endif
-          </div>
-          <div style="margin-top:4px;">
-            <strong>Meaning:</strong> {{ $weatherProxyStatus['errorInfo']['meaning'] }}
-          </div>
-          <div style="margin-top:2px;">
-            <strong>What to do:</strong> {{ $weatherProxyStatus['errorInfo']['action'] }}
-          </div>
-          @if(!empty($weatherProxyStatus['errorInfo']['reason']))
-            <div style="margin-top:2px; color:#666;">
-              <strong>Technical detail:</strong> {{ $weatherProxyStatus['errorInfo']['reason'] }}
-            </div>
-          @endif
-          @if(!empty($weatherProxyStatus['lastSuccessAt']))
-            <div style="margin-top:2px; color:#666;">
-              <strong>Last successful tile:</strong> {{ $weatherProxyStatus['lastSuccessAt'] }}
-            </div>
-          @endif
-        </div>
-        <div style="margin-top:8px; font-size:12px; color:#555;">
-          Note: The error code shows the last OpenWeatherMap response. "Fallback Active" means temporary blank tiles are served to avoid 502 browser error spam.
+          </small>
         </div>
       </div>
-
-      @if(!$acarsLiveTimeStatus['isSafe'])
-        <div class="alert alert-warning" style="margin-bottom:14px;">
-          <strong>phpVMS Core Note:</strong>
-          ACARS <strong>Live Time</strong> is currently <strong>{{ $acarsLiveTimeStatus['value'] }}</strong>.
-          Keep it at <strong>1 or higher</strong> in <em>Admin - ACARS</em>.
-          Do not use <code>0</code> on production systems, because this value is also used by core stale/stuck PIREP cleanup routines.
-        </div>
-      @else
-        <p class="help-block" style="margin-top:-4px; margin-bottom:14px;">
-          phpVMS Core: ACARS <strong>Live Time</strong> detected as <strong>{{ $acarsLiveTimeStatus['value'] }}</strong> (safe).
-        </p>
-      @endif
 
       <form method="POST" action="{{ url('/admin/livemap/settings') }}">
         @csrf
 
-        <h5>Layout</h5>
-        <div class="form-group">
-          <label for="flights_panel">Flights panel</label>
-          <select id="flights_panel" name="flights_panel" class="form-control">
-            <option value="top" {{ $tafelLage === 'top' ? 'selected' : '' }}>
-              Top — collapsible panel over the map
-            </option>
-            <option value="bottom" {{ $tafelLage === 'bottom' ? 'selected' : '' }}>
-              Bottom — table below the map (always open, outside the map)
-            </option>
-            <option value="off" {{ $tafelLage === 'off' ? 'selected' : '' }}>
-              Off — no flights list (aircraft stay on the map)
-            </option>
-          </select>
-          <p class="help-block" style="margin-top:6px">
-            Replaces the former “Layout mode” (Modern = Top, Old Style = Off).
-          </p>
-        </div>
-        <div class="form-group">
-          <label for="default_basemap">Default basemap</label>
-          <select id="default_basemap" name="default_basemap" class="form-control">
-            @php($currentBasemap = $lmS('acars.livemap_default_basemap', 'positron'))
-            @foreach($basemapOptions as $value => $label)
-              <option value="{{ $value }}" {{ $currentBasemap === $value ? 'selected' : '' }}>{{ $label }}</option>
-            @endforeach
-          </select>
-          <p class="help-block" style="margin-top:6px">
-            Select which map style is used by default when users open the live map.
-          </p>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="show_basemap_switcher" value="1" {{ $lmS('acars.livemap_show_basemap_switcher', true) ? 'checked' : '' }}>
-            Show basemap switcher on map
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="enable_satellite" value="1" {{ $lmS('acars.livemap_enable_satellite', true) ? 'checked' : '' }}>
-            Enable satellite map option
-          </label>
-          <p class="help-block" style="margin-top:6px">
-            Satellite uses Esri World Imagery tiles.
-          </p>
-        </div>
-
-        <hr style="margin:32px 0 24px;">
-        <h5>Flight data source</h5>
-        <p class="help-block" style="margin:0 0 18px;">
-          Where the flights on the map come from. <strong>phpVMS</strong> shows the running PIREPs of this site.
-          <strong>AeroACARS Live</strong> shows the same flights, phases and fields as the AeroACARS Live web app;
-          it needs a read key, which stays on this server.
-        </p>
-        @php($lmQuelle = old('flight_source', $lmS('acars.livemap_quelle', 'phpvms')))
-        <div class="form-group">
-          <label for="flight_source">Source</label>
-          <select id="flight_source" name="flight_source" class="form-control">
-            <option value="phpvms" {{ $lmQuelle === 'phpvms' ? 'selected' : '' }}>phpVMS (running PIREPs)</option>
-            <option value="aeroacars" {{ $lmQuelle === 'aeroacars' ? 'selected' : '' }}>AeroACARS Live</option>
-            <option value="beide" {{ $lmQuelle === 'beide' ? 'selected' : '' }}>Both (AeroACARS first, plus phpVMS-only flights)</option>
-          </select>
-          <p class="help-block" style="margin-top:6px">
-            <strong>Both</strong>: AeroACARS flights are matched to their phpVMS PIREP by callsign and pilot
-            (registration and PIREP link come from the PIREP); flights only known to phpVMS are added.
-          </p>
-        </div>
-        <div class="form-group">
-          <label for="va_prefix">AeroACARS VA prefix</label>
-          <input type="text" id="va_prefix" name="va_prefix" class="form-control" autocomplete="off" maxlength="20"
-                 value="{{ old('va_prefix', $lmS('acars.livemap_va_prefix', '')) }}" placeholder="e.g. gsg — empty shows every VA">
-          @error('va_prefix')<p class="text-danger" style="margin-top:6px">{{ $message }}</p>@enderror
-        </div>
-        <div class="form-group">
-          <label for="live_url">AeroACARS Live address</label>
-          <input type="text" id="live_url" name="live_url" class="form-control" autocomplete="off"
-                 value="{{ old('live_url', $lmS('acars.livemap_live_url', \Modules\LiveMap\Http\Controllers\LiveFlightsController::STANDARD_BASIS)) }}">
-          @error('live_url')<p class="text-danger" style="margin-top:6px">{{ $message }}</p>@enderror
-        </div>
-        <div class="form-group">
-          <label for="live_key">AeroACARS Live read key</label>
-          <input type="password" id="live_key" name="live_key" class="form-control" autocomplete="new-password" value=""
-                 placeholder="{{ trim((string) $lmS('acars.livemap_live_key', '')) !== '' ? 'Stored — leave empty to keep it' : 'Not set' }}">
-          <div class="checkbox" style="margin-top:6px">
-            <label><input type="checkbox" name="live_key_clear" value="1"> Remove stored key</label>
+        {{-- ── Flight data ── --}}
+        <section class="lma-sek">
+          <header>
+            <h5>Flight data</h5>
+            <p>Where the flights on the map come from.</p>
+          </header>
+          <div class="lma-zeile">
+            <div>
+              <label for="flight_source">Source</label>
+              <p class="lma-hilfe"><strong>phpVMS</strong> shows the running PIREPs of this site. <strong>AeroACARS Live</strong> shows the same flights, phases and fields as the AeroACARS Live web app and needs a read key.</p>
+              <p class="lma-hilfe"><strong>Both</strong> matches AeroACARS flights to their PIREP by callsign and pilot and adds flights only phpVMS knows.</p>
+            </div>
+            <div>
+              <select id="flight_source" name="flight_source" class="form-control">
+                <option value="phpvms" {{ $lmQuelle === 'phpvms' ? 'selected' : '' }}>phpVMS (running PIREPs)</option>
+                <option value="aeroacars" {{ $lmQuelle === 'aeroacars' ? 'selected' : '' }}>AeroACARS Live</option>
+                <option value="beide" {{ $lmQuelle === 'beide' ? 'selected' : '' }}>Both (AeroACARS first, plus phpVMS-only flights)</option>
+              </select>
+            </div>
           </div>
-        </div>
-
-        <hr style="margin:32px 0 24px;">
-        <h5>Appearance</h5>
-        @php($lmModus = old('theme_mode', $lmS('acars.livemap_theme_mode', 'auto')))
-        <div class="form-group">
-          <label for="theme_mode">Light / dark</label>
-          <select id="theme_mode" name="theme_mode" class="form-control">
-            <option value="auto" {{ $lmModus === 'auto' ? 'selected' : '' }}>Follow the theme</option>
-            <option value="light" {{ $lmModus === 'light' ? 'selected' : '' }}>Always light</option>
-            <option value="dark" {{ $lmModus === 'dark' ? 'selected' : '' }}>Always dark</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="min_height">Map height (px): minimum / maximum</label>
-          <div style="display:flex; gap:8px; max-width:320px">
-            <input type="number" id="min_height" name="min_height" class="form-control" min="320" max="2000" value="{{ old('min_height', $lmS('acars.livemap_min_height', 420)) }}">
-            <input type="number" id="max_height" name="max_height" class="form-control" min="320" max="3000" value="{{ old('max_height', $lmS('acars.livemap_max_height', 1000)) }}" aria-label="Maximum height">
-          </div>
-          <p class="help-block" style="margin-top:6px">The map fills the window below the page header, within these limits.</p>
-        </div>
-        <div class="checkbox">
-          <label><input type="checkbox" name="show_labels" value="1" {{ filter_var($lmS('acars.livemap_show_labels', true), FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}> Show callsigns next to the aircraft from zoom 6</label>
-        </div>
-
-        <hr style="margin:32px 0 24px;">
-        <h5>Basemap</h5>
-        <p class="help-block" style="margin:0 0 18px;">
-          The tiles the map is drawn on. Only the two CARTO styles need a key —
-          OpenStreetMap and Satellite do not. <strong>Without a CARTO key the map uses OpenStreetMap</strong>
-          and the CARTO styles are not offered in the style switcher.
-        </p>
-
-      <div class="alert alert-{{ $cartoStatus['badgeClass'] }}" style="margin:0 0 22px;">
-        <strong>CARTO Basemap Status:</strong>
-        {{ $cartoStatus['title'] }}<br>
-        <span style="font-size:12px">{{ $cartoStatus['message'] }}</span>
-        <div style="margin-top:8px; font-size:12px;">
-          {{-- Die Quelle gehoert neben den Zustand. "SET" allein laesst offen,
-               ob der Schluessel aus diesem Formular kommt oder aus der .env —
-               und damit auch, warum das Loeschen-Haekchen scheinbar nichts tut. --}}
-          <span>API Key:
-            <strong>{{ $cartoStatus['hasApiKey'] ? 'SET' : 'MISSING' }}</strong>@if($cartoStatus['hasApiKey'])<span style="opacity:.75;">
-              @if(($cartoStatus['quelle'] ?? '') === 'env')
-                (from <code>.env</code>)
-              @else
-                (from this page)
+          <div class="lma-zeile" data-lma-live>
+            <div>
+              <label for="live_key">AeroACARS Live read key</label>
+              <p class="lma-hilfe">Stays on this server and is never sent to the browser.</p>
+            </div>
+            <div>
+              <input type="password" id="live_key" name="live_key" class="form-control" autocomplete="new-password" value=""
+                     placeholder="{{ $lmLiveKey ? 'Stored — leave empty to keep it' : 'Not set' }}">
+              @error('live_key')<p class="lma-fehler">{{ $message }}</p>@enderror
+              @if($lmLiveKey)
+                <label class="lma-schalter lma-nebenbei"><input type="checkbox" name="live_key_clear" value="1"> Remove the stored key on save</label>
               @endif
-            </span>@endif
-          </span>
-          <span style="margin-left:10px;">Accepted by CARTO:
-            <strong>{{ $cartoStatus['accepted'] === true ? 'YES' : ($cartoStatus['accepted'] === false ? 'NO' : 'UNKNOWN') }}</strong>
-          </span>
-          <span style="margin-left:10px;">Default basemap uses CARTO:
-            <strong>{{ $cartoStatus['cartoInUse'] ? 'YES' : 'NO' }}</strong>
-          </span>
-        </div>
-        @if(!empty($cartoStatus['envUeberstimmt']))
-          <div style="margin-top:10px; font-size:12px; border-top:1px solid rgba(0,0,0,0.08); padding-top:8px;">
-            <strong>Note:</strong> <code>CARTO_API_KEY</code> is set in <code>.env</code>, but the key was
-            cleared on this page — and a value set here wins. Remove the <code>.env</code> line too if you
-            want it gone for good, or enter a key above to use one again.
-          </div>
-        @endif
-        @if(!empty($cartoStatus['checkedAt']))
-          <div style="margin-top:10px; font-size:12px; border-top:1px solid rgba(0,0,0,0.08); padding-top:8px;">
-            Last checked: {{ $cartoStatus['checkedAt'] }} — re-checked automatically
-            whenever the stored key changes.
-          </div>
-        @endif
-      </div>
-
-
-        <div class="form-group" style="margin-bottom:8px;">
-          <label for="carto_api_key" style="margin-bottom:8px;">CARTO Basemaps API Key</label>
-          <input
-            id="carto_api_key"
-            name="carto_api_key"
-            type="password"
-            class="form-control"
-            value="{{ old('carto_api_key', '') }}"
-            autocomplete="new-password"
-            placeholder="{{ $cartoStatus['hasApiKey'] ? 'Leave empty to keep current key, or enter a new one' : 'Paste CARTO key (cb1_…)' }}">
-          @if($cartoStatus['hasApiKey'])
-            <div class="checkbox" style="margin-top:14px;">
-              <label>
-                <input type="checkbox" name="carto_api_key_clear" value="1" {{ old('carto_api_key_clear') ? 'checked' : '' }}>
-                Remove currently stored API key on save
-              </label>
             </div>
-          @endif
-          <p class="help-block" style="margin-top:16px;">
-            Required since 26 Aug 2026 for the <strong>Carto Light</strong> and <strong>Carto Dark</strong>
-            basemaps — without a key CARTO stamps “API KEY REQUIRED” across every tile.
-            Free up to 5 million tiles per month:
-            <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noreferrer">carto.com/basemaps/apikey</a>.
-            OpenStreetMap and Satellite are not affected.
-          </p>
-          <p class="help-block" style="margin-top:12px;">
-            New keys are checked on Save: CARTO answers <em>every</em> tile request with 200, even for a
-            wrong key — so the check compares the returned image against the un-keyed one. Identical means
-            the key was not accepted. Keeping CARTO and OpenStreetMap attribution visible is a condition of
-            the free tier.
-          </p>
-          <p class="help-block" style="margin-top:16px; margin-bottom:0;">
-            <strong>Without database access?</strong> Add the key to your <code>.env</code> instead —
-            useful before anyone opens this page, or when you deploy by file:
-          </p>
-          <pre style="margin-top:10px; margin-bottom:12px; padding:12px; font-size:12px;">CARTO_API_KEY=cb1_...</pre>
-          <p class="help-block" style="margin-top:0; margin-bottom:0;">
-            Then run <code>php artisan config:clear</code> (or Admin&nbsp;→&nbsp;Maintenance&nbsp;→&nbsp;Clear
-            Caches) so the new value is read. <strong>A key entered on this page always wins over
-            <code>.env</code></strong> — including one you deliberately removed here. The <code>.env</code>
-            value applies only while nobody has set one above.
-          </p>
-        </div>
-
-        <hr>
-        <h5>Weather</h5>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="show_weather_box" value="1" {{ $lmS('acars.livemap_show_weather_box', true) ? 'checked' : '' }}>
-            Show weather box
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="weather_proxy_enabled" value="1" {{ $lmS('acars.livemap_weather_proxy_enabled', true) ? 'checked' : '' }}>
-            Enable server-side weather proxy (recommended)
-          </label>
-          <p class="help-block" style="margin-top:6px">
-            When enabled, OpenWeatherMap key stays server-side and is not exposed in browser DevTools.
-          </p>
-        </div>
-        <div class="form-group">
-          <label for="owm_api_key">OpenWeatherMap API Key</label>
-          <input
-            id="owm_api_key"
-            name="owm_api_key"
-            type="password"
-            class="form-control"
-            value="{{ old('owm_api_key', '') }}"
-            autocomplete="new-password"
-            placeholder="{{ $weatherProxyStatus['hasApiKey'] ? 'Leave empty to keep current key, or enter a new one' : 'Paste OWM key' }}">
-          @if($weatherProxyStatus['hasApiKey'])
-            <div class="checkbox" style="margin-top:8px;">
-              <label>
-                <input type="checkbox" name="owm_api_key_clear" value="1" {{ old('owm_api_key_clear') ? 'checked' : '' }}>
-                Remove currently stored API key on save
-              </label>
+          </div>
+          <div class="lma-zeile" data-lma-live>
+            <div>
+              <label for="va_prefix">VA prefix</label>
+              <p class="lma-hilfe">Only show AeroACARS Live flights of this VA, e.g. <code>gsg</code>. Empty shows every VA the key allows.</p>
             </div>
-          @endif
-          <p class="help-block" style="margin-top:6px">
-            New keys are validated on Save against OpenWeatherMap. Leave this field empty to keep the current key.
-          </p>
-        </div>
-        <div class="form-group">
-          <label for="weather_default_layer">Default weather layer</label>
-          <select id="weather_default_layer" name="weather_default_layer" class="form-control">
-            @php($currentLayer = $lmS('acars.livemap_weather_default_layer', 'combo'))
-            @foreach($layerOptions as $value => $label)
-              <option value="{{ $value }}" {{ $currentLayer === $value ? 'selected' : '' }}>{{ $label }}</option>
-            @endforeach
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="weather_default_opacity">Default weather opacity (0.2 - 1.0)</label>
-          <input
-            id="weather_default_opacity"
-            name="weather_default_opacity"
-            type="number"
-            min="0.2"
-            max="1"
-            step="0.05"
-            class="form-control"
-            value="{{ $lmS('acars.livemap_weather_default_opacity', 1) }}">
-        </div>
+            <div>
+              <input type="text" id="va_prefix" name="va_prefix" class="form-control" autocomplete="off" maxlength="20"
+                     value="{{ old('va_prefix', $lmS('acars.livemap_va_prefix', '')) }}" placeholder="e.g. gsg">
+              @error('va_prefix')<p class="lma-fehler">{{ $message }}</p>@enderror
+            </div>
+          </div>
+          <div class="lma-zeile" data-lma-live>
+            <div>
+              <label for="live_url">AeroACARS Live address</label>
+              <p class="lma-hilfe">Leave as is. Only the official server is accepted, because the read key is sent there.</p>
+            </div>
+            <div>
+              <input type="text" id="live_url" name="live_url" class="form-control" autocomplete="off"
+                     value="{{ old('live_url', $lmS('acars.livemap_live_url', \Modules\LiveMap\Http\Controllers\LiveFlightsController::STANDARD_BASIS)) }}">
+              @error('live_url')<p class="lma-fehler">{{ $message }}</p>@enderror
+            </div>
+          </div>
+        </section>
 
-        <hr>
-        <h5>Network</h5>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="show_network_box" value="1" {{ $lmS('acars.livemap_show_network_box', true) ? 'checked' : '' }}>
-            Show network box
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="default_network_vatsim" value="1" {{ $lmS('acars.livemap_default_network_vatsim', true) ? 'checked' : '' }}>
-            VATSIM enabled by default
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="default_network_ivao" value="1" {{ $lmS('acars.livemap_default_network_ivao', true) ? 'checked' : '' }}>
-            IVAO enabled by default
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="default_show_pilots" value="1" {{ $lmS('acars.livemap_default_show_pilots', false) ? 'checked' : '' }}>
-            Show pilots by default
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="default_show_controllers" value="1" {{ $lmS('acars.livemap_default_show_controllers', true) ? 'checked' : '' }}>
-            Show controllers by default
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="default_show_sectors" value="1" {{ $lmS('acars.livemap_default_show_sectors', false) ? 'checked' : '' }}>
-            Show FIR/UIR sectors by default
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="default_follow_flight" value="1" {{ $lmS('acars.livemap_default_follow_flight', true) ? 'checked' : '' }}>
-            Follow flight by default
-          </label>
-        </div>
+        {{-- ── Flights list ── --}}
+        <section class="lma-sek">
+          <header>
+            <h5>Flights list</h5>
+            <p>The list of active and planned flights next to the map.</p>
+          </header>
+          <div class="lma-zeile">
+            <div>
+              <label for="flights_panel">Position</label>
+              <p class="lma-hilfe"><strong>Top</strong>: a collapsible panel over the map. <strong>Bottom</strong>: a table below the map, always open, sortable by column. <strong>Off</strong>: no list, the aircraft stay on the map.</p>
+              <p class="lma-hilfe">Upgrading from 4.x: replaces “Layout mode” (Modern = Top, Old style = Off).</p>
+            </div>
+            <div>
+              <select id="flights_panel" name="flights_panel" class="form-control">
+                <option value="top" {{ $tafelLage === 'top' ? 'selected' : '' }}>Top — collapsible panel over the map</option>
+                <option value="bottom" {{ $tafelLage === 'bottom' ? 'selected' : '' }}>Bottom — table below the map</option>
+                <option value="off" {{ $tafelLage === 'off' ? 'selected' : '' }}>Off — no flights list</option>
+              </select>
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="default_follow_flight" value="1" {{ $lmAn('acars.livemap_default_follow_flight', true) ? 'checked' : '' }}> Follow the selected flight</label>
+            </div>
+            <div><p class="lma-hilfe">When a visitor clicks a flight, the map keeps it centred. This sets the start state of the Follow button; visitors can switch it off.</p></div>
+          </div>
+        </section>
 
-        <hr>
-        <h5>Mobile</h5>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="mobile_show_flights_button" value="1" {{ $lmS('acars.livemap_mobile_show_flights_button', true) ? 'checked' : '' }}>
-            Show mobile Flights button
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="mobile_flights_open" value="1" {{ $lmS('acars.livemap_mobile_flights_open', false) ? 'checked' : '' }}>
-            Open Flights panel by default on mobile
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="mobile_weather_open" value="1" {{ $lmS('acars.livemap_mobile_weather_open', false) ? 'checked' : '' }}>
-            Open Weather panel by default on mobile
-          </label>
-        </div>
-        <div class="form-group">
-          <label>
-            <input type="checkbox" name="mobile_network_open" value="1" {{ $lmS('acars.livemap_mobile_network_open', false) ? 'checked' : '' }}>
-            Open Network panel by default on mobile
-          </label>
-        </div>
+        {{-- ── Map ── --}}
+        <section class="lma-sek">
+          <header>
+            <h5>Map</h5>
+            <p>Look and size of the map itself.</p>
+          </header>
+          <div class="lma-zeile">
+            <div>
+              <label for="theme_mode">Light / dark</label>
+              <p class="lma-hilfe"><strong>Follow the theme</strong> switches to dark when your site theme is dark (e.g. the dark mode of Seven or SPTheme).</p>
+            </div>
+            <div>
+              <select id="theme_mode" name="theme_mode" class="form-control">
+                <option value="auto" {{ $lmModus === 'auto' ? 'selected' : '' }}>Follow the theme</option>
+                <option value="light" {{ $lmModus === 'light' ? 'selected' : '' }}>Always light</option>
+                <option value="dark" {{ $lmModus === 'dark' ? 'selected' : '' }}>Always dark</option>
+              </select>
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="min_height">Height</label>
+              <p class="lma-hilfe">The map fills the browser window below the page header, but never less than the minimum or more than the maximum.</p>
+            </div>
+            <div>
+              <div class="lma-paar">
+                <input type="number" id="min_height" name="min_height" class="form-control" min="320" max="2000" value="{{ old('min_height', $lmS('acars.livemap_min_height', 420)) }}" aria-label="Minimum height in pixels">
+                <span>to</span>
+                <input type="number" id="max_height" name="max_height" class="form-control" min="320" max="3000" value="{{ old('max_height', $lmS('acars.livemap_max_height', 1000)) }}" aria-label="Maximum height in pixels">
+                <span>px</span>
+              </div>
+              @error('min_height')<p class="lma-fehler">{{ $message }}</p>@enderror
+              @error('max_height')<p class="lma-fehler">{{ $message }}</p>@enderror
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="show_labels" value="1" {{ $lmAn('acars.livemap_show_labels', true) ? 'checked' : '' }}> Callsigns next to the aircraft</label>
+            </div>
+            <div><p class="lma-hilfe">Shown from zoom level 6. The selected flight always shows its callsign.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="ui_primary_color">Accent colour</label>
+              <p class="lma-hilfe">Active toolbar buttons and switches, the selected tab and the selected flight. Light mode only — dark mode uses a fixed light blue that stays readable.</p>
+            </div>
+            <div class="lma-farbe">
+              <input id="ui_primary_color" name="ui_primary_color" type="color" value="{{ $lmS('acars.livemap_color_flights_header_start', '#1A2A4A') }}">
+              <code>{{ strtoupper($lmS('acars.livemap_color_flights_header_start', '#1A2A4A')) }}</code>
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="color_box_background">Panel background</label>
+              <p class="lma-hilfe">Background of the flights list, the flight details and the toolbar panels. Light mode only; keep it light so the text stays readable.</p>
+            </div>
+            <div class="lma-farbe">
+              <input id="color_box_background" name="color_box_background" type="color" value="{{ $lmS('acars.livemap_color_box_background', '#FFFFFF') }}">
+              <code>{{ strtoupper($lmS('acars.livemap_color_box_background', '#FFFFFF')) }}</code>
+            </div>
+          </div>
+        </section>
 
-        <hr>
-        <h5>Colors</h5>
-        <p class="help-block" style="margin-top:-4px">
-          Reduced to the essentials: only 3 color settings for the whole map UI.
-        </p>
-        <p class="help-block" style="margin-top:-2px">
-          These colors only change the UI design (panels/buttons), never flight or network data.
-        </p>
-        <div class="form-group">
-          <label for="ui_primary_color">Primary UI Color</label>
-          <input
-            id="ui_primary_color"
-            name="ui_primary_color"
-            type="color"
-            class="form-control"
-            value="{{ $lmS('acars.livemap_color_flights_header_start', '#1A2A4A') }}">
-          <p class="help-block" style="margin-top:6px">
-            Used for weather/network headers, flights header start, and mobile flights button (inactive).
-          </p>
-        </div>
-        <div class="form-group">
-          <label for="ui_accent_color">Accent UI Color</label>
-          <input
-            id="ui_accent_color"
-            name="ui_accent_color"
-            type="color"
-            class="form-control"
-            value="{{ $lmS('acars.livemap_color_flights_header_end', '#243B6A') }}">
-          <p class="help-block" style="margin-top:6px">
-            Used for flights header end and mobile flights button (active/open).
-          </p>
-        </div>
-        <div class="form-group">
-          <label for="color_box_background">Box Background Color</label>
-          <input
-            id="color_box_background"
-            name="color_box_background"
-            type="color"
-            class="form-control"
-            value="{{ $lmS('acars.livemap_color_box_background', '#FFFFFF') }}">
-          <p class="help-block" style="margin-top:6px">
-            Body background color of flights/weather/network boxes.
-          </p>
-        </div>
-        <div class="alert alert-info" style="font-size:12px; margin-top:8px; margin-bottom:14px;">
-          <strong>Quick map:</strong><br>
-          Primary = most headers + mobile flights button (inactive).<br>
-          Accent = flights gradient end + mobile flights button (active).<br>
-          Box Background = content area of flights/weather/network boxes.
-        </div>
+        {{-- ── Basemap ── --}}
+        <section class="lma-sek">
+          <header>
+            <h5>Basemap</h5>
+            <p>The map tiles. OpenStreetMap and Satellite work without a key; the CARTO light and dark styles need a free CARTO key.</p>
+          </header>
+          <div class="lma-zeile">
+            <div>
+              <label for="default_basemap">Default style</label>
+              <p class="lma-hilfe">The style visitors see first. Without a CARTO key a CARTO style falls back to OpenStreetMap, and the CARTO styles are not offered.</p>
+            </div>
+            <div>
+              <select id="default_basemap" name="default_basemap" class="form-control">
+                @foreach($basemapOptions as $value => $label)
+                  <option value="{{ $value }}" {{ $currentBasemap === $value ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+              </select>
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="show_basemap_switcher" value="1" {{ $lmAn('acars.livemap_show_basemap_switcher', true) ? 'checked' : '' }}> Let visitors change the style</label>
+            </div>
+            <div><p class="lma-hilfe">Adds the map style button to the toolbar.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="enable_satellite" value="1" {{ $lmAn('acars.livemap_enable_satellite', true) ? 'checked' : '' }}> Offer satellite imagery</label>
+            </div>
+            <div><p class="lma-hilfe">Adds Esri World Imagery to the styles.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="carto_api_key">CARTO API key</label>
+              <p class="lma-hilfe">Free up to 5 million tiles per month: <a href="https://carto.com/basemaps/apikey/" target="_blank" rel="noreferrer">carto.com/basemaps/apikey</a>. Without a key CARTO prints “API KEY REQUIRED” on every tile.</p>
+              <p class="lma-hilfe">Status: <strong>{{ $cartoStatus['hasApiKey'] ? 'set' : 'not set' }}</strong>@if($cartoStatus['hasApiKey']) ({{ ($cartoStatus['quelle'] ?? '') === 'env' ? 'from .env' : 'from this page' }}), accepted by CARTO: <strong>{{ $cartoStatus['accepted'] === true ? 'yes' : ($cartoStatus['accepted'] === false ? 'no' : 'unknown') }}</strong>@endif.</p>
+              @if($cartoStatus['hasApiKey'] && $cartoStatus['accepted'] !== true)
+                <p class="lma-hilfe">{{ $cartoStatus['message'] }}</p>
+              @endif
+            </div>
+            <div>
+              <input id="carto_api_key" name="carto_api_key" type="password" class="form-control"
+                     value="{{ old('carto_api_key', '') }}" autocomplete="new-password"
+                     placeholder="{{ $cartoStatus['hasApiKey'] ? 'Stored — leave empty to keep it' : 'Paste your CARTO key (cb1_…)' }}">
+              @error('carto_api_key')<p class="lma-fehler">{{ $message }}</p>@enderror
+              @if($cartoStatus['hasApiKey'])
+                <label class="lma-schalter lma-nebenbei"><input type="checkbox" name="carto_api_key_clear" value="1" {{ old('carto_api_key_clear') ? 'checked' : '' }}> Remove the stored key on save</label>
+              @endif
+              @if(!empty($cartoStatus['envUeberstimmt']))
+                <p class="lma-hilfe" style="margin-top:8px"><code>CARTO_API_KEY</code> is set in <code>.env</code>, but the key was cleared here, and this page wins. Remove the <code>.env</code> line too, or enter a key again.</p>
+              @endif
+              <details>
+                <summary>Set the key in .env instead</summary>
+                <pre>CARTO_API_KEY=cb1_...</pre>
+                Then run <code>php artisan config:clear</code> (or Admin → Maintenance → Clear Caches). A key entered on this page always wins over <code>.env</code>.
+              </details>
+              <p class="lma-hilfe" style="margin-top:8px">A new key is checked on save. Keep the CARTO and OpenStreetMap credits visible; that is a condition of the free tier.</p>
+            </div>
+          </div>
+        </section>
 
-        <hr>
-        <button type="submit" class="btn btn-primary">Save Settings</button>
-        <p style="margin-top:14px; font-size:12px; color:#666;">
-          Crafted with &hearts; in Germany by Thomas Kant -
-          <a href="https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2" target="_blank" rel="noopener noreferrer">Support via PayPal</a>
-        </p>
+        {{-- ── Weather ── --}}
+        <section class="lma-sek">
+          <header>
+            <h5>Weather</h5>
+            <p>Optional weather layers from OpenWeatherMap. Without an API key the map simply has no weather.</p>
+          </header>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="show_weather_box" value="1" {{ $lmAn('acars.livemap_show_weather_box', true) ? 'checked' : '' }}> Show the weather button</label>
+            </div>
+            <div><p class="lma-hilfe">The weather panel in the toolbar. Off only removes the button: the layer at start (below) still shows. Without an OpenWeatherMap key there is no weather, so switch the button off.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="owm_api_key">OpenWeatherMap API key</label>
+              <p class="lma-hilfe">Free at openweathermap.org. A brand-new key can take up to two hours before OpenWeatherMap accepts it; it is saved anyway.</p>
+            </div>
+            <div>
+              <input id="owm_api_key" name="owm_api_key" type="password" class="form-control"
+                     value="{{ old('owm_api_key', '') }}" autocomplete="new-password"
+                     placeholder="{{ $weatherProxyStatus['hasApiKey'] ? 'Stored — leave empty to keep it' : 'Paste your OpenWeatherMap key' }}">
+              @error('owm_api_key')<p class="lma-fehler">{{ $message }}</p>@enderror
+              @if($weatherProxyStatus['hasApiKey'])
+                <label class="lma-schalter lma-nebenbei"><input type="checkbox" name="owm_api_key_clear" value="1" {{ old('owm_api_key_clear') ? 'checked' : '' }}> Remove the stored key on save</label>
+              @endif
+              @if(!empty($weatherProxyStatus['lastErrorCode']) || $weatherProxyStatus['fallbackActive'])
+                <details>
+                  <summary>Last OpenWeatherMap error: {{ $weatherProxyStatus['errorInfo']['code'] ?? 'none' }}</summary>
+                  <p class="lma-hilfe" style="margin-top:6px">{{ $weatherProxyStatus['errorInfo']['meaning'] }} {{ $weatherProxyStatus['errorInfo']['action'] }}</p>
+                  @if(!empty($weatherProxyStatus['errorInfo']['reason']))
+                    <p class="lma-hilfe">Detail: {{ $weatherProxyStatus['errorInfo']['reason'] }}</p>
+                  @endif
+                  @if(!empty($weatherProxyStatus['lastErrorAt']))
+                    <p class="lma-hilfe">At {{ $weatherProxyStatus['lastErrorAt'] }}@if(!empty($weatherProxyStatus['lastSuccessAt'])) — last good tile {{ $weatherProxyStatus['lastSuccessAt'] }}@endif.</p>
+                  @endif
+                </details>
+              @endif
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="weather_proxy_enabled" value="1" {{ $lmAn('acars.livemap_weather_proxy_enabled', true) ? 'checked' : '' }}> Load weather through this server (recommended)</label>
+            </div>
+            <div><p class="lma-hilfe">Keeps the key on the server. When off, the key is sent to every visitor's browser.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="weather_default_layer">Layer at start</label>
+              <p class="lma-hilfe">Visitors can change it in the weather panel.</p>
+            </div>
+            <div>
+              <select id="weather_default_layer" name="weather_default_layer" class="form-control">
+                @foreach($layerOptions as $value => $label)
+                  <option value="{{ $value }}" {{ $currentLayer === $value ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+              </select>
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="weather_default_opacity">Opacity at start</label>
+              <p class="lma-hilfe">From 0.2 (faint) to 1 (solid).</p>
+            </div>
+            <div>
+              <input id="weather_default_opacity" name="weather_default_opacity" type="number" min="0.2" max="1" step="0.05"
+                     class="form-control" style="max-width:140px" value="{{ $lmS('acars.livemap_weather_default_opacity', 1) }}">
+            </div>
+          </div>
+        </section>
+
+        {{-- ── VATSIM / IVAO ── --}}
+        <section class="lma-sek">
+          <header>
+            <h5>VATSIM and IVAO</h5>
+            <p>Online network traffic from the public VATSIM and IVAO data. These options set what is switched on when the map opens; visitors can toggle each one.</p>
+          </header>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="show_network_box" value="1" {{ $lmAn('acars.livemap_show_network_box', true) ? 'checked' : '' }}> Show the network button</label>
+            </div>
+            <div><p class="lma-hilfe">The network panel in the toolbar. Off only removes the button: whatever is switched on below still shows, and visitors cannot change it. To show no network traffic, untick VATSIM and IVAO as well.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div><label>Networks at start</label></div>
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="default_network_vatsim" value="1" {{ $lmAn('acars.livemap_default_network_vatsim', true) ? 'checked' : '' }}> VATSIM</label>
+              <label class="lma-schalter" style="margin-top:8px"><input type="checkbox" name="default_network_ivao" value="1" {{ $lmAn('acars.livemap_default_network_ivao', true) ? 'checked' : '' }}> IVAO</label>
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label>Shown at start</label>
+              <p class="lma-hilfe">Network pilots can crowd the map; controllers and sectors are lighter.</p>
+            </div>
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="default_show_pilots" value="1" {{ $lmAn('acars.livemap_default_show_pilots', false) ? 'checked' : '' }}> Pilots</label>
+              <label class="lma-schalter" style="margin-top:8px"><input type="checkbox" name="default_show_controllers" value="1" {{ $lmAn('acars.livemap_default_show_controllers', true) ? 'checked' : '' }}> Controllers</label>
+              <label class="lma-schalter" style="margin-top:8px"><input type="checkbox" name="default_show_sectors" value="1" {{ $lmAn('acars.livemap_default_show_sectors', false) ? 'checked' : '' }}> FIR / UIR sectors</label>
+            </div>
+          </div>
+        </section>
+
+        {{-- ── Phones ── --}}
+        <section class="lma-sek">
+          <header>
+            <h5>Phones and narrow screens</h5>
+            <p>On narrow screens the flights list, the flight details and the toolbar panels share one column, so only one is open at a time.</p>
+          </header>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="mobile_show_flights_button" value="1" {{ $lmAn('acars.livemap_mobile_show_flights_button', true) ? 'checked' : '' }}> Show the flights list</label>
+            </div>
+            <div><p class="lma-hilfe">Off hides the flights list on narrow screens; the aircraft stay on the map.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="mobile_flights_open" value="1" {{ $lmAn('acars.livemap_mobile_flights_open', false) ? 'checked' : '' }}> Open the flights list at start</label>
+            </div>
+            <div><p class="lma-hilfe">Position “Top” only. At the bottom the list is always open.</p></div>
+          </div>
+          <div class="lma-zeile">
+            <div><label>Open a panel at start</label></div>
+            <div>
+              <label class="lma-schalter"><input type="checkbox" name="mobile_network_open" value="1" {{ $lmAn('acars.livemap_mobile_network_open', false) ? 'checked' : '' }}> Network</label>
+              <label class="lma-schalter" style="margin-top:8px"><input type="checkbox" name="mobile_weather_open" value="1" {{ $lmAn('acars.livemap_mobile_weather_open', false) ? 'checked' : '' }}> Weather</label>
+              <p class="lma-hilfe" style="margin-top:8px">Only one panel opens: Network wins over Weather, and neither opens when the flights list opens at start.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="lma-fuss">
+          <button type="submit" class="btn btn-primary">Save settings</button>
+          <p>Crafted with &hearts; in Germany by Thomas Kant · <a href="https://www.paypal.com/donate/?hosted_button_id=7QEUD3PZLZPV2" target="_blank" rel="noopener noreferrer">Support via PayPal</a></p>
+        </div>
       </form>
-
     </div>
   </div>
+
+  <script>
+    // AeroACARS Live fields only matter when that source is selected.
+    (function () {
+      var wahl = document.getElementById('flight_source');
+      if (!wahl) return;
+      var zeige = function () {
+        var live = wahl.value !== 'phpvms';
+        document.querySelectorAll('[data-lma-live]').forEach(function (z) { z.hidden = !live; });
+      };
+      wahl.addEventListener('change', zeige);
+      zeige();
+    })();
+  </script>
 @endsection

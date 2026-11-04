@@ -26,6 +26,8 @@ Release date: 2026-11-03
 * **More robust:** fetches have a timeout and are retried (large data files 5 minutes after a failure), sources come via jsDelivr (7-day browser cache), sector labels are nudged or hidden instead of overlapping.
 * **Not adopted:** TRACON areas from the SimAware TRACON Project (measured 03.11.2026: the 1.77 MB release asset has no CORS header on GitHub, jsDelivr only has 1389 single files / 4.4 MB without a prefix index; the only way left would be a fetch through every VA's server), so the green TRACON shield stays. Also not adopted: VATGlasses altitude sectors (28 MB, licence CC BY-NC-SA, third-party service).
 * **New settings** under Admin → Live Map: flight panel position, source "Both", VA prefix, light/dark/auto, minimum/maximum height, callsign labels on/off.
+* **Settings page tidied up (English only):** a status row on top, then seven clear sections with a short help text for every setting. The unused colour "Accent UI Color" is gone; "Primary UI Color" is now "Accent colour" (light mode only). "Show mobile Flights button" is now "Show the flights list".
+* **Fixed:** with the weather proxy on (default) the settings could not be saved without an OpenWeatherMap key. They now save, and the map simply has no weather.
 
 ### Upgrade
 
@@ -60,6 +62,8 @@ Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
 * **Robuster:** Abrufe haben eine Zeitgrenze und werden neu versucht (große Datendateien 5 Minuten nach einem Fehlschlag), die Quellen kommen über jsDelivr (Browser-Puffer 7 Tage), Sektor-Etiketten werden gerückt oder ausgeblendet statt sich zu überlappen.
 * **Bewusst nicht übernommen:** TRACON-Flächen aus dem SimAware-TRACON-Project (gemessen am 03.11.2026: das Release-Asset von 1,77 MB hat bei GitHub keine CORS-Freigabe, jsDelivr hat nur 1389 Einzeldateien / 4,4 MB ohne Präfix-Index; es bliebe nur ein Abruf über den Server jeder VA), daher bleibt der grüne TRACON-Schild. Ebenfalls nicht: VATGlasses-Höhensektoren (28 MB, Lizenz CC BY-NC-SA, Fremddienst).
 * **Neue Einstellungen** unter Admin → Live Map: Lage der Flugtafel, Quelle „Beide“, VA-Kennung, Hell/Dunkel/Auto, Mindest-/Höchsthöhe, Rufzeichen an/aus.
+* **Verwaltungsseite aufgeräumt (nur Englisch):** oben eine Statuszeile, dann sieben klare Abschnitte mit einem kurzen Hilfetext je Einstellung. Die ungenutzte Farbe „Accent UI Color“ ist weg, „Primary UI Color“ heißt jetzt „Accent colour“ (nur hell). „Show mobile Flights button“ heißt jetzt „Show the flights list“.
+* **Behoben:** Bei eingeschaltetem Wetter-Proxy (Standard) ließen sich die Einstellungen ohne OpenWeatherMap-Schlüssel nicht speichern. Jetzt wird gespeichert, und die Karte zeigt einfach kein Wetter.
 
 ### Aktualisieren
 

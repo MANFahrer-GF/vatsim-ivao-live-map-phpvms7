@@ -45,11 +45,9 @@ class SettingsController extends Controller
             'live_url'                => 'nullable|string|max:200',
             'live_key'                => 'nullable|string|max:256',
             'ui_primary_color'           => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'ui_accent_color'            => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'color_box_background'       => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
-        $proxyEnabled = $request->boolean('weather_proxy_enabled');
         $currentOwmApiKey = trim((string) $this->lmGet('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')));
         $submittedOwmApiKey = trim((string) ($validated['owm_api_key'] ?? ''));
         $clearOwmApiKey = $request->boolean('owm_api_key_clear');
@@ -57,11 +55,10 @@ class SettingsController extends Controller
             ? $submittedOwmApiKey
             : ($clearOwmApiKey ? '' : $currentOwmApiKey);
 
-        if ($proxyEnabled && $owmApiKey === '') {
-            return back()->withInput()->withErrors([
-                'owm_api_key' => 'OpenWeatherMap API key is required when weather proxy is enabled.',
-            ]);
-        }
+        // 5.1: Ohne Wetter-Schluessel wird trotzdem gespeichert. Das Widget
+        // schaltet das Wetter dann ab (widget.blade.php, $weatherAvailable);
+        // vorher liess sich bei eingeschaltetem Proxy (Standard) gar nichts
+        // speichern, solange kein Schluessel hinterlegt war.
 
         // CARTO-Schluessel — dieselbe Mechanik wie beim Wetter-Schluessel:
         // leer heisst "behalten", nur das Haekchen loescht.
@@ -126,7 +123,9 @@ class SettingsController extends Controller
         // damit aeltere Theme-Dateien und ein Rueckweg auf 4.7.x weiter stimmen.
         $tafelLage = $validated['flights_panel'];
         $primaryColor = $this->normalizeHexColor($validated['ui_primary_color'] ?? '', '#1A2A4A');
-        $accentColor = $this->normalizeHexColor($validated['ui_accent_color'] ?? '', '#243B6A');
+        // 5.1: Die Akzentfarbe ist die Farbe oben (styles.blade.php --lm-akzent);
+        // der alte zweite Farbwert hat kein Feld mehr und bleibt, wie er ist.
+        $accentColor = $this->normalizeHexColor((string) $this->lmGet('acars.livemap_color_flights_header_end', '#243B6A'), '#243B6A');
         $boxBackgroundColor = $this->normalizeHexColor($validated['color_box_background'] ?? '', '#FFFFFF');
 
         $payload = [
@@ -270,9 +269,9 @@ class SettingsController extends Controller
             if (md5($mit->body()) === $referenz) {
                 return [
                     'valid'   => false,
-                    'message' => 'CARTO liefert mit diesem Schlüssel dieselbe Kachel wie ohne — '
-                        .'er wird also nicht angenommen. Bitte den Wert aus der CARTO-Mail prüfen '
-                        .'(Format: cb1_…). Die Karte trägt sonst weiterhin das Wasserzeichen.',
+                    'message' => 'CARTO returns the same tile with this key as without one, '
+                        .'so the key is not accepted. Please check the value from the CARTO e-mail '
+                        .'(format: cb1_…). Otherwise the map keeps the watermark.',
                 ];
             }
 
@@ -470,24 +469,25 @@ class SettingsController extends Controller
 
         $state = 'ok';
         $badgeClass = 'success';
-        $title = 'Weather Proxy OK';
-        $message = 'Proxy is active and no temporary upstream fallback is currently detected.';
+        $title = 'Working';
+        $message = 'Weather loads through this server.';
 
-        if (!$proxyEnabled) {
-            $state = 'disabled';
-            $badgeClass = 'info';
-            $title = 'Weather Proxy Disabled';
-            $message = 'Proxy is turned off in settings. Browser will call OpenWeather directly (key may be visible).';
-        } elseif (!$hasApiKey) {
+        // 5.1: Wetter ist freiwillig. Ohne Schluessel ist es aus, kein Fehler.
+        if (!$hasApiKey) {
             $state = 'missing_key';
-            $badgeClass = 'danger';
-            $title = 'API Key Missing';
-            $message = 'No OpenWeatherMap API key configured. Weather tiles cannot be loaded.';
+            $badgeClass = 'info';
+            $title = 'Off';
+            $message = 'No OpenWeatherMap key, so the map shows no weather.';
+        } elseif (!$proxyEnabled) {
+            $state = 'disabled';
+            $badgeClass = 'warning';
+            $title = 'Direct, without proxy';
+            $message = 'Weather loads straight from OpenWeatherMap; the key is visible in the browser.';
         } elseif ($fallbackActive) {
             $state = 'fallback';
             $badgeClass = 'warning';
-            $title = 'Fallback Active';
-            $message = 'OpenWeather upstream recently failed. Proxy serves blank tiles temporarily to prevent browser error spam.';
+            $title = 'Temporarily unavailable';
+            $message = 'OpenWeatherMap failed recently; blank tiles are served for a while instead of errors.';
         }
 
         return [

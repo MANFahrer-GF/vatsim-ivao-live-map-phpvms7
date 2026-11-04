@@ -137,25 +137,17 @@ Admin page also shows:
 
 ## Mobile Behavior
 
-Current mobile behavior is intentionally minimal:
+On narrow screens the flights list, the flight details and the toolbar panels
+share one column, so only one is open at a time. Admin options (section
+*Phones and narrow screens*) choose whether the flights list is shown and what
+is open at start.
 
-- One floating button: **Flights**
-- Network control remains in the side/bottom Network panel (no extra green network floating button)
-- Admin options control default open/closed states for Flights/Weather/Network sections
+## Colors
 
-## Colors (Reduced)
+Two colour settings, both for light mode only (dark mode uses fixed colours):
 
-Admin color settings were simplified to:
-
-1. **Primary UI Color**
-2. **Accent UI Color**
-3. **Box Background Color**
-
-Mapping:
-
-- Primary: Weather/Network headers, Flights header start, mobile Flights button inactive
-- Accent: Flights header end, mobile Flights button active
-- Box Background: body area of flights/weather/network panels
+1. **Accent colour**: active toolbar buttons and switches, the selected tab and the selected flight
+2. **Panel background**: flights list, flight details and toolbar panels
 
 ## Security
 

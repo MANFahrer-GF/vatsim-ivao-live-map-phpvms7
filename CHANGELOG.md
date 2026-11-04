@@ -143,6 +143,35 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
   Rufzeichen neben den Flugzeugen ab Zoom 6 (an/aus).
   *New settings: flight panel position (top / bottom / off), source "Both", VA prefix, light/dark/auto, min/max height, callsign labels.*
 
+### Changed / Geändert — Verwaltungsseite (Admin → Live Map)
+- **Neu geordnet und erklärt, nur Englisch** (öffentliches Modul): Statuszeile oben
+  (Flüge, Kartengrundlage, Wetter, ACARS-Live-Zeit), dann Flugdaten, Flugliste, Karte,
+  Kartengrundlage, Wetter, VATSIM/IVAO, Handys. Jede Einstellung hat einen kurzen Hilfetext,
+  der sagt, was sie auf der Karte wirklich tut; die AeroACARS-Felder erscheinen nur bei
+  Quelle AeroACARS oder Beide. Speichern-Leiste bleibt beim Scrollen sichtbar.
+  *Reordered and explained, English only: status row, seven sections, a short help text per
+  setting; AeroACARS fields only for that source; sticky save bar.*
+- **Farbe „Accent UI Color“ entfernt:** sie wirkte seit der Neugestaltung nirgends mehr
+  (`--lm-accent` ohne Verwender). „Primary UI Color“ heißt jetzt **Accent colour**;
+  sie und **Panel background** gelten nur im hellen Modus (dunkel feste Farben).
+  *Removed the unused "Accent UI Color"; "Primary UI Color" is now "Accent colour"; both
+  colours apply in light mode only.*
+- „Show mobile Flights button“ heißt **Show the flights list** (es gibt keinen Knopf; aus
+  blendet die Liste auf schmalen Bildschirmen aus). Hinweise: „Open the flights list at start“
+  wirkt nur bei Lage oben; von Netzwerk/Wetter öffnet beim Start nur eines.
+  *"Show mobile Flights button" is now "Show the flights list"; notes on what the mobile
+  start options really do.*
+
+### Fixed / Behoben — Verwaltungsseite
+- **Speichern ohne OpenWeatherMap-Schlüssel ging nicht**, solange der Wetter-Proxy an war
+  (Standard) — eine VA ohne Wetter konnte keine Einstellung ändern. Jetzt wird gespeichert,
+  die Karte zeigt dann einfach kein Wetter. Der Wetterstatus ist ohne Schlüssel „Off“
+  statt eines roten Alarms.
+  *Saving without an OpenWeatherMap key failed while the weather proxy was on (default).
+  It now saves and the map simply has no weather; the status shows "Off" instead of a red alert.*
+- Die Ablehnungsmeldung bei falschem CARTO-Schlüssel war deutsch, jetzt englisch.
+  *The CARTO key rejection message is now in English.*
+
 ### Upgrade
 1. `LiveMap/` nach `modules/` kopieren (erst hochladen, dann umbenennen, siehe INSTALL.txt).
 2. Die Theme-Datei `live_map.blade.php` aus dem Paket in **jedes benutzte Theme**
