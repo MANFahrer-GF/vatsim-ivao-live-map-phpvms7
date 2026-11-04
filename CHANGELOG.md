@@ -26,13 +26,14 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
   Spaltenköpfe sortieren (Standard Phase in Flugreihenfolge, darin Rest-Strecke;
   Offline unten; fehlende Werte hinten; Rufzeichen natürlich, GSG7 vor GSG101),
   Wahl in `localStorage` (`livemap_sort`). Ohne Logo: Airline-Buchstaben;
-  fehlt das Logo im Flug, das der phpVMS-Airline (`AIRLINE_LOGOS`). Netz-Punkte:
-  grün = an und geladen, rot = Fehler, aus = kein Punkt. Popups dunkel lesbar.
+  fehlt das Logo im Flug, das der phpVMS-Airline (`AIRLINE_LOGOS`). Grüner Punkt an
+  jedem eingeschalteten Schalter (Netz, Piloten, Lotsen, FIR-Sektoren, Wetter); bei
+  VATSIM/IVAO grau = lädt, rot = Fehler. Popups dunkel lesbar.
   *Redesign: flat surfaces, grouped tools, tinted phases, admin header colour as
   accent; bottom list without a fold-out header and without height limit;
   sortable columns (default phase in flight order, then distance to go), stored
-  in the browser; airline letters / airline logo fallback; network dots green /
-  red / off; dark popups readable.*
+  in the browser; airline letters / airline logo fallback; green dot on every switch that is on
+  (grey loading / red error on VATSIM/IVAO); dark popups readable.*
 - **Datenquelle „Beide“** (neben phpVMS und AeroACARS Live): AeroACARS- und
   phpVMS-Flug mit demselben Piloten (phpVMS-Konto `users.id`) und demselben
   Rufzeichen sind ein Flug (Registrierung, PIREP-Link und Logo kommen vom PIREP). Fällt eine Quelle aus,

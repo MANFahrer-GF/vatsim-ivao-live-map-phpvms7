@@ -271,6 +271,13 @@
                     .lm3 .lm3-schalter.active .map-network-dot { display: inline-block; }
                     .lm3 .map-network-dot.live { background: #22c55e; }
                     .lm3 .map-network-dot.fehler { background: #ef4444; }
+                    /* Alle anderen Ein/Aus-Schalter (Piloten, Lotsen, FIR-Sektoren, Wetter):
+                       gruener Punkt, solange eingeschaltet — einheitlich mit VATSIM/IVAO */
+                    .lm3 .lm3-schalter.vatsim-btn::before, .lm3 .lm3-schalter.weather-btn::before {
+                        content: ''; flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+                        background: #22c55e; box-shadow: 0 0 0 2px rgba(255,255,255,.55); display: none;
+                    }
+                    .lm3 .lm3-schalter.vatsim-btn.active::before, .lm3 .lm3-schalter.weather-btn.active::before { display: inline-block; }
                     .lm3-statistik { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--lm-text-2); text-align: center; }
                     .lm3-regler { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--lm-text-2); }
                     .lm3-regler label { margin: 0; }
