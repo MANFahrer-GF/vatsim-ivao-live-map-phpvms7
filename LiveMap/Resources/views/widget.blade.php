@@ -119,12 +119,44 @@
                         $weatherDefault = 'none';
                     }
                     $flightsHeaderStart = $lmHexColor($lmSetting('acars.livemap_color_flights_header_start', '#1A2A4A'), '#1A2A4A');
-                    $flightsHeaderEnd = $lmHexColor($lmSetting('acars.livemap_color_flights_header_end', '#243B6A'), '#243B6A');
                     $weatherHeaderColor = $lmHexColor($lmSetting('acars.livemap_color_weather_header', '#1A2E4A'), '#1A2E4A');
                     $networkHeaderColor = $lmHexColor($lmSetting('acars.livemap_color_network_header', '#1A2E4A'), '#1A2E4A');
                     $boxBackgroundColor = $lmHexColor($lmSetting('acars.livemap_color_box_background', '#FFFFFF'), '#FFFFFF');
                     $mobileButtonColor = $lmHexColor($lmSetting('acars.livemap_color_mobile_button', '#1A2A4A'), '#1A2A4A');
                     $mobileButtonActiveColor = $lmHexColor($lmSetting('acars.livemap_color_mobile_button_active', '#243B6A'), '#243B6A');
+                    // 5.1: Akzent hell (Feld „Accent colour“) und dunkel einstellbar; die
+                    // Zeilen-Toenungen und die Schrift auf dem Akzent leiten sich davon ab,
+                    // damit z. B. eine gruene VA-Seite kein Blau mehr behaelt.
+                    $lmAkzentDunkel = $lmHexColor($lmSetting('acars.livemap_color_accent_dark', '#7CB8F0'), '#7CB8F0');
+                    $lmSchriftAuf = function ($hex) {
+                        // WCAG-Kontrast: Weiss oder Dunkelblau, was besser lesbar ist.
+                        $lin = function ($c) { $c = $c / 255; return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4; };
+                        $h = ltrim((string) $hex, '#');
+                        $l = 0.2126 * $lin(hexdec(substr($h, 0, 2))) + 0.7152 * $lin(hexdec(substr($h, 2, 2))) + 0.0722 * $lin(hexdec(substr($h, 4, 2)));
+                        $gegenWeiss = 1.05 / ($l + 0.05);
+                        $gegenDunkel = ($l + 0.05) / (0.0137 + 0.05); // #0B1F3A
+                        return $gegenWeiss >= $gegenDunkel ? '#FFFFFF' : '#0B1F3A';
+                    };
+                    // Helle Zeilen-Toenung: kraeftige Fassung des Akzents (gleicher Farbton,
+                    // Saettigung >= 70 %, Helligkeit 55 %). Ein dunkler Akzent wie Marineblau
+                    // wuerde sonst grau toenen; so bleibt GSG beim bisherigen Hellblau.
+                    $lmToenung = function ($hex) {
+                        $h = ltrim((string) $hex, '#');
+                        $r = hexdec(substr($h, 0, 2)) / 255; $g = hexdec(substr($h, 2, 2)) / 255; $b = hexdec(substr($h, 4, 2)) / 255;
+                        $max = max($r, $g, $b); $min = min($r, $g, $b); $d = $max - $min; $l = ($max + $min) / 2;
+                        $s = $d == 0 ? 0 : $d / (1 - abs(2 * $l - 1));
+                        $hue = 0;
+                        if ($d != 0) {
+                            if ($max == $r) $hue = 60 * fmod((($g - $b) / $d), 6);
+                            elseif ($max == $g) $hue = 60 * ((($b - $r) / $d) + 2);
+                            else $hue = 60 * ((($r - $g) / $d) + 4);
+                        }
+                        if ($hue < 0) $hue += 360;
+                        $s = $d == 0 ? 0 : max($s, 0.7); $l = 0.55;
+                        $c = (1 - abs(2 * $l - 1)) * $s; $x = $c * (1 - abs(fmod($hue / 60, 2) - 1)); $m = $l - $c / 2;
+                        [$r1, $g1, $b1] = $hue < 60 ? [$c, $x, 0] : ($hue < 120 ? [$x, $c, 0] : ($hue < 180 ? [0, $c, $x] : ($hue < 240 ? [0, $x, $c] : ($hue < 300 ? [$x, 0, $c] : [$c, 0, $x]))));
+                        return sprintf('#%02X%02X%02X', round(($r1 + $m) * 255), round(($g1 + $m) * 255), round(($b1 + $m) * 255));
+                    };
                     $boxBackgroundRgba = $lmHexToRgba($boxBackgroundColor, 0.97);
                     $mobileButtonRgba = $lmHexToRgba($mobileButtonColor, 0.92);
                     $mobileButtonActiveRgba = $lmHexToRgba($mobileButtonActiveColor, 0.92);

@@ -137,21 +137,22 @@
           <div class="lma-zeile">
             <div>
               <label for="flight_source">Source</label>
-              <p class="lma-hilfe"><strong>phpVMS</strong> shows the running PIREPs of this site. <strong>AeroACARS Live</strong> shows the same flights, phases and fields as the AeroACARS Live web app and needs a read key.</p>
-              <p class="lma-hilfe"><strong>Both</strong> matches AeroACARS flights to their PIREP by callsign and pilot and adds flights only phpVMS knows.</p>
+              <p class="lma-hilfe"><strong>phpVMS</strong> shows the running PIREPs of this site. This is the right choice for every VA.</p>
+              <p class="lma-hilfe"><strong>AeroACARS Live</strong> and <strong>Both</strong> are for <strong>German Sky Group only</strong>: they read the live server of German Sky Group's own ACARS client and need a read key that only German Sky Group has. Other VAs cannot use them.</p>
             </div>
             <div>
               <select id="flight_source" name="flight_source" class="form-control">
                 <option value="phpvms" {{ $lmQuelle === 'phpvms' ? 'selected' : '' }}>phpVMS (running PIREPs)</option>
-                <option value="aeroacars" {{ $lmQuelle === 'aeroacars' ? 'selected' : '' }}>AeroACARS Live</option>
-                <option value="beide" {{ $lmQuelle === 'beide' ? 'selected' : '' }}>Both (AeroACARS first, plus phpVMS-only flights)</option>
+                <option value="aeroacars" {{ $lmQuelle === 'aeroacars' ? 'selected' : '' }}>AeroACARS Live — German Sky Group only</option>
+                <option value="beide" {{ $lmQuelle === 'beide' ? 'selected' : '' }}>Both: AeroACARS Live + phpVMS — German Sky Group only</option>
               </select>
             </div>
           </div>
           <div class="lma-zeile" data-lma-live>
             <div>
               <label for="live_key">AeroACARS Live read key</label>
-              <p class="lma-hilfe">Stays on this server and is never sent to the browser.</p>
+              <p class="lma-hilfe">Issued by German Sky Group. Stays on this server and is never sent to the browser.</p>
+              <p class="lma-hilfe"><strong>Both</strong> matches AeroACARS flights to their PIREP by callsign and pilot and adds flights only phpVMS knows.</p>
             </div>
             <div>
               <input type="password" id="live_key" name="live_key" class="form-control" autocomplete="new-password" value=""
@@ -258,11 +259,21 @@
           <div class="lma-zeile">
             <div>
               <label for="ui_primary_color">Accent colour</label>
-              <p class="lma-hilfe">Active toolbar buttons and switches, the selected tab and the selected flight. Light mode only — dark mode uses a fixed light blue that stays readable.</p>
+              <p class="lma-hilfe">The map's own colour in light mode: active toolbar buttons and switches, the selected tab, the selected flight and the light tint of hovered and selected rows. Pick your site's main colour, e.g. green for a green site. Text on it turns white or dark automatically.</p>
             </div>
             <div class="lma-farbe">
               <input id="ui_primary_color" name="ui_primary_color" type="color" value="{{ $lmS('acars.livemap_color_flights_header_start', '#1A2A4A') }}">
               <code>{{ strtoupper($lmS('acars.livemap_color_flights_header_start', '#1A2A4A')) }}</code>
+            </div>
+          </div>
+          <div class="lma-zeile">
+            <div>
+              <label for="ui_accent_dark_color">Accent colour (dark mode)</label>
+              <p class="lma-hilfe">The same in dark mode. Use a lighter shade of your colour so it stands out on the dark panels.</p>
+            </div>
+            <div class="lma-farbe">
+              <input id="ui_accent_dark_color" name="ui_accent_dark_color" type="color" value="{{ $lmS('acars.livemap_color_accent_dark', '#7CB8F0') }}">
+              <code>{{ strtoupper($lmS('acars.livemap_color_accent_dark', '#7CB8F0')) }}</code>
             </div>
           </div>
           <div class="lma-zeile">

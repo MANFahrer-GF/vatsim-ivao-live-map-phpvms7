@@ -46,6 +46,7 @@ class SettingsController extends Controller
             'live_key'                => 'nullable|string|max:256',
             'ui_primary_color'           => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'color_box_background'       => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'ui_accent_dark_color'       => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         $currentOwmApiKey = trim((string) $this->lmGet('acars.livemap_owm_api_key', env('LIVEMAP_OWM_API_KEY', '')));
@@ -127,6 +128,7 @@ class SettingsController extends Controller
         // der alte zweite Farbwert hat kein Feld mehr und bleibt, wie er ist.
         $accentColor = $this->normalizeHexColor((string) $this->lmGet('acars.livemap_color_flights_header_end', '#243B6A'), '#243B6A');
         $boxBackgroundColor = $this->normalizeHexColor($validated['color_box_background'] ?? '', '#FFFFFF');
+        $accentDarkColor = $this->normalizeHexColor($validated['ui_accent_dark_color'] ?? '', '#7CB8F0');
 
         $payload = [
             'acars.livemap_flights_panel'               => $tafelLage,
@@ -167,6 +169,7 @@ class SettingsController extends Controller
             'acars.livemap_color_box_background'        => $boxBackgroundColor,
             'acars.livemap_color_mobile_button'         => $primaryColor,
             'acars.livemap_color_mobile_button_active'  => $accentColor,
+            'acars.livemap_color_accent_dark'           => $accentDarkColor,
         ];
 
         foreach ($this->definitions() as $key => $definition) {
@@ -859,6 +862,12 @@ class SettingsController extends Controller
                 'description' => 'Background color for active mobile Flights toggle button',
                 'type'        => 'string',
                 'default'     => '#243B6A',
+            ],
+            'acars.livemap_color_accent_dark' => [
+                'name'        => 'Live Map: Accent Colour (dark mode)',
+                'description' => 'Accent of the map in dark mode: active buttons, selected tab and flight, row tints',
+                'type'        => 'string',
+                'default'     => '#7CB8F0',
             ],
         ];
     }

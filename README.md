@@ -101,7 +101,7 @@ No SSH/CLI commands are required for any of the above.
 Admin → Live Map → source:
 
 - **phpVMS** (default): the running PIREPs of this site.
-- **AeroACARS Live**: flights from the AeroACARS Live server (needs a read key; the key stays on the server). Optional **VA prefix** limits the list to the flights of one VA.
+- **AeroACARS Live** (German Sky Group only): flights from the live server of German Sky Group's own ACARS client. It needs a read key that only German Sky Group has, so other VAs use **phpVMS**. The key stays on the server. Optional **VA prefix** limits the list to the flights of one VA.
 - **Both**: AeroACARS flights plus phpVMS-only flights. An AeroACARS flight and a phpVMS flight with the same pilot and the same callsign are shown as one flight (registration, PIREP link and logo come from the PIREP). If one source fails, the other is shown with a notice.
 
 ## Critical phpVMS Setting Note (Important)
@@ -144,10 +144,10 @@ is open at start.
 
 ## Colors
 
-Two colour settings, both for light mode only (dark mode uses fixed colours):
+Colour settings (phase, ATC and route colours stay fixed as data colours):
 
-1. **Accent colour**: active toolbar buttons and switches, the selected tab and the selected flight
-2. **Panel background**: flights list, flight details and toolbar panels
+1. **Accent colour** and **Accent colour (dark mode)**: active toolbar buttons and switches, the selected tab, the selected flight and the tint of hovered and selected rows
+2. **Panel background** (light mode only): flights list, flight details and toolbar panels
 
 ## Security
 

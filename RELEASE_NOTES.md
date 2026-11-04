@@ -28,6 +28,8 @@ Release date: 2026-11-03
 * **New settings** under Admin → Live Map: flight panel position, source "Both", VA prefix, light/dark/auto, minimum/maximum height, callsign labels on/off.
 * **Settings page tidied up (English only):** a status row on top, then seven clear sections with a short help text for every setting. The unused colour "Accent UI Color" is gone; "Primary UI Color" is now "Accent colour" (light mode only). "Show mobile Flights button" is now "Show the flights list".
 * **Fixed:** with the weather proxy on (default) the settings could not be saved without an OpenWeatherMap key. They now save, and the map simply has no weather.
+* **Your colours:** accent colour for light and dark mode; tabs, switches, selected and hovered rows follow it, so a green site gets a green map. Text on the accent turns white or dark automatically.
+* **AeroACARS Live is German Sky Group only:** it needs a read key that only German Sky Group has. Every other VA uses the source phpVMS.
 
 ### Upgrade
 
@@ -64,6 +66,8 @@ Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
 * **Neue Einstellungen** unter Admin → Live Map: Lage der Flugtafel, Quelle „Beide“, VA-Kennung, Hell/Dunkel/Auto, Mindest-/Höchsthöhe, Rufzeichen an/aus.
 * **Verwaltungsseite aufgeräumt (nur Englisch):** oben eine Statuszeile, dann sieben klare Abschnitte mit einem kurzen Hilfetext je Einstellung. Die ungenutzte Farbe „Accent UI Color“ ist weg, „Primary UI Color“ heißt jetzt „Accent colour“ (nur hell). „Show mobile Flights button“ heißt jetzt „Show the flights list“.
 * **Behoben:** Bei eingeschaltetem Wetter-Proxy (Standard) ließen sich die Einstellungen ohne OpenWeatherMap-Schlüssel nicht speichern. Jetzt wird gespeichert, und die Karte zeigt einfach kein Wetter.
+* **Eigene Farben:** Akzentfarbe für hell und dunkel; Reiter, Schalter, gewählte und überfahrene Zeilen folgen ihr, eine grüne Seite bekommt also eine grüne Karte. Die Schrift auf dem Akzent wird automatisch weiß oder dunkel.
+* **AeroACARS Live nur für German Sky Group:** Der Lese-Schlüssel kommt nur von German Sky Group. Alle anderen VAs nutzen die Quelle phpVMS.
 
 ### Aktualisieren
 

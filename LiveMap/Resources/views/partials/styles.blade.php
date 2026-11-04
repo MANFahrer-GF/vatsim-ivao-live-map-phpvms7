@@ -18,17 +18,16 @@
                        getoente Phasen-Pillen. Schriftgroessen und Zeilenhoehen wie 4.7.9. */
                     .lm3 {
                         --lm-primary: {{ $flightsHeaderStart }};
-                        --lm-accent: {{ $flightsHeaderEnd }};
                         --lm-flaeche: {{ $boxBackgroundRgba }};
                         --lm-flaeche-2: #f3f5f8;
                         --lm-text: #101c2e;
                         --lm-text-2: #5d6b7c;
                         --lm-linie: rgba(16, 28, 46, .09);
-                        --lm-zeile-hover: rgba(47, 111, 228, .06);
-                        --lm-gewaehlt: rgba(47, 111, 228, .12);
+                        --lm-zeile-hover: {{ $lmHexToRgba($lmToenung($flightsHeaderStart), 0.06) }};
+                        --lm-gewaehlt: {{ $lmHexToRgba($lmToenung($flightsHeaderStart), 0.12) }};
                         /* Akzent = Verwaltungsfarbe „Kopf der Flugliste“ (frueher der Verlaufsbalken) */
                         --lm-akzent: var(--lm-primary);
-                        --lm-akzent-text: #fff;
+                        --lm-akzent-text: {{ $lmSchriftAuf($flightsHeaderStart) }};
                         --lm-schatten: 0 1px 2px rgba(16,24,40,.06), 0 8px 24px -6px rgba(16,24,40,.22);
                         --lm-gold: #E8B131;
                         --lm-r: 12px;
@@ -54,10 +53,10 @@
                         --lm-text: #e6ebf2;
                         --lm-text-2: #8d9bae;
                         --lm-linie: rgba(255, 255, 255, .08);
-                        --lm-zeile-hover: rgba(124, 184, 240, .07);
-                        --lm-gewaehlt: rgba(124, 184, 240, .14);
-                        --lm-akzent: #7cb8f0;
-                        --lm-akzent-text: #0b1f3a;
+                        --lm-zeile-hover: {{ $lmHexToRgba($lmAkzentDunkel, 0.07) }};
+                        --lm-gewaehlt: {{ $lmHexToRgba($lmAkzentDunkel, 0.14) }};
+                        --lm-akzent: {{ $lmAkzentDunkel }};
+                        --lm-akzent-text: {{ $lmSchriftAuf($lmAkzentDunkel) }};
                         --lm-schatten: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -6px rgba(0,0,0,.6);
                     }
                     .lm3 *, .lm3 *::before, .lm3 *::after { box-sizing: border-box; }

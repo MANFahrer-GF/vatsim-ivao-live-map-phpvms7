@@ -172,6 +172,19 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
 - Die Ablehnungsmeldung bei falschem CARTO-Schlüssel war deutsch, jetzt englisch.
   *The CARTO key rejection message is now in English.*
 
+### Added / Neu — Farben (Admin → Live Map → Map)
+- **Akzentfarbe hell und dunkel einstellbar** (Thomas 04.11.2026: „Was ist, wenn man eine
+  grüne Seite hat?“). Neues Feld *Accent colour (dark mode)* (Standard `#7CB8F0` wie bisher).
+  Die Tönung von überfahrenen und gewählten Zeilen kommt jetzt aus dem Akzent statt aus festem
+  Blau (hell: kräftige Fassung des Akzents, damit Marineblau nicht grau tönt, GSG bleibt
+  gemessen wie vorher); die Schrift auf dem Akzent wird nach WCAG-Kontrast weiß oder dunkel.
+  Fest bleiben bewusst die Datenfarben: Phasen (wie die Webapp), Lotsenrollen, Route.
+  *Accent colour for light and dark mode; row tints and text on the accent follow it, so a
+  green site gets a green map. Phase, ATC and route colours stay as data colours.*
+- **AeroACARS Live / Beide als „German Sky Group only“ gekennzeichnet**: der Lese-Schlüssel
+  kommt nur von GSG, fremde VAs nutzen phpVMS.
+  *AeroACARS Live and Both are marked "German Sky Group only".*
+
 ### Upgrade
 1. `LiveMap/` nach `modules/` kopieren (erst hochladen, dann umbenennen, siehe INSTALL.txt).
 2. Die Theme-Datei `live_map.blade.php` aus dem Paket in **jedes benutzte Theme**
