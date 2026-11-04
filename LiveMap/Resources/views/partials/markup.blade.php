@@ -117,4 +117,6 @@
             @include('livemap::partials.tafel')
         </div>
     @endif
+    {{-- Dezente Signatur fuer alle Besucher (Thomas 04.11.2026), ohne Spendenlink. --}}
+    <p class="lm3-signatur">Crafted with <span aria-hidden="true">&hearts;</span><span class="lm-sr">love</span> in Germany by Thomas Kant</p>
 </div>

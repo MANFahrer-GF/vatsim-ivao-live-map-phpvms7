@@ -30,6 +30,7 @@ Release date: 2026-11-03
 * **Fixed:** with the weather proxy on (default) the settings could not be saved without an OpenWeatherMap key. They now save, and the map simply has no weather.
 * **Your colours:** accent colour for light and dark mode; tabs, switches, selected and hovered rows follow it, so a green site gets a green map. Text on the accent turns white or dark automatically.
 * **AeroACARS Live is German Sky Group only:** it needs a read key that only German Sky Group has. Every other VA uses the source phpVMS.
+* A small credit line below the map: "Crafted with ♥ in Germany by Thomas Kant".
 
 ### Upgrade
 
@@ -70,6 +71,7 @@ Install ZIP attached: `LiveMap-full-package-v5.1.0.zip`.
 * **Behoben:** Bei eingeschaltetem Wetter-Proxy (Standard) ließen sich die Einstellungen ohne OpenWeatherMap-Schlüssel nicht speichern. Jetzt wird gespeichert, und die Karte zeigt einfach kein Wetter.
 * **Eigene Farben:** Akzentfarbe für hell und dunkel; Reiter, Schalter, gewählte und überfahrene Zeilen folgen ihr, eine grüne Seite bekommt also eine grüne Karte. Die Schrift auf dem Akzent wird automatisch weiß oder dunkel.
 * **AeroACARS Live nur für German Sky Group:** Der Lese-Schlüssel kommt nur von German Sky Group. Alle anderen VAs nutzen die Quelle phpVMS.
+* Eine dezente Signatur unter der Karte: „Crafted with ♥ in Germany by Thomas Kant“.
 
 ### Aktualisieren
 

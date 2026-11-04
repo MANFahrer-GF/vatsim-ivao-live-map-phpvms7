@@ -193,6 +193,8 @@
                     .lm3-nochmal { margin-left: 8px; border: 1px solid currentColor; background: none; color: inherit; border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 11px; }
 
                     /* ── Tafel unten: Liste unter der Karte, ganze Breite, nichts abgeschnitten ── */
+                    .lm3 .lm3-signatur { margin: 0; padding: 5px 12px 6px; border-top: 1px solid var(--lm-linie); background: var(--lm-flaeche); color: var(--lm-text-2); font-size: 10.5px; line-height: 1.4; text-align: right; letter-spacing: .01em; opacity: .85; }
+                    .lm3 .lm3-signatur span[aria-hidden] { color: #e5484d; }
                     .lm3-unten { container-type: inline-size; container-name: lmmitte; border-top: 1px solid var(--lm-linie); background: var(--lm-flaeche); }
                     .lm3-unten .lm3-tafel {
                         width: 100%; max-width: none; max-height: none; border-radius: 0; box-shadow: none; border: 0; background: transparent;

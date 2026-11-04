@@ -186,6 +186,9 @@ Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und
 - **AeroACARS Live / Beide als „German Sky Group only“ gekennzeichnet**: der Lese-Schlüssel
   kommt nur von GSG, fremde VAs nutzen phpVMS.
   *AeroACARS Live and Both are marked "German Sky Group only".*
+- **Dezente Signatur unter der Karte** für alle Besucher: „Crafted with ♥ in Germany by
+  Thomas Kant“ (ohne Spendenlink; der bleibt in der Verwaltung).
+  *A small credit line below the map, without the donation link.*
 
 ### Upgrade
 1. `LiveMap/` nach `modules/` kopieren (erst hochladen, dann umbenennen, siehe INSTALL.txt).
