@@ -7,7 +7,7 @@ All notable changes to this project are documented in this file.
 ## [5.1.1] — 2026-11-05
 
 ### Fixed / Behoben
-- **Einstellungen wurden nicht übernommen** (gemeldet von BATC im phpVMS-Discord): Auf
+- **Einstellungen wurden nicht übernommen** (gemeldet von Disposable Hero im phpVMS-Discord): Auf
   Seiten mit phpVMS im Produktionsmodus und echtem Cache (file, redis …) kam ein
   abgewähltes Häkchen nach dem Speichern zurück, ein neuer OpenWeatherMap-Schlüssel
   schien zu fehlen und die Karte zeigte kein Wetter – bis zu 24 h oder bis zum Leeren der

@@ -8,7 +8,7 @@ Release date: 2026-11-05
 
 ### Fixed
 
-* **Settings did not show up after saving** on sites that run phpVMS in production with a real cache (file, redis …): a ticked box came back after saving, a new OpenWeatherMap key seemed missing and the map showed no weather – for up to 24 hours or until the caches were cleared. phpVMS caches every setting under the key exactly as it is asked for; the module cleared a differently spelled key. Saving now clears the right one. Thanks to BATC for the report.
+* **Settings did not show up after saving** on sites that run phpVMS in production with a real cache (file, redis …): a ticked box came back after saving, a new OpenWeatherMap key seemed missing and the map showed no weather – for up to 24 hours or until the caches were cleared. phpVMS caches every setting under the key exactly as it is asked for; the module cleared a differently spelled key. Saving now clears the right one. Thanks to Disposable Hero for the report.
 
 ### Update from 5.1.0 (FTP, no SSH)
 
@@ -25,7 +25,7 @@ Install ZIP attached: `LiveMap-full-package-v5.1.1.zip`.
 
 ### Behoben
 
-* **Einstellungen wurden nach dem Speichern nicht übernommen** auf Seiten mit phpVMS im Produktionsmodus und echtem Cache (file, redis …): Ein abgewähltes Häkchen kam nach dem Speichern zurück, ein neuer OpenWeatherMap-Schlüssel schien zu fehlen und die Karte zeigte kein Wetter – bis zu 24 Stunden oder bis die Caches geleert wurden. phpVMS cacht jede Einstellung unter dem Schlüssel, so wie er abgefragt wird; das Modul löschte einen anders geschriebenen. Speichern löscht jetzt den richtigen. Danke an BATC für die Meldung.
+* **Einstellungen wurden nach dem Speichern nicht übernommen** auf Seiten mit phpVMS im Produktionsmodus und echtem Cache (file, redis …): Ein abgewähltes Häkchen kam nach dem Speichern zurück, ein neuer OpenWeatherMap-Schlüssel schien zu fehlen und die Karte zeigte kein Wetter – bis zu 24 Stunden oder bis die Caches geleert wurden. phpVMS cacht jede Einstellung unter dem Schlüssel, so wie er abgefragt wird; das Modul löschte einen anders geschriebenen. Speichern löscht jetzt den richtigen. Danke an Disposable Hero für die Meldung.
 
 ### Aktualisieren von 5.1.0 (FTP, ohne SSH)
 
