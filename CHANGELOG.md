@@ -4,6 +4,29 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.1.1] — 2026-11-05
+
+### Fixed / Behoben
+- **Einstellungen wurden nicht übernommen** (gemeldet von BATC im phpVMS-Discord): Auf
+  Seiten mit phpVMS im Produktionsmodus und echtem Cache (file, redis …) kam ein
+  abgewähltes Häkchen nach dem Speichern zurück, ein neuer OpenWeatherMap-Schlüssel
+  schien zu fehlen und die Karte zeigte kein Wetter – bis zu 24 h oder bis zum Leeren der
+  Caches. Ursache: phpVMS cacht `setting($key)` unter `settings.<key wie übergeben>`
+  (`settings.acars.livemap_…`), das Modul löschte nur `settings.acars_livemap_…`.
+  Speichern löscht jetzt beide Schlüssel; Test in `tests/live_flights_probe.php` über den
+  echten `setting()`-Helfer.
+  *Settings saved under Admin → Live Map did not show up on sites running phpVMS in
+  production with a real cache: the module cleared the wrong cache key. Saving now clears
+  the key phpVMS really uses.*
+
+### Upgrade
+Nur `modules/LiveMap` tauschen (FTP, siehe INSTALL.txt), die Theme-Datei bleibt.
+Bereits hängende Werte: Admin → Live Map einmal öffnen und speichern.
+*Only replace `modules/LiveMap`; the theme file stays. Values already stuck: open
+Admin → Live Map once and click Save Settings.*
+
+---
+
 ## [5.1.0] — 2026-11-04
 
 Optik wieder kompakt wie 4.7.9, Technik von 5.0; läuft unter Seven, SPTheme und Disposable_v3.

@@ -1079,6 +1079,11 @@ class SettingsController extends Controller
             return;
         }
 
+        // phpVMS cacht setting($key) unter dem Schluessel, wie er uebergeben
+        // wird ('settings.acars.livemap_…', helpers.php setting()). Nur die
+        // formatKey-Fassung ('settings.acars_livemap_…') zu loeschen liess den
+        // alten Wert bis zu 24 h stehen (BATC, 04.11.2026). Beide loeschen.
+        Cache::forget($cache['key'].$key);
         Cache::forget($cache['key'].Setting::formatKey($key));
     }
 }

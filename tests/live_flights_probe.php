@@ -651,6 +651,24 @@ pruefe('Tafel-Lage alt: nur Tafel-Schalter an gesetzt → top', $lage(null, '1')
 pruefe('Tafel unten: Teil tafel.blade.php in markup oben UND unten eingebunden',
     substr_count(file_get_contents(dirname(__DIR__).'/LiveMap/Resources/views/partials/markup.blade.php'), "@include('livemap::partials.tafel')") === 2);
 
+// 5.1.1 Speichern muss den Einstellungs-Cache von phpVMS wirklich leeren.
+// phpVMS cacht setting($key) in Produktion 24 h unter seinem EIGENEN Schluessel
+// (helpers.php: 'settings.'.$key). Gemeldet von BATC 04.11.2026: Haekchen nach
+// dem Speichern wieder da, Wetter-Schluessel scheinbar leer. Geprueft wird ueber
+// den echten setting()-Helfer, nicht ueber einen nachgebauten Schluessel.
+$app['env'] = 'production';
+Cache::flush();
+$einstellungen['acars.livemap_show_basemap_switcher'] = true;
+$cacheVorher = setting('acars.livemap_show_basemap_switcher', 'FEHLT');
+$einstellungen['acars.livemap_show_basemap_switcher'] = false;
+$verwaltung = (new ReflectionClass(\Modules\LiveMap\Http\Controllers\Admin\SettingsController::class))->newInstanceWithoutConstructor();
+(new ReflectionMethod($verwaltung, 'forgetSettingCache'))->invoke($verwaltung, 'acars.livemap_show_basemap_switcher');
+$nachSpeichern = setting('acars.livemap_show_basemap_switcher', 'FEHLT');
+pruefe('Cache-Gegenprobe: phpVMS liefert in Produktion den gecachten Wert', $cacheVorher === true);
+pruefe('Speichern leert den phpVMS-Einstellungs-Cache (neuer Wert sofort sichtbar)', $nachSpeichern === false, $nachSpeichern);
+$app['env'] = 'dev';
+Cache::flush();
+
 // ─────────────────────────────────────────────────────────────────────────
 Carbon::setTestNow();
 echo "\n$anzahl Pruefungen, $fehler Fehler\n";

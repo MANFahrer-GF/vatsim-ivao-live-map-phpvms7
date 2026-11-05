@@ -1,9 +1,22 @@
-LiveMap v5.1.0 - Install Package
+LiveMap v5.1.1 - Install Package
 ================================
 
 Contents:
   LiveMap/                     -> phpVMS module (copy to <phpvms-root>/modules/LiveMap/)
   live_map.blade.php           -> theme file (one line, copy into each theme in use)
+
+Fixed in v5.1.1:
+
+  Settings saved under Admin -> Live Map did not show up on sites that
+  run phpVMS in production with a real cache (file, redis ...): a ticked
+  box came back after saving, a new OpenWeatherMap key seemed missing and
+  the map showed no weather - for up to 24 hours or until the caches were
+  cleared. Saving now clears the cached value under the key phpVMS really
+  uses. Settings that are already stuck: open Admin -> Live Map once and
+  click Save Settings.
+
+  UPDATE from 5.1.0: only the folder modules/LiveMap changes (see
+  "Installation" at the end). The theme file stays the same.
 
 New in v5.1.0:
 

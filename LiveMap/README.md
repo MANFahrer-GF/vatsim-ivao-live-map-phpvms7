@@ -1,6 +1,6 @@
 # LiveMap Module (phpVMS 7)
 
-Version: **5.1.0**
+Version: **5.1.1**
 
 This module provides:
 
