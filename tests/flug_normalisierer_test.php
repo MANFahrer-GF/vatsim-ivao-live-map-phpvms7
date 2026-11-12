@@ -161,5 +161,67 @@ pruefe('fremde, interne und unsaubere Adressen abgelehnt (Produktion)', $alleAb)
 pruefe('Pruefserver nur ausserhalb der Produktion', N::liveBasis('http://127.0.0.1:8792', true) === 'http://127.0.0.1:8792'
     && N::liveBasis('http://10.0.0.5:80', true) === null);
 
+// ── Shared Cockpit, Weg B (B2): ein Flugzeug, Kennzeichen am Gastgeber ──
+// Regel wie SharedCockpit Http/Middleware/KernKarte: Spurtraeger UND fuehrender
+// Bericht in der Liste, pireps.updated_at des Gastgebers hoechstens 120 s hinter
+// dem des Spurtraegers. Die Crew-Felder liefert SharedCockpitQuelle.
+$t0 = 1_793_325_000_000;
+$scPirep = fn (string $id, int $userId, string $cs, ?int $pirepMs, string $name) => N::ausPhpvms(['pirep_id' => $id, 'callsign' => $cs,
+    'status' => 'ENR', 'lat' => 48, 'lon' => 10, 'dep' => 'EDDF', 'arr' => 'LEBL', 'user_id' => (string) $userId, 'pilot_name' => $name,
+    'updated_ms' => $t0 + 999_000, 'pirep_updated_ms' => $pirepMs]);
+$gast = $scPirep('GASTp1', 1, 'GSG100', $t0, 'Thomas K.');
+$spur = $scPirep('SPURp2', 7, 'GSG100', $t0 + 30_000, 'Peter M.');
+$crew = ['status' => 'angenommen', 'spur_pirep_id' => 'SPURp2', 'fuehrender_pirep_id' => 'GASTp1', 'rolle_gastgeber' => 'PF', 'partner_name' => 'Peter M'];
+$sichtbar = fn (array $fl) => array_values(array_map(fn ($f) => $f['id'], N::ohneSpurtraeger($fl)));
+$mit = N::crewsAnwenden([$gast, $spur], [$crew]);
+pruefe('SC: Spurtraeger faellt weg, Gastgeber bleibt', $sichtbar($mit) === ['phpvms/GASTp1'], $sichtbar($mit));
+pruefe('SC: Gastgeber behaelt seinen Namen und bekommt das Kennzeichen (Kurzname wie kurzname())',
+    $mit[0]['pilot_name'] === 'Thomas K.' && ($mit[0]['shared_cockpit'] ?? null) === ['rolle_gastgeber' => 'PF', 'partner_name' => 'Peter M.'], $mit[0]['shared_cockpit'] ?? null);
+pruefe('SC: Kennzeichen nur am Gastgeber', !array_key_exists('shared_cockpit', $mit[1]));
+$oeff = json_encode(array_map([N::class, 'oeffentlich'], N::ohneSpurtraeger($mit)));
+pruefe('SC: oeffentlich ohne Spurtraeger-Bericht, crew_id, user_id und interne Felder',
+    !str_contains($oeff, 'SPURp2') && !str_contains($oeff, 'crew_id') && !str_contains($oeff, 'user_id') && !str_contains($oeff, '"_'), $oeff);
+pruefe('SC: oeffentliche Form = Form ohne Crew + Kennzeichen', array_keys(N::oeffentlich($mit[0])) === array_merge(array_keys(N::oeffentlich($gast)), ['shared_cockpit']));
+pruefe('SC: Rolle nur PF/PM, sonst null', N::crewsAnwenden([$gast, $spur], [['rolle_gastgeber' => 'XX<b>'] + $crew])[0]['shared_cockpit']['rolle_gastgeber'] === null);
+pruefe('SC: Crew nicht angenommen → beide', $sichtbar(N::crewsAnwenden([$gast, $spur], [['status' => 'abgelehnt'] + $crew])) === ['phpvms/GASTp1', 'phpvms/SPURp2']);
+pruefe('SC: ohne Crews unveraendert', N::crewsAnwenden([$gast, $spur], []) === [$gast, $spur]);
+pruefe('SC: Gastgeber fehlt in der Liste → Spurtraeger bleibt', $sichtbar(N::crewsAnwenden([$spur], [$crew])) === ['phpvms/SPURp2']
+    && !array_key_exists('shared_cockpit', N::crewsAnwenden([$spur], [$crew])[0]));
+pruefe('SC: ohne fuehrenden Bericht (Gastgeber noch nicht gestartet) → beide', $sichtbar(N::crewsAnwenden([$gast, $spur], [['fuehrender_pirep_id' => null] + $crew])) === ['phpvms/GASTp1', 'phpvms/SPURp2']);
+$grenze = fn (int $abstandMs) => $sichtbar(N::crewsAnwenden([$scPirep('GASTp1', 1, 'GSG100', $t0, 'Thomas K.'), $scPirep('SPURp2', 7, 'GSG100', $t0 + $abstandMs, 'Peter M.')], [$crew]));
+pruefe('SC: Gastgeber genau 120 s hinter dem Spurtraeger → zusammengelegt', $grenze(120_000) === ['phpvms/GASTp1']);
+pruefe('SC: Gastgeber 121 s hinter dem Spurtraeger (eingefroren) → beide', $grenze(121_000) === ['phpvms/GASTp1', 'phpvms/SPURp2']);
+pruefe('SC: Gastgeber neuer als der Spurtraeger → zusammengelegt', $grenze(-600_000) === ['phpvms/GASTp1']);
+pruefe('SC: Zeit nur aus pireps.updated_at, nicht aus last_seen (Position)', $gast['last_seen'] === $t0 + 999_000
+    && $grenze(121_000) === ['phpvms/GASTp1', 'phpvms/SPURp2']);
+pruefe('SC: ohne lesbare Zeit → beide', $sichtbar(N::crewsAnwenden([$scPirep('GASTp1', 1, 'GSG100', null, 'Thomas K.'), $spur], [$crew])) === ['phpvms/GASTp1', 'phpvms/SPURp2']);
+
+// Quelle „Beide“ ohne B3: live liefert den Partner-Flug weiter → ausblenden
+$liveGast = N::ausLive(array_merge($live, ['pilot_id' => '1', 'callsign' => 'GSG 100', 'display_name' => 'Thomas Kant']));
+$livePartner = N::ausLive(array_merge($live, ['pilot_id' => '7', 'callsign' => 'GSG 100', 'display_name' => 'Peter Meier']));
+$liveFremd = N::ausLive(array_merge($live, ['pilot_id' => '55', 'callsign' => 'DLH1']));
+$zb = N::zusammenfuehren([$liveGast, $livePartner, $liveFremd], $mit);
+pruefe('SC Beide: Partner-Live-Eintrag und Spurtraeger weg, Gastgeber von live, Fremder bleibt',
+    array_column($zb['fluege'], 'id') === ['GSG/1', 'GSG/55'], array_column($zb['fluege'], 'id'));
+pruefe('SC Beide: Kennzeichen geht auf den Live-Gastgeber ueber', ($zb['fluege'][0]['shared_cockpit'] ?? null) === ['rolle_gastgeber' => 'PF', 'partner_name' => 'Peter M.'], $zb['fluege'][0]);
+pruefe('SC Beide: zugeordnet zaehlt Gastgeber und ausgeblendeten Partner', $zb['zugeordnet'] === 2, $zb['zugeordnet']);
+pruefe('SC Beide: ohne Zusammenlegung (eingefroren) bleiben beide Live-Fluege', array_column(N::zusammenfuehren([$liveGast, $livePartner],
+    N::crewsAnwenden([$scPirep('GASTp1', 1, 'GSG100', $t0, 'Thomas K.'), $scPirep('SPURp2', 7, 'GSG100', $t0 + 121_000, 'Peter M.')], [$crew]))['fluege'], 'id') === ['GSG/1', 'GSG/7']);
+pruefe('SC Beide: ohne Live-Treffer faellt der Spurtraeger trotzdem weg', array_column(N::zusammenfuehren([], $mit)['fluege'], 'id') === ['phpvms/GASTp1']);
+
+// Quelle „Beide“ mit B3: live hat den Partner selbst ausgeblendet und traegt das Kennzeichen
+$b3 = ['rolle_gastgeber' => 'PM', 'partner_name' => 'Peter M.'];
+$liveGastB3 = N::ausLive(array_merge($live, ['pilot_id' => '1', 'callsign' => 'GSG 100', 'shared_cockpit' => $b3]));
+pruefe('SC live: Kennzeichen aus der B3-Kurzfassung durchgereicht', ($liveGastB3['shared_cockpit'] ?? null) === $b3, $liveGastB3['shared_cockpit'] ?? null);
+$zb3 = N::zusammenfuehren([$liveGastB3], $mit);
+pruefe('SC Beide mit B3: ein Flug, Kennzeichen von live gilt', array_column($zb3['fluege'], 'id') === ['GSG/1'] && $zb3['fluege'][0]['shared_cockpit'] === $b3, $zb3['fluege']);
+pruefe('SC live: ohne Feld kein Schluessel (Antwort wie heute)', !array_key_exists('shared_cockpit', N::ausLive($live)));
+pruefe('SC live: kein Objekt → kein Schluessel', !array_key_exists('shared_cockpit', N::ausLive(array_merge($live, ['shared_cockpit' => 'PF']))));
+$schmutz = N::ausLive(array_merge($live, ['shared_cockpit' => ['rolle_gastgeber' => 'pf<script>', 'partner_name' => "Peter\x07 Meierhofer-".str_repeat('x', 200),
+    'crew_id' => 12, 'partner_pilot_id' => 'GSG0007']]))['shared_cockpit'] ?? null;
+pruefe('SC live: nur zwei Felder, Rolle geprueft, Name gekuerzt', $schmutz === ['rolle_gastgeber' => null, 'partner_name' => 'Peter M.'], $schmutz);
+pruefe('SC live: Name kein Text → null', (N::ausLive(array_merge($live, ['shared_cockpit' => ['rolle_gastgeber' => 'PF', 'partner_name' => ['x']]]))['shared_cockpit'] ?? null)
+    === ['rolle_gastgeber' => 'PF', 'partner_name' => null]);
+
 echo "\n$anzahl Pruefungen, $fehler fehlgeschlagen\n";
 exit($fehler === 0 ? 0 : 1);

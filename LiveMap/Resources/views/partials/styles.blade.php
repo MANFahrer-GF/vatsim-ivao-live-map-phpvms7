@@ -167,6 +167,7 @@
                     .lm3-zeile.ist-offline { opacity: .5; }
                     .lm3-zeile.lm3-g-plan { cursor: default; }
                     .lm3-zeile > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .lm3-zeile .lm3-sc { color: var(--lm-text-2); }
                     .lm3-flug { display: flex !important; align-items: center; gap: 8px; }
                     .lm3-flug b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
                     .lm3-logo { width: 40px; height: 18px; flex: 0 0 40px; display: inline-flex; align-items: center; justify-content: center; background: #fff; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(16,28,46,.08); overflow: hidden; }

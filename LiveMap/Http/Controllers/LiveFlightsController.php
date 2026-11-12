@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Modules\LiveMap\Support\FlugNormalisierer;
+use Modules\LiveMap\Support\SharedCockpitQuelle;
 
 /**
  * Flugdaten fuer die Live-Karte — eine Adresse, zwei Quellen.
@@ -62,7 +63,7 @@ class LiveFlightsController extends Controller
                 return $this->antwort(['ok' => false, 'quelle' => 'phpvms', 'fehler' => 'phpvms', 'fluege' => []], 503);
             }
 
-            return $this->mitBeiwerk(['ok' => true, 'quelle' => 'phpvms', 'fluege' => $fluege]);
+            return $this->mitBeiwerk(['ok' => true, 'quelle' => 'phpvms', 'fluege' => FlugNormalisierer::ohneSpurtraeger($fluege)]);
         }
 
         $live = $this->liveFluege();
@@ -370,6 +371,7 @@ class LiveFlightsController extends Controller
                         optional($pos->updated_at ?? $pos->created_at ?? null)->getTimestampMs() ?? 0
                     ) ?: null,
                     'created_ms'    => optional($p->created_at)->getTimestampMs(),
+                    'pirep_updated_ms' => optional($p->updated_at)->getTimestampMs(),
                     'logo'          => self::absolut(optional($p->airline)->logo),
                     'pirep_url'     => url('/pireps/'.$p->id),
                     'user_id'       => $nutzer ? (string) $nutzer->id : null,
@@ -380,13 +382,31 @@ class LiveFlightsController extends Controller
                 }
             }
 
-            return $fluege;
+            return $this->mitCrews($fluege);
         })();
         if ($fluege !== null) {
             Cache::put('livemap:phpvms:fluege', $fluege, now()->addSeconds(self::PUFFER_LISTE_S));
         }
 
         return $fluege;
+    }
+
+    /**
+     * Shared Cockpit (Weg B, B2): Crew-Kennzeichen am Gastgeber, Spurtraeger
+     * markiert (FlugNormalisierer::crewsAnwenden). Ein Fehler im Modul
+     * SharedCockpit darf die Karte nie kippen: dann die Liste wie ohne Crew.
+     */
+    private function mitCrews(array $fluege): array
+    {
+        try {
+            $crews = app(SharedCockpitQuelle::class)->crews(array_column($fluege, 'pilot'));
+        } catch (\Throwable $e) {
+            Log::warning('LiveMap: Shared Cockpit nicht lesbar: '.mb_substr($e->getMessage(), 0, 160));
+
+            return $fluege;
+        }
+
+        return FlugNormalisierer::crewsAnwenden($fluege, is_array($crews) ? $crews : []);
     }
 
     private function phpvmsSpur(string $pirepId): array

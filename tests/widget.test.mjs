@@ -426,3 +426,48 @@ test('Tafelzeile: echte zeileAktiv liefert die Zellen in Kopf-Reihenfolge, ETA n
   assert.equal(zelle(zeile('CRUISE', { last_seen: jetzt - 11 * 60000 }), 'lm3-sp-eta'), '');
   assert.equal(zelle(zeile('CRUISE', { aircraft_icao: '<b>' }), 'lm3-sp-typ'), '&lt;b&gt;');   // escaped
 });
+
+test('Shared Cockpit: Kennzeichen-Text wie sharedCockpitText der Webapp, DE und EN', () => {
+  const sc = { rolle_gastgeber: 'PF', partner_name: 'Peter M.' };
+  assert.equal(LM3.sharedCockpitText(sc, 'de'), 'Shared Cockpit · mit Peter M. · Gastgeber PF');
+  assert.equal(LM3.sharedCockpitText(sc, 'en'), 'Shared Cockpit · with Peter M. · Host PF');
+  assert.equal(LM3.sharedCockpitText({ rolle_gastgeber: 'PM', partner_name: null }, 'de'), 'Shared Cockpit · Gastgeber PM');
+  assert.equal(LM3.sharedCockpitText({ rolle_gastgeber: null, partner_name: '  Peter M. ' }, 'de'), 'Shared Cockpit · mit Peter M.');
+  assert.equal(LM3.sharedCockpitText({ rolle_gastgeber: null, partner_name: '   ' }, 'en'), 'Shared Cockpit');
+  assert.equal(LM3.sharedCockpitText({ rolle_gastgeber: 'XX', partner_name: 42 }, 'de'), 'Shared Cockpit');
+  assert.equal(LM3.sharedCockpitText(null, 'de'), '');
+  assert.equal(LM3.sharedCockpitText(undefined, 'en'), '');
+  assert.equal(LM3.sharedCockpitText('PF', 'de'), '');
+});
+
+test('Shared Cockpit: Tafelzeile zeigt das Kennzeichen beim Piloten, escaped, Spalten unveraendert', () => {
+  const start = skript.indexOf('function zeileAktiv(f) {');
+  const ende = skript.indexOf('function zeileGeplant(', start);
+  const knoten = () => ({ style: { setProperty() {} }, setAttribute() {}, addEventListener() {}, innerHTML: '' });
+  const ctx = {
+    LM3, LM_SPRACHE: 'de', LM_T: { pilot: 'Pilot' }, zustand: { auswahl: null }, waehle() {},
+    document: { createElement: knoten }, logoFuer: () => null, logoHtml: () => '', weg: () => null, Date,
+  };
+  const esc = skript.slice(skript.indexOf('function lmEsc(s) {'), skript.indexOf('function lmKurzname('));
+  vm.runInNewContext(esc + skript.slice(start, ende) + '; this.zeileAktiv = zeileAktiv;', ctx);
+  const basis = { id: 'x', callsign: 'GSG1', dep: 'EDDF', arr: 'LEBL', pilot_name: 'Max S.', phase: 'CRUISE', status: 'online', pos: {} };
+  const ohne = ctx.zeileAktiv(basis).innerHTML;
+  assert.match(ohne, /<span class="lm3-sp-pilot">Max S\.<\/span>/);   // ohne Crew wie bisher
+  const mit = ctx.zeileAktiv({ ...basis, shared_cockpit: { rolle_gastgeber: 'PF', partner_name: 'Pe<b>ter' } }).innerHTML;
+  const zelle = mit.slice(mit.indexOf('<span class="lm3-sp-pilot"'));
+  assert.ok(zelle.includes('Max S.'), zelle);
+  assert.ok(zelle.includes('Shared Cockpit · mit Pe&lt;b&gt;ter · Gastgeber PF'), zelle);
+  assert.ok(!mit.includes('<b>ter'), 'Partnername escaped');
+  assert.match(zelle, /title="Max S\. · Shared Cockpit · mit Pe&lt;b&gt;ter · Gastgeber PF"/);
+  const oben = (html) => { const out = []; let tiefe = 0; for (const m of html.matchAll(/<(\/?)span(?: class="([^"]*)")?[^>]*>/g)) { if (m[1]) tiefe--; else { if (tiefe === 0) out.push(m[2] || ''); tiefe++; } } return out; };
+  assert.deepEqual(oben(mit), oben(ohne), 'gleiche Zellen auf oberster Ebene');
+});
+
+test('Shared Cockpit: Flugdetail zeigt das Kennzeichen unter dem Piloten', () => {
+  const start = skript.indexOf('function zeichneDetail() {');
+  assert.ok(start > 0);
+  const teil = skript.slice(start, skript.indexOf('zelle(LM_T.flugzeug', start));
+  assert.match(teil, /zelle\(LM_T\.pilot, f\.pilot_name\)\s*\+\s*zelle\(LM_T\.crew, LM3\.sharedCockpitText\(f\.shared_cockpit, LM_SPRACHE\), true\)/);
+  const t = skript.slice(skript.indexOf('var LM_T = ({'), skript.indexOf('})[LM_SPRACHE];'));
+  assert.equal((t.match(/\bcrew: '/g) || []).length, 2, 'Bezeichnung DE und EN');
+});

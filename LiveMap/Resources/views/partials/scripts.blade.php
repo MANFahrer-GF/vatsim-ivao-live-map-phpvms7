@@ -404,6 +404,19 @@
             return liste[0];
         }
 
+        // Shared Cockpit (Weg B): Kennzeichen am Gastgeber-Flug, Teile wie
+        // `sharedCockpitText` der Webapp (aeroacars-live webapp/src/lib/pilotAnzeige.ts):
+        // fehlt Name oder Rolle, faellt der Teil weg. Ohne Objekt: leer.
+        function sharedCockpitText(sc, sprache) {
+            if (!sc || typeof sc !== 'object') return '';
+            var en = sprache === 'en';
+            var teile = ['Shared Cockpit'];
+            var name = typeof sc.partner_name === 'string' ? sc.partner_name.trim() : '';
+            if (name) teile.push((en ? 'with ' : 'mit ') + name);
+            if (sc.rolle_gastgeber === 'PF' || sc.rolle_gastgeber === 'PM') teile.push((en ? 'Host ' : 'Gastgeber ') + sc.rolle_gastgeber);
+            return teile.join(' · ');
+        }
+
         wurzel.LM3 = {
             PHASE_COLOR: PHASE_COLOR, PHASE_LIST: PHASE_LIST, PHASE_LABEL: PHASE_LABEL,
             phaseColor: phaseColor, phaseLabel: phaseLabel, phaseForDisplay: phaseForDisplay,
@@ -415,7 +428,7 @@
             etaMinuten: etaMinuten, etaText: etaText, etaFuerFlug: etaFuerFlug,
             KLASSEN: KLASSEN, flugzeugKlasse: flugzeugKlasse, klassenInfo: klassenInfo, amBoden: amBoden,
             aufSprechfrequenz: aufSprechfrequenz, vatspyLesen: vatspyLesen, firTreffer: firTreffer,
-            grenzenFuerLotse: grenzenFuerLotse, firFlaeche: firFlaeche
+            grenzenFuerLotse: grenzenFuerLotse, firFlaeche: firFlaeche, sharedCockpitText: sharedCockpitText
         };
     })(typeof window !== 'undefined' ? window : globalThis);
     /* </lm3-rein> */
@@ -1559,7 +1572,7 @@
                     keineGeplant: 'Keine geplanten Flüge.', laden: 'Flüge werden geladen …',
                     folgen: 'Folgen', folgt: 'Folgt', frei: 'Frei', alle: 'Alle Phasen', zuletzt: 'vor',
                     schliessen: 'Schließen', stand: 'Stand', offline: 'offline', abflug: 'Abflug',
-                    pilot: 'Pilot', veraltet: 'Angezeigt wird der letzte bekannte Stand.', nochmal: 'Erneut versuchen',
+                    pilot: 'Pilot', crew: 'Crew', veraltet: 'Angezeigt wird der letzte bekannte Stand.', nochmal: 'Erneut versuchen',
                     flugzeug: 'Flugzeug', hoehe: 'Höhe', kurs: 'Kurs', fortschritt: 'Fortschritt', mehr: 'Mehr Werte',
                     weitereFluege: 'weitere Flüge hier – Klick zoomt hinein',
                     fehler: {
@@ -1577,7 +1590,7 @@
                     keineGeplant: 'No planned flights.', laden: 'Loading flights …',
                     folgen: 'Follow', folgt: 'Following', frei: 'Free', alle: 'All phases', zuletzt: 'ago',
                     schliessen: 'Close', stand: 'Stand', offline: 'offline', abflug: 'Departure',
-                    pilot: 'Pilot', veraltet: 'Showing the last known state.', nochmal: 'Try again',
+                    pilot: 'Pilot', crew: 'Crew', veraltet: 'Showing the last known state.', nochmal: 'Try again',
                     flugzeug: 'Aircraft', hoehe: 'Altitude', kurs: 'Heading', fortschritt: 'Progress', mehr: 'More values',
                     weitereFluege: 'more flights here – click to zoom in',
                     fehler: {
@@ -1850,6 +1863,7 @@
                     var pos = f.pos || {};
                     var phase = LM3.phaseForDisplay(f.phase, f.shadow_segment);
                     var w = weg(f);
+                    var sc = LM3.sharedCockpitText(f.shared_cockpit, LM_SPRACHE);
                     var b = document.createElement('button');
                     b.type = 'button';
                     b.className = 'lm3-zeile lm3-g-akt' + (zustand.auswahl === f.id ? ' ist-gewaehlt' : '') + (f.status === 'offline' ? ' ist-offline' : '');
@@ -1866,7 +1880,10 @@
                             '<i class="lm3-fort" aria-hidden="true"><i style="width:' + Math.round(w.anteil * 100) + '%"></i></i>' : '') + '</span>' +
                         '<span class="lm3-sp-eta">' + lmEsc(LM3.etaFuerFlug(f, w, Date.now())) + '</span>' +
                         '<span class="lm3-sp-phase"><span class="lm3-pille">' + lmEsc(LM3.phaseLabel(phase)) + '</span></span>' +
-                        '<span class="lm3-sp-pilot">' + lmEsc(f.pilot_name || '') + '</span>';
+                        // Shared Cockpit: Kennzeichen hinter dem Namen; die Zelle schneidet ab, der volle Text steht im title.
+                        (sc ? '<span class="lm3-sp-pilot" title="' + lmEsc([f.pilot_name, sc].filter(Boolean).join(' · ')) + '">' +
+                            lmEsc(f.pilot_name || '') + ' <span class="lm3-sc">· ' + lmEsc(sc) + '</span></span>'
+                            : '<span class="lm3-sp-pilot">' + lmEsc(f.pilot_name || '') + '</span>');
                     b.addEventListener('click', function () { waehle(f.id, true); });
                     return b;
                 }
@@ -2035,6 +2052,7 @@
 
                     var raster =
                         zelle(LM_T.pilot, f.pilot_name) +
+                        zelle(LM_T.crew, LM3.sharedCockpitText(f.shared_cockpit, LM_SPRACHE), true) +
                         zelle(LM_T.flugzeug, flugzeug) +
                         zelle(LM_T.hoehe, pos.alt_ft != null ? LM3.zahl(pos.alt_ft, LM_SPRACHE) + ' ft' : null) +
                         zelle('GS', pos.gs_kt != null ? Math.round(pos.gs_kt) + ' kt' : null) +
