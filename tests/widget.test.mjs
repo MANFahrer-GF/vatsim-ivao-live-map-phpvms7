@@ -415,6 +415,23 @@ test('Tafel unten: Raster ab 1000 px trifft nur unten, Zeilen ohne eigenen Rollb
   }
 });
 
+test('Kartenhoehe und Lueckenausgleich: Zahlen von GSG (Thomas 12.11.2026)', () => {
+  // GSG eingeloggt: Karte ab 158 px, Tafel mit 1 Flug 110 + Signatur 27.
+  const p = (fenster, tafel) => LM3.kartenHoehe({ fenster, oben: 158, untenFest: 0, tafel, min: 420, max: 1000 });
+  assert.equal(p(753, 137), 442);          // Chrome 1490x753: endet 16 px ueber dem Fensterrand
+  assert.equal(p(728, 137), 420);          // Thomas' Edge: Mindesthoehe greift
+  assert.equal(p(900, 137), 589);
+  assert.equal(p(900, 600), 436);          // viele Fluege: Karte behaelt 60 %
+  assert.equal(p(900, null), 726);         // Lage oben: keine Tafel unter der Karte
+  assert.equal(LM3.kartenHoehe({ fenster: 3000, oben: 0, tafel: 100, min: 420, max: 1000 }), 1000);
+  assert.equal(LM3.kartenHoehe({ fenster: 900, oben: -300, untenFest: 50, tafel: null }), 834);   // gescrollt: oben zaehlt nicht negativ
+  // SPTheme: 93 px bis zur Fusszeile, Huelle (row) ohne eigenen Abstand → -77, Luecke danach 16
+  assert.equal(LM3.lueckenAusgleich(93, 0), -77);
+  assert.equal(LM3.lueckenAusgleich(93, 16), -61);
+  assert.equal(LM3.lueckenAusgleich(16, 0), 0);
+  assert.equal(LM3.lueckenAusgleich(4, 10), 10);   // engere Themes bleiben, wie sie sind
+});
+
 test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
   const dep = { lat: 50, lon: 8 }, arr = { lat: 52, lon: 13 };
   const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, phase: 'CRUISE', pos: { lat, lon: 10, gs_kt: gs } });

@@ -415,7 +415,24 @@
             return liste[0];
         }
 
+        // Hoehe der Kartenflaeche: Fenster minus was ueber der Karte steht, was unten
+        // fest am Fenster klebt (Cookie-Leiste) und 16 px Luft. Tafel unten teilt sich
+        // den Platz: wenige Fluege, grosse Karte; viele Fluege, Karte mindestens 60 %
+        // und die Liste geht auf der Seite weiter. Danach Mindest-/Hoechsthoehe.
+        function kartenHoehe(p) {
+            var h = p.fenster - Math.max(0, p.oben || 0) - (p.untenFest || 0) - 16;
+            if (p.tafel != null) h = Math.max(h - p.tafel, h * 0.6);
+            return Math.round(Math.max(p.min || 420, Math.min(p.max || 1000, h)));
+        }
+        // Polster des Themes unter dem Widget auf 16 px schliessen (SPTheme liess
+        // 93 px leer bis zur Fusszeile, Thomas 12.11.2026): neuer Aussenabstand
+        // unten fuer die Huelle des Widgets.
+        function lueckenAusgleich(luecke, abstand) {
+            return luecke > 16 ? abstand - (luecke - 16) : abstand;
+        }
+
         wurzel.LM3 = {
+            kartenHoehe: kartenHoehe, lueckenAusgleich: lueckenAusgleich,
             PHASE_COLOR: PHASE_COLOR, PHASE_LIST: PHASE_LIST, PHASE_LABEL: PHASE_LABEL,
             phaseColor: phaseColor, phaseLabel: phaseLabel, phaseForDisplay: phaseForDisplay,
             formatSimLabel: formatSimLabel, fmtQnhBoth: fmtQnhBoth, ageString: ageString, zahl: zahl,
@@ -2449,24 +2466,53 @@
                         if (r.height < window.innerHeight / 2) untenFest = Math.max(untenFest, r.height);
                         break;
                     }
-                    var h = window.innerHeight - Math.max(0, oben) - untenFest - 16;
-                    // Tafel unten: Karte und Tafel teilen sich das Fenster — wenige Fluege,
-                    // grosse Karte, die ganze Tafel steht im Fenster. Bei vielen Fluegen
-                    // behaelt die Karte mindestens 60 % und die Liste geht darunter weiter
-                    // (kein Rollbalken in der Tafel: der verschob unter Windows die Zeilen
-                    // gegen den Kopf, Abnahme 5.2.2).
+                    // Tafel unten: kein Rollbalken in der Tafel (der verschob unter Windows
+                    // die Zeilen gegen den Kopf, Abnahme 5.2.2), sie zaehlt mit Signatur.
                     var unten = wrap.classList.contains('lm3--tafel-unten') && wrap.querySelector('.lm3-unten');
+                    var tafelH = null;
                     if (unten && unten.offsetParent !== null) {
                         var sig = wrap.querySelector('.lm3-signatur');
-                        var tafelH = unten.getBoundingClientRect().height + (sig ? sig.getBoundingClientRect().height : 0);
-                        h = Math.max(h - tafelH, h * 0.6);
+                        tafelH = unten.getBoundingClientRect().height + (sig ? sig.getBoundingClientRect().height : 0);
                     }
-                    h = Math.max(cfg.minHoehe || 420, Math.min(cfg.maxHoehe || 1000, h));
-                    var neu = Math.round(h) + 'px';
+                    var neu = window.LM3.kartenHoehe({ fenster: window.innerHeight, oben: oben, untenFest: untenFest,
+                        tafel: tafelH, min: cfg.minHoehe, max: cfg.maxHoehe }) + 'px';
                     var geaendert = flaeche.style.height !== neu;
                     flaeche.style.height = neu;
+                    schliesseLuecke();
                     messeObenFrei();
                     return geaendert;
+                }
+                // Unter dem Widget folgt im Theme oft ein Polster bis zur Fusszeile (SPTheme:
+                // 93 px). Die Karte reicht bis an den Fensterrand, beim Scrollen kam darunter
+                // ein leeres Band (Thomas 12.11.2026). Gemessen wird der naechste sichtbare
+                // Kasten unter dem Widget; den Ausgleich bekommt die aeusserste Huelle, die nur
+                // das Widget enthaelt — am Widget selbst endete der Kartenrahmen mitten in der
+                // Tafel. Vorher immer zuruecksetzen, damit die Luecke frisch gemessen wird.
+                var huelle = null, huelleAlt = '';
+                function zaehltAlsInhalt(e) {
+                    var st = getComputedStyle(e);
+                    return e.offsetHeight > 0 && st.position !== 'fixed' && st.position !== 'absolute';
+                }
+                function schliesseLuecke() {
+                    if (huelle) { huelle.style.marginBottom = huelleAlt; huelle = null; }
+                    var k = wrap.getBoundingClientRect(), naechst = null, grenze = null;
+                    for (var a = wrap; a && a !== document.body && !naechst; a = a.parentElement) {
+                        for (var s = a.nextElementSibling; s; s = s.nextElementSibling) {
+                            var st = getComputedStyle(s);
+                            if (st.position === 'fixed' || st.display === 'none') continue;
+                            var r = s.getBoundingClientRect();
+                            if (!r.height || r.right <= k.left || r.left >= k.right || r.top < k.bottom - 1) continue;
+                            if (!naechst || r.top < naechst.top) { naechst = r; grenze = a.parentElement; }
+                        }
+                    }
+                    if (!naechst) return;
+                    var h = wrap;
+                    while (h.parentElement && h.parentElement !== grenze && [].filter.call(h.parentElement.children, zaehltAlsInhalt).length === 1) h = h.parentElement;
+                    var jetzt = parseFloat(getComputedStyle(h).marginBottom) || 0;
+                    var soll = window.LM3.lueckenAusgleich(Math.round(naechst.top - k.bottom), jetzt);
+                    if (soll === jetzt) return;
+                    huelle = h; huelleAlt = h.style.marginBottom;
+                    h.style.marginBottom = soll + 'px';
                 }
                 // Feste Leiste des Themes ueber der Kartenoberkante (Cookie-Hinweis oben bei
                 // Seven/Disposable, beim Scrollen die Navigationsleiste): Tafel, Zoom und
