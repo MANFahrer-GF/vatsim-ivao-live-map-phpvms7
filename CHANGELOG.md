@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.2.0] — 2026-11-12
+
+### Added / Neu
+- **Spalten „Typ“ und „ETA“ in der Flugtafel** (Wunsch von Elisa): Typ aus dem ICAO-Code des
+  Flugzeugs, ETA = jetzt + Reststrecke / Geschwindigkeit über Grund, ab 50 kt (Startlauf),
+  in UTC („17:30z“). Großkreis-Rest, also eine Schätzung; offline leer. Beide Spalten
+  sortierbar; schmale Tafel gibt zuerst „Typ“ ab, ganz schmal auch „ETA“.
+  *New flight board columns Type and ETA (now + distance to go / ground speed, from 50 kt,
+  UTC). Both sortable; narrow boards drop Type first, very narrow ones ETA too.*
+
+### Upgrade
+Nur `modules/LiveMap` tauschen (FTP, siehe INSTALL.txt), die Theme-Datei bleibt.
+*Only replace `modules/LiveMap`; the theme file stays.*
+
+---
+
 ## [5.1.1] — 2026-11-05
 
 ### Fixed / Behoben

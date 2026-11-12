@@ -1,9 +1,19 @@
-LiveMap v5.1.1 - Install Package
+LiveMap v5.2.0 - Install Package
 ================================
 
 Contents:
   LiveMap/                     -> phpVMS module (copy to <phpvms-root>/modules/LiveMap/)
   live_map.blade.php           -> theme file (one line, copy into each theme in use)
+
+New in v5.2.0:
+
+  Two new columns in the flight board: aircraft type (Type) and estimated
+  arrival (ETA). ETA = now + distance to go / ground speed, shown from
+  50 kt (take-off roll) in UTC, e.g. "17:30z". Both columns can be sorted.
+  On narrow boards Type is dropped first, very narrow boards drop ETA too.
+
+  UPDATE from 5.1.x: only the folder modules/LiveMap changes (see
+  "Installation" at the end). The theme file stays the same.
 
 Fixed in v5.1.1:
 
