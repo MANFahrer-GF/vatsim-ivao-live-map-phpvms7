@@ -461,7 +461,9 @@ $einstellungen['acars.livemap_quelle'] = 'phpvms';
 $pireps = $scPaar;
 $app->forgetInstance(SC_QUELLE);
 if (class_exists('Modules\\SharedCockpit\\Support\\CrewAuskunft')) {
-    pruefe('SC Standard-Quelle: lokales SharedCockpit hat CrewAuskunft — Livestand-Pruefung hier nicht moeglich', false);
+    // Lokal liegt schon Weg B: der Livestand ohne CrewAuskunft laesst sich hier nicht nachstellen
+    // (abgedeckt durch „Klassen fehlen“ oben). Sichtbar, aber kein Fehler.
+    echo "skip SC Standard-Quelle: lokales SharedCockpit hat CrewAuskunft\n";
 } else {
     [$code, $j] = hole('/livemap/api/fluege');
     pruefe('SC Standard-Quelle gegen lokales SharedCockpit main: Antwort unveraendert', $code === 200 && $ohneStand($j) === $basis, array_column($j['fluege'] ?? [], 'id'));

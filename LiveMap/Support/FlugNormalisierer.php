@@ -20,6 +20,7 @@ namespace Modules\LiveMap\Support;
  *   id, va, pilot, callsign, pilot_name, aircraft_icao, registration, sim,
  *   acars, dep, arr, dep_gate, arr_gate, phase, shadow_segment, status,
  *   last_seen (ms), started_at (ms), pos{…} | null
+ *   [shared_cockpit{rolle_gastgeber, partner_name}] nur am Gastgeber einer Crew
  *
  * `phase` bleibt die ROHE Phase von live (UPPER_SNAKE). Die Anzeige-Phase
  * („Level" bei einer ATC-Hoehenbeschraenkung) rechnet das Widget wie die
