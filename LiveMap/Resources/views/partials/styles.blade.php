@@ -332,6 +332,8 @@
                     .lm3-d-raster dt { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--lm-text-2); margin: 0 0 1px; }
                     .lm3-d-raster dd { font-size: 12.5px; font-weight: 650; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
                     .lm3-d-breit { grid-column: 1 / -1; }
+                    /* Crew (Shared Cockpit): langer Text bricht um, statt PF/PM abzuschneiden. */
+                    .lm3-d-raster .lm3-d-umbruch dd { white-space: normal; overflow-wrap: anywhere; }
                     .lm3-balken { height: 4px; border-radius: 2px; background: var(--lm-linie); margin-top: 4px; overflow: hidden; }
                     .lm3-balken i { display: block; height: 100%; background: var(--ph, #10b981); border-radius: 2px; }
                     .lm3-d-mehr { border-top: 1px solid var(--lm-linie); padding: 0 12px; }

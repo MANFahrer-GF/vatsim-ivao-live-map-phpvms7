@@ -371,7 +371,6 @@ class LiveFlightsController extends Controller
                         optional($pos->updated_at ?? $pos->created_at ?? null)->getTimestampMs() ?? 0
                     ) ?: null,
                     'created_ms'    => optional($p->created_at)->getTimestampMs(),
-                    'pirep_updated_ms' => optional($p->updated_at)->getTimestampMs(),
                     'logo'          => self::absolut(optional($p->airline)->logo),
                     'pirep_url'     => url('/pireps/'.$p->id),
                     'user_id'       => $nutzer ? (string) $nutzer->id : null,

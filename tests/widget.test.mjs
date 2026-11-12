@@ -463,11 +463,38 @@ test('Shared Cockpit: Tafelzeile zeigt das Kennzeichen beim Piloten, escaped, Sp
   assert.deepEqual(oben(mit), oben(ohne), 'gleiche Zellen auf oberster Ebene');
 });
 
-test('Shared Cockpit: Flugdetail zeigt das Kennzeichen unter dem Piloten', () => {
-  const start = skript.indexOf('function zeichneDetail() {');
-  assert.ok(start > 0);
-  const teil = skript.slice(start, skript.indexOf('zelle(LM_T.flugzeug', start));
-  assert.match(teil, /zelle\(LM_T\.pilot, f\.pilot_name\)\s*\+\s*zelle\(LM_T\.crew, LM3\.sharedCockpitText\(f\.shared_cockpit, LM_SPRACHE\), true\)/);
+test('Shared Cockpit: Flugdetail rendert die Crew-Zelle ganz, mit Umbruch statt Abschneiden', () => {
+  // Echte zelle() + zeichneDetail() aus dem Widget, mit langem Partnernamen gerendert.
+  const start = skript.indexOf('function zelle(name, wert, breit, extra) {');
+  const ende = skript.indexOf('// ── Folgen', start);
+  assert.ok(start > 0 && ende > start, 'zeichneDetail nicht gefunden');
+  const detail = { hidden: true, scrollTop: 0, innerHTML: '', style: { setProperty() {} }, querySelector: () => null, classList: { contains: () => false } };
+  const flug = { id: 'GSG/1', callsign: 'GSG100', dep: 'EDDF', arr: 'LEBL', pilot_name: 'Thomas K.', phase: 'CRUISE', status: 'online', pos: {},
+    shared_cockpit: { rolle_gastgeber: 'PM', partner_name: 'Christopher-Maximilian W.' } };
+  const ctx = {
+    LM3, LM_SPRACHE: 'de', LM_T: { pilot: 'Pilot', crew: 'Crew', flugzeug: 'Flugzeug', mehr: 'Mehr', folgen: 'Folgen', schliessen: 'Schliessen' },
+    el: { detail }, zustand: { auswahl: 'GSG/1', flughaefen: {}, folgen: false }, findeFlug: () => flug, weg: () => null,
+    logoFuer: () => null, safeAssetUrl: () => null, safeUrl: () => null,
+  };
+  const esc = skript.slice(skript.indexOf('function lmEsc(s) {'), skript.indexOf('function lmKurzname('));
+  vm.runInNewContext(esc + skript.slice(start, ende) + '; this.zeichneDetail = zeichneDetail;', ctx);
+  ctx.zeichneDetail();
+  const html = detail.innerHTML;
+  const text = 'Shared Cockpit · mit Christopher-Maximilian W. · Gastgeber PM';
+  const crew = html.match(/<div class="([^"]*)"><dt>Crew<\/dt><dd>([^<]*)<\/dd><\/div>/);
+  assert.ok(crew, html);
+  assert.equal(crew[2], text, 'voller Text samt Rolle in der Zelle');
+  assert.deepEqual(crew[1].split(' ').sort(), ['lm3-d-breit', 'lm3-d-umbruch']);
+  assert.ok(html.indexOf('<dt>Pilot</dt><dd>Thomas K.</dd>') < html.indexOf('<dt>Crew</dt>'), 'Crew unter dem Piloten');
+  // Die Klasse hebt das Abschneiden der Rasterzellen auf (spezifischer als .lm3-d-raster dd).
+  const css = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'styles.blade.php'), 'utf8');
+  const regel = css.match(/\.lm3-d-raster \.lm3-d-umbruch dd \{([^}]*)\}/);
+  assert.ok(regel && /white-space:\s*normal/.test(regel[1]), 'Umbruch-Regel fehlt');
+  assert.ok(css.indexOf(regel[0]) > css.indexOf('.lm3-d-raster dd {'), 'Umbruch-Regel steht nach der Abschneide-Regel');
+  // Ohne Crew keine Zelle, andere breite Zellen ohne Zusatzklasse
+  ctx.findeFlug = () => ({ ...flug, shared_cockpit: undefined, pos: { qnh_hpa: 1013 } });
+  ctx.zeichneDetail();
+  assert.ok(!detail.innerHTML.includes('<dt>Crew</dt>') && !detail.innerHTML.includes('lm3-d-umbruch'));
   const t = skript.slice(skript.indexOf('var LM_T = ({'), skript.indexOf('})[LM_SPRACHE];'));
   assert.equal((t.match(/\bcrew: '/g) || []).length, 2, 'Bezeichnung DE und EN');
 });

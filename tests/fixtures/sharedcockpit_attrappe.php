@@ -7,6 +7,8 @@
 
 namespace LiveMapProbe\SC;
 
+require_once __DIR__.'/sharedcockpit_teilstaende.php';
+
 final class Crew
 {
     public const ANGENOMMEN = 'angenommen';
@@ -19,6 +21,7 @@ final class Crew
 
     public static function where(string $feld, $wert): self
     {
+        \LiveMapProbe\Zaehler::$where++;
         if (self::$wirft) {
             throw new \RuntimeException('Tabelle sc_crews fehlt');
         }
@@ -70,8 +73,16 @@ final class CrewAuskunft
 
 final class Spurtraeger
 {
+    /** Ergebnis von gastgeberLebt (Serverzeit-Frische, Schalter fuer die Probe). */
+    public static bool $lebt = true;
+
     public static function laufenderFuehrender($crew)
     {
         return null;
+    }
+
+    public static function gastgeberLebt($crew): bool
+    {
+        return self::$lebt;
     }
 }

@@ -222,23 +222,19 @@ final class FlugNormalisierer
             '_pilot'         => array_values(array_filter([
                 self::text($p['user_id'] ?? null, 20),
             ], fn ($v) => $v !== null)),
-            // Nur fuer Shared Cockpit (crewsAnwenden): `pireps.updated_at` allein,
-            // nicht `last_seen` (das ist das Maximum mit der letzten Position).
-            '_pirep_ms'      => self::ganzzahl($p['pirep_updated_ms'] ?? null),
         ];
     }
-
-    /** Hoechstens so viel aelter als der Spurtraeger darf der Bericht des Gastgebers sein (wie SharedCockpit KernKarte). */
-    public const SC_VORSPRUNG_MS = 120_000;
 
     /**
      * Shared Cockpit, Weg B (B2): eine Crew erscheint als EIN Flugzeug.
      *
      * Regel wie SharedCockpit `Http/Middleware/KernKarte` (Kern-Karte /api/acars):
      * Crew `angenommen`; Spurtraeger UND fuehrender Bericht stehen beide in
-     * der Liste (mit Position); `pireps.updated_at` des Gastgebers liegt
-     * hoechstens 120 s hinter dem des Spurtraegers (sonst ist sein Client
-     * eingefroren und die Karte zeigt beide). Ohne lesbare Zeit: beide.
+     * der Liste (mit Position); der Gastgeber lebt (`gastgeber_lebt` aus
+     * SharedCockpit `Spurtraeger::gastgeberLebt`: sein Heartbeat in Serverzeit
+     * hoechstens 120 s hinter dem des Spurtraegers, sonst ist sein Client
+     * eingefroren und die Karte zeigt beide). Nicht `pireps.updated_at`: Das
+     * schickt AeroACARS mit der PC-Uhr.
      *
      * Dann bekommt der Gastgeber `shared_cockpit` (gleiche Form wie
      * aeroacars-live `scFuerLivemap`: Rolle und Kurzname, keine Kennungen) und
@@ -246,8 +242,13 @@ final class FlugNormalisierer
      * `zusammenfuehren()` nehmen ihn heraus. Die Liste bleibt flach, damit der
      * Puffer im Controller seine Form behaelt.
      *
+     * Den Spurtraeger jeder angenommenen Crew markiert `_sc_gast` (users.id des
+     * Gastgebers), auch ohne Zusammenlegung: Hat aeroacars-live (B3) die Crew
+     * schon zusammengelegt, blendet `zusammenfuehren()` ihn damit aus.
+     *
      * @param array $crews je Crew: status, spur_pirep_id, fuehrender_pirep_id,
-     *                     rolle_gastgeber, partner_name (SharedCockpitQuelle)
+     *                     rolle_gastgeber, partner_name, gastgeber_user_id,
+     *                     gastgeber_lebt (SharedCockpitQuelle)
      */
     public static function crewsAnwenden(array $fluege, array $crews): array
     {
@@ -259,13 +260,14 @@ final class FlugNormalisierer
         }
         foreach ($crews as $c) {
             $spur = $nachBericht[(string) ($c['spur_pirep_id'] ?? '')] ?? null;
-            $gast = $nachBericht[(string) ($c['fuehrender_pirep_id'] ?? '')] ?? null;
-            if (($c['status'] ?? null) !== 'angenommen' || $spur === null || $gast === null || $spur === $gast) {
+            if (($c['status'] ?? null) !== 'angenommen' || $spur === null) {
                 continue;
             }
-            $s = $fluege[$spur]['_pirep_ms'] ?? null;
-            $g = $fluege[$gast]['_pirep_ms'] ?? null;
-            if (!is_int($s) || !is_int($g) || $s - $g > self::SC_VORSPRUNG_MS) {
+            if (($gastgeber = self::text($c['gastgeber_user_id'] ?? null, 20)) !== null) {
+                $fluege[$spur]['_sc_gast'] = $gastgeber;
+            }
+            $gast = $nachBericht[(string) ($c['fuehrender_pirep_id'] ?? '')] ?? null;
+            if ($gast === null || $spur === $gast || ($c['gastgeber_lebt'] ?? null) !== true) {
                 continue;
             }
             $fluege[$spur]['_sc_spur'] = true;
@@ -307,7 +309,10 @@ final class FlugNormalisierer
      * Shared Cockpit (crewsAnwenden): Der Live-Flug, der dem Spurtraeger
      * zugeordnet wird, faellt mit ihm weg. Solange aeroacars-live (B3) den
      * Partner nicht selbst ausblendet, liefert es ihn weiter; so zeigt die
-     * Karte unabhaengig von der Reihenfolge ein Flugzeug.
+     * Karte unabhaengig von der Reihenfolge ein Flugzeug. Hat B3 die Crew
+     * zusammengelegt (Live-Gastgeber traegt `shared_cockpit` von live), faellt
+     * ein freier Spurtraeger (`_sc_gast` = dieser Live-Pilot) auch dann weg,
+     * wenn LiveMap selbst nicht zusammenlegt (etwa Gastgeber-PIREP ohne Position).
      *
      * @return array{fluege: array, zugeordnet: int}
      */
@@ -315,6 +320,13 @@ final class FlugNormalisierer
     {
         $frei = $phpvms;
         $zugeordnet = 0;
+        // Vor der Schleife: darin bekommt live auch das Kennzeichen vom PIREP.
+        $b3Gastgeber = [];
+        foreach ($live as $l) {
+            if (isset($l['shared_cockpit']) && (string) ($l['pilot'] ?? '') !== '') {
+                $b3Gastgeber[(string) $l['pilot']] = true;
+            }
+        }
         foreach ($live as $i => $l) {
             $cs = self::rufzeichenSchluessel($l['callsign'] ?? null);
             $pilot = (string) ($l['pilot'] ?? '');
@@ -349,6 +361,8 @@ final class FlugNormalisierer
             }
         }
 
+        $frei = array_filter($frei, fn ($p) => !isset($b3Gastgeber[(string) ($p['_sc_gast'] ?? '')]));
+
         return ['fluege' => array_merge(array_values($live), self::ohneSpurtraeger($frei)), 'zugeordnet' => $zugeordnet];
     }
 
@@ -380,7 +394,7 @@ final class FlugNormalisierer
     /** Nur die Felder, die das Widget sieht — interne Zuordnungsfelder raus. */
     public static function oeffentlich(array $flug): array
     {
-        unset($flug['_pilot'], $flug['_pirep_ms'], $flug['_sc_spur']);
+        unset($flug['_pilot'], $flug['_sc_spur'], $flug['_sc_gast']);
 
         return $flug + ['logo' => null, 'pirep_url' => null];
     }

@@ -170,6 +170,7 @@ function zurueck(): void
     $pirepsKaputt = false;
     LiveMapProbe\SC\Crew::$alle = [];
     LiveMapProbe\SC\Crew::$wirft = false;
+    LiveMapProbe\SC\Spurtraeger::$lebt = true;
     $q = scQuelle('LiveMapProbe\\SC\\', true);
     if ($q !== null) {
         $GLOBALS['app']->instance(SC_QUELLE, $q);
@@ -378,12 +379,13 @@ $scLogZeilen = fn () => substr_count((string) @file_get_contents($protokoll), 'S
 $scOhneKennungen = fn (string $roh) => !str_contains($roh, 'PIREPSPUR1') && !str_contains($roh, 'crew_id') && !str_contains($roh, 'user_id')
     && !str_contains($roh, 'GSG0001') && !str_contains($roh, 'GSG0007') && !str_contains($roh, 'Meier') && !str_contains($roh, '"_');
 /** Lauf mit/ohne Crew; liefert [Code, JSON ohne stand, Rohtext]. */
-$scLauf = function (string $quelle, array $pirepListe, array $crews, ?array $liveListe = null) use ($ohneStand) {
+$scLauf = function (string $quelle, array $pirepListe, array $crews, ?array $liveListe = null, bool $lebt = true) use ($ohneStand) {
     global $einstellungen, $pireps;
     zurueck();
     $einstellungen['acars.livemap_quelle'] = $quelle;
     $pireps = $pirepListe;
     LiveMapProbe\SC\Crew::$alle = $crews;
+    LiveMapProbe\SC\Spurtraeger::$lebt = $lebt;
     if ($liveListe !== null) {
         live(['live.kant.ovh/api/flights' => Http::response($liveListe, 200)]);
     }
@@ -417,15 +419,29 @@ pruefe('SC beide mit B3: keine Kennungen', $scOhneKennungen($roh), $roh);
 pruefe('SC nur live: B3-Kennzeichen durchgereicht, Name gekuerzt', ($j['fluege'][0]['shared_cockpit'] ?? null) === ['rolle_gastgeber' => 'PM', 'partner_name' => 'Peter M.'], $j['fluege'][0] ?? null);
 
 // Faelle, in denen beide bleiben: Antwort gleich dem Lauf ganz ohne Crew
-$scGleich = function (string $name, string $quelle, array $pirepListe, array $crews, ?array $liveListe = null) use ($scLauf) {
+$scGleich = function (string $name, string $quelle, array $pirepListe, array $crews, ?array $liveListe = null, bool $lebt = true) use ($scLauf) {
     [, $basis] = $scLauf($quelle, $pirepListe, [], $liveListe);
-    [$code, $j] = $scLauf($quelle, $pirepListe, $crews, $liveListe);
-    pruefe($name, $code === 200 && $j === $basis && count($j['fluege'] ?? []) >= 2, [array_column($j['fluege'] ?? [], 'id'), $j === $basis]);
+    [$code, $j, $roh] = $scLauf($quelle, $pirepListe, $crews, $liveListe, $lebt);
+    pruefe($name, $code === 200 && $j === $basis && count($j['fluege'] ?? []) >= 2 && !str_contains($roh, '"_'), [array_column($j['fluege'] ?? [], 'id'), $j === $basis]);
 };
 $scGleich('SC: Gastgeber fehlt in der Liste (keine Position) → beide bleiben, Antwort unveraendert', 'phpvms', [$scGast(null, false), $scSpur(), $scPirep('PIREPANDER', 9, 'Anna Fischer', 'Anna F.', Carbon::now())], [$scCrew()]);
-$scGleich('SC: Gastgeber eingefroren (3 min hinter dem Spurtraeger) → beide bleiben', 'phpvms', [$scGast(Carbon::now()->subMinutes(3)), $scSpur(Carbon::now())], [$scCrew()]);
-$scGleich('SC beide: Gastgeber eingefroren → beide Live-Fluege bleiben', 'beide', [$scGast(Carbon::now()->subMinutes(3)), $scSpur(Carbon::now())], [$scCrew()], $scLive());
-$scGleich('SC: Gastgeber ohne lesbare Zeit → beide bleiben', 'phpvms', [$scGast(false), $scSpur()], [$scCrew()]);
+// Frische nur aus Spurtraeger::gastgeberLebt (Serverzeit); pireps.updated_at ist die PC-Uhr des Clients
+$scGleich('SC: Gastgeber eingefroren (gastgeberLebt false), PC-Uhren frisch → beide bleiben', 'phpvms', [$scGast(Carbon::now()), $scSpur(Carbon::now())], [$scCrew()], null, false);
+$scGleich('SC beide: Gastgeber eingefroren → beide Live-Fluege bleiben', 'beide', [$scGast(Carbon::now()), $scSpur(Carbon::now())], [$scCrew()], $scLive(), false);
+[$code, $j] = $scLauf('phpvms', [$scGast(Carbon::now()->subMinutes(3)), $scSpur(Carbon::now())], [$scCrew()]);
+pruefe('SC: PC-Uhr des Gastgebers 3 min nach, gastgeberLebt → ein Flug', $code === 200 && array_column($j['fluege'] ?? [], 'id') === ['phpvms/PIREPGAST1'], array_column($j['fluege'] ?? [], 'id'));
+[$code, $j] = $scLauf('phpvms', [$scGast(false), $scSpur(false)], [$scCrew()]);
+pruefe('SC: PIREPs ohne lesbare Zeit, gastgeberLebt → ein Flug', $code === 200 && array_column($j['fluege'] ?? [], 'id') === ['phpvms/PIREPGAST1'], array_column($j['fluege'] ?? [], 'id'));
+// B3 legt zusammen (live: nur Gastgeber, mit Kennzeichen), LiveMap nicht (eingefroren / Gastgeber ohne Position)
+$b3Live = [$scLive(['shared_cockpit' => ['rolle_gastgeber' => 'PF', 'partner_name' => 'Peter M.']])[0]];
+[$code, $j, $roh] = $scLauf('beide', [$scGast(), $scSpur()], [$scCrew()], $b3Live, false);
+pruefe('SC beide mit B3, Gastgeber nicht frisch → nur GSG/1', $code === 200 && array_column($j['fluege'] ?? [], 'id') === ['GSG/1'], array_column($j['fluege'] ?? [], 'id'));
+pruefe('SC beide mit B3, Gastgeber nicht frisch: keine Kennungen', $scOhneKennungen($roh), $roh);
+[$code, $j] = $scLauf('beide', [$scGast(null, false), $scSpur()], [$scCrew()], $b3Live);
+pruefe('SC beide mit B3, Gastgeber-PIREP ohne Position → nur GSG/1', $code === 200 && array_column($j['fluege'] ?? [], 'id') === ['GSG/1'], array_column($j['fluege'] ?? [], 'id'));
+[$code, $j, $roh] = $scLauf('beide', [$scGast(), $scSpur()], [$scCrew()], [$scLive()[0]], false);
+pruefe('SC beide ohne B3-Kennzeichen, Gastgeber nicht frisch → beide', $code === 200 && array_column($j['fluege'] ?? [], 'id') === ['GSG/1', 'phpvms/PIREPSPUR1'], array_column($j['fluege'] ?? [], 'id'));
+pruefe('SC beide ohne B3-Kennzeichen: nichts Internes (_sc_gast) nach aussen', !str_contains($roh, '"_') && !str_contains($roh, 'sc_gast') && !str_contains($roh, 'user_id'), $roh);
 foreach (['eingeladen', 'abgelehnt', 'zurueckgezogen', 'abgesprungen', 'geflogen'] as $st) {
     $scGleich("SC: Crew '$st' (nicht angenommen) → beide bleiben", 'phpvms', [$scGast(), $scSpur()], [$scCrew($st)]);
 }
@@ -442,7 +458,10 @@ LiveMapProbe\SC\Crew::$wirft = true;
 [$code, $j] = hole('/livemap/api/fluege');
 pruefe('SC wirft (Tabelle fehlt): Antwort unveraendert', $code === 200 && $ohneStand($j) === $basis, array_column($j['fluege'] ?? [], 'id'));
 pruefe('SC wirft: eine Log-Warnung', $scLogZeilen() === $logVorher + 1, $scLogZeilen() - $logVorher);
-foreach (['Klassen fehlen (Modul fehlt / heutiger Livestand ohne CrewAuskunft)' => ['LiveMapProbe\\Fehlt\\', true], 'Modul abgeschaltet' => ['LiveMapProbe\\SC\\', false]] as $name => [$ns, $aktiv]) {
+foreach (['Klassen fehlen (Modul fehlt)' => ['LiveMapProbe\\Fehlt\\', true], 'Modul abgeschaltet' => ['LiveMapProbe\\SC\\', false],
+    'heutiger Livestand (Crew, Spurtraeger ohne laufenderFuehrender/gastgeberLebt, ohne CrewAuskunft)' => ['LiveMapProbe\\Livestand\\', true],
+    'ohne CrewAuskunft' => ['LiveMapProbe\\OhneAuskunft\\', true], 'ohne Crew' => ['LiveMapProbe\\OhneCrew\\', true],
+    'ohne laufenderFuehrender' => ['LiveMapProbe\\OhneFuehrender\\', true], 'ohne gastgeberLebt (feat/weg-b vor der Serverzeit)' => ['LiveMapProbe\\OhneLebt\\', true]] as $name => [$ns, $aktiv]) {
     zurueck();
     $einstellungen['acars.livemap_quelle'] = 'phpvms';
     $pireps = $scPaar;
@@ -451,8 +470,10 @@ foreach (['Klassen fehlen (Modul fehlt / heutiger Livestand ohne CrewAuskunft)' 
         $app->instance(SC_QUELLE, $q);
     }
     $logVorher = $scLogZeilen();
+    LiveMapProbe\Zaehler::$where = 0;
     [$code, $j] = hole('/livemap/api/fluege');
-    pruefe("SC $name: Antwort unveraendert, kein Log", $code === 200 && $ohneStand($j) === $basis && $scLogZeilen() === $logVorher, array_column($j['fluege'] ?? [], 'id'));
+    pruefe("SC $name: Antwort unveraendert, kein Log, Crew::where nie aufgerufen", $code === 200 && $ohneStand($j) === $basis && $scLogZeilen() === $logVorher
+        && LiveMapProbe\Zaehler::$where === 0, [array_column($j['fluege'] ?? [], 'id'), LiveMapProbe\Zaehler::$where]);
 }
 // Echte Standard-Quelle gegen das lokale phpVMS: dort liegt SharedCockpit main
 // (= heutiger Livestand, ohne CrewAuskunft). Ohne Attrappe → unveraendert.

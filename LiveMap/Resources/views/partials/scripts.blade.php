@@ -2034,9 +2034,11 @@
 
                 // ── Detailkasten (Aufbau wie der 4.7.9-„Crew Pass“) ──
                 // Felder, die die Quelle nicht liefert, fehlen — keine Striche.
+                // breit: true = ganze Zeile; ein Text = ganze Zeile mit dieser Zusatzklasse.
                 function zelle(name, wert, breit, extra) {
                     if (wert == null || wert === '') return '';
-                    return '<div' + (breit ? ' class="lm3-d-breit"' : '') + '><dt>' + lmEsc(name) + '</dt><dd>' + lmEsc(wert) + '</dd>' + (extra || '') + '</div>';
+                    var klasse = breit ? 'lm3-d-breit' + (typeof breit === 'string' ? ' ' + breit : '') : '';
+                    return '<div' + (klasse ? ' class="' + klasse + '"' : '') + '><dt>' + lmEsc(name) + '</dt><dd>' + lmEsc(wert) + '</dd>' + (extra || '') + '</div>';
                 }
                 function zeichneDetail() {
                     if (!el.detail) return;
@@ -2052,7 +2054,7 @@
 
                     var raster =
                         zelle(LM_T.pilot, f.pilot_name) +
-                        zelle(LM_T.crew, LM3.sharedCockpitText(f.shared_cockpit, LM_SPRACHE), true) +
+                        zelle(LM_T.crew, LM3.sharedCockpitText(f.shared_cockpit, LM_SPRACHE), 'lm3-d-umbruch') +
                         zelle(LM_T.flugzeug, flugzeug) +
                         zelle(LM_T.hoehe, pos.alt_ft != null ? LM3.zahl(pos.alt_ft, LM_SPRACHE) + ' ft' : null) +
                         zelle('GS', pos.gs_kt != null ? Math.round(pos.gs_kt) + ' kt' : null) +
