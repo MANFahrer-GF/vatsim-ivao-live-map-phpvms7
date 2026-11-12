@@ -207,11 +207,20 @@
             return pos.gs_kt != null && pos.gs_kt >= 150 && pos.vs_fpm != null && isFinite(pos.vs_fpm) && Math.abs(pos.vs_fpm) <= 500
                 && pos.alt_ft != null && pos.alt_ft >= 10000;
         }
+        // „Level" im Steigflug unter 5000 ft AGL: Die AeroACARS-Phasen-Engine schaltet
+        // dort nie auf Cruise (phase_v2.rs CRUISE_MIN_AGL_FT), ein VFR-Reiseflug (C172
+        // auf 2300 ft, GSG 1524 am 12.11.) bliebe sonst ohne ETA. Darueber wird aus
+        // „Level" nach 4–10 min von selbst Cruise; ein abfangender Jet bekommt seine
+        // ETA erst dann (sonst Stunden zu spaet bei langer Reststrecke).
+        function tieferReiseflug(f) {
+            var pos = f.pos || {}, agl = pos.agl_ft != null ? pos.agl_ft : pos.alt_ft;
+            return phaseForDisplay(f.phase, f.shadow_segment) === 'LEVEL' && String(f.phase).toUpperCase() === 'CLIMB'
+                && agl != null && agl < 5000 && pos.gs_kt != null && pos.gs_kt <= 180;
+        }
         function etaMinutenFuerFlug(f, weg, jetztMs) {
             if (!f || !weg || f.status === 'offline') return null;
             if (f.last_seen && jetztMs - f.last_seen > ETA_VERALTET_MS) return null;
-            // „Level" (Steig-/Sinkphase im Geradeausflug laut Phasen-Engine) zaehlt wie Reiseflug.
-            var reise = ETA_PHASEN[String(f.phase || '').toUpperCase()] || phaseForDisplay(f.phase, f.shadow_segment) === 'LEVEL';
+            var reise = ETA_PHASEN[String(f.phase || '').toUpperCase()] || tieferReiseflug(f);
             if (!reise && !imGeradeausflug(f)) return null;
             return etaMinuten(weg.rest, f.pos ? f.pos.gs_kt : null);
         }
@@ -2441,29 +2450,16 @@
                         break;
                     }
                     var h = window.innerHeight - Math.max(0, oben) - untenFest - 16;
-                    // Tafel unten: Karte und Tafel teilen sich das Fenster. Die Tafel nimmt,
-                    // was ihre Fluege brauchen, hoechstens 40 %; darueber scrollen die Zeilen
-                    // in sich. Die Karte bekommt den Rest (wenige Fluege → grosse Karte).
+                    // Tafel unten: Karte und Tafel teilen sich das Fenster — wenige Fluege,
+                    // grosse Karte, die ganze Tafel steht im Fenster. Bei vielen Fluegen
+                    // behaelt die Karte mindestens 60 % und die Liste geht darunter weiter
+                    // (kein Rollbalken in der Tafel: der verschob unter Windows die Zeilen
+                    // gegen den Kopf, Abnahme 5.2.2).
                     var unten = wrap.classList.contains('lm3--tafel-unten') && wrap.querySelector('.lm3-unten');
                     if (unten && unten.offsetParent !== null) {
                         var sig = wrap.querySelector('.lm3-signatur');
-                        var sigH = sig ? sig.getBoundingClientRect().height : 0;
-                        // Volle Hoehe ueber scrollHeight messen, ohne die Begrenzung zu loesen
-                        // (sonst springt eine gescrollte Liste bei jeder Aktualisierung nach oben).
-                        var zIst = 0, zVoll = 0;
-                        [].forEach.call(unten.querySelectorAll('.lm3-zeilen'), function (z) {
-                            if (z.offsetParent !== null && z.scrollHeight > zVoll) { zVoll = z.scrollHeight; zIst = z.getBoundingClientRect().height; }
-                        });
-                        var rahmen = unten.getBoundingClientRect().height + sigH - zIst;   // Reiter, Kopf, Signatur
-                        var deckel = Math.round(h * 0.4);
-                        var zeilen = zVoll;
-                        if (rahmen + zVoll > deckel) {
-                            zeilen = Math.max(72, deckel - rahmen);   // mindestens zwei Zeilen
-                            unten.style.setProperty('--lm-zeilen-max', zeilen + 'px');
-                        } else {
-                            unten.style.removeProperty('--lm-zeilen-max');
-                        }
-                        h -= rahmen + Math.min(zVoll, zeilen);
+                        var tafelH = unten.getBoundingClientRect().height + (sig ? sig.getBoundingClientRect().height : 0);
+                        h = Math.max(h - tafelH, h * 0.6);
                     }
                     h = Math.max(cfg.minHoehe || 420, Math.min(cfg.maxHoehe || 1000, h));
                     var neu = Math.round(h) + 'px';

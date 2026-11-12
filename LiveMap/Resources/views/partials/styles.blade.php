@@ -203,9 +203,7 @@
                     .lm3-unten .lm3-reiter { padding: 8px 10px; }
                     .lm3-unten .lm3-thead { background: var(--lm-flaeche-2); }
                     .lm3-unten .lm3-g-plan { grid-template-columns: minmax(150px, 1.4fr) minmax(110px, 1fr) 96px minmax(100px, 1.2fr); }
-                    /* Hoehe: das Skript (messeHoehe) setzt --lm-zeilen-max, wenn die Tafel mehr
-                       als ihren Anteil am Fenster braucht; dann scrollen die Zeilen in sich. */
-                    .lm3-unten .lm3-zeilen { max-height: var(--lm-zeilen-max, none); overflow-y: auto; }
+                    .lm3-unten .lm3-zeilen { max-height: none; overflow: visible; }
                     /* Unten mit Platz: groessere Schrift, Textspalten mit Mindestbreiten fuer
                        lange Namen/Routen bei 15 px (Abnahme 5.2.2), Rest gewichtet verteilt —
                        sonst schluckt eine Spalte den ganzen Platz. Summe der Minima 856 px

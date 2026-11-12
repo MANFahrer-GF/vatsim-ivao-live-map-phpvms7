@@ -349,6 +349,13 @@ test('ETA je Flug: nur ab Reiseflug, nicht offline, nicht veraltet', () => {
   assert.equal(LM3.etaFuerFlug(lv('CLIMB', 'climbing'), { rest: 38 }, jetzt), '');
   assert.equal(LM3.etaFuerFlug(lv('CLIMB', null), { rest: 38 }, jetzt), '');
   assert.equal(LM3.etaFuerFlug(lv('TAKEOFF', 'level'), { rest: 38 }, jetzt), '');   // nur Steig-/Sinkphase wird „Level"
+  // Jet faengt im Steigflug ab: keine ETA (waere bei langer Reststrecke Stunden zu spaet);
+  // ueber 5000 ft AGL wird daraus nach 4–10 min von selbst Cruise.
+  const jet = (alt, gs, agl) => ({ phase: 'CLIMB', shadow_segment: 'level', status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: gs, vs_fpm: 0, alt_ft: alt, agl_ft: agl } });
+  assert.equal(LM3.etaFuerFlug(jet(10000, 290), { rest: 3300 }, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(jet(3000, 210), { rest: 580 }, jetzt), '');            // tief, aber schnell
+  assert.equal(LM3.etaFuerFlug(jet(6500, 150, 6000), { rest: 40 }, jetzt), '');       // langsam, aber ueber 5000 ft AGL
+  assert.equal(LM3.etaFuerFlug(jet(5500, 110, 2100), { rest: 38 }, jetzt), '18:00z'); // hoher Platz: AGL zaehlt
 });
 
 test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
@@ -368,6 +375,11 @@ test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
   const voll = [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm)].map((m) => m[1]);   // oben und unten, ausserhalb der Stufen
   assert.equal(voll.length, 2);
   for (const sp of voll) assert.ok(mindest(sp) <= stufen[0].max + 1, 'volles Raster ' + mindest(sp) + ' px > ' + (stufen[0].max + 1));
+  // Tafel unten ab 1000 px (5.2.2): eigenes Raster mit Mindestbreiten fuer lange Namen
+  const breit = css.match(/@container lmmitte \(min-width: (\d+)px\)\s*\{[\s\S]*?--lm-sp:\s*([^;]+);/);
+  assert.ok(breit, 'Raster ab 1000 px nicht gefunden');
+  assert.equal(spalten(breit[2]).length, 9, 'Raster ab ' + breit[1] + ' px: 9 Spalten');
+  assert.ok(mindest(breit[2]) <= +breit[1], 'Raster ab ' + breit[1] + ' px braucht ' + mindest(breit[2]) + ' px');
   // Neue Spalten (5.2) fallen zuerst: wo Pilot/Rest/Hoehe/GS fehlen, fehlen auch
   // Typ und ETA; Pilot faellt nicht frueher als in 5.1.1 (Stufe 720 px).
   const versteckt = (m) => new Set([...m.matchAll(/\.lm3-sp-(\w+)/g)].map((x) => x[1]));
@@ -422,7 +434,7 @@ test('Tafelzeile: echte zeileAktiv liefert die Zellen in Kopf-Reihenfolge, ETA n
   const html = zeile('CRUISE');
   assert.deepEqual(oben(html), kopf, 'Zellen der Zeile = Spaltenkoepfe');
   const css = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'styles.blade.php'), 'utf8');
-  for (const sp of [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm)].map((m) => m[1]))
+  for (const sp of [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm), ...css.matchAll(/@container lmmitte \(min-width: \d+px\)\s*\{[\s\S]*?--lm-sp:\s*([^;]+);/g)].map((m) => m[1]))
     assert.equal(sp.split(/\s+(?![^()]*\))/).length, kopf.length, 'volles Raster = Spaltenzahl');
 
   const zelle = (h, k) => { const m = h.match(new RegExp('<span class="' + k + '">([^<]*)</span>')); return m ? m[1] : null; };
