@@ -396,6 +396,25 @@ test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
   }
 });
 
+test('Tafel unten: Raster ab 1000 px trifft nur unten, Zeilen ohne eigenen Rollbalken', () => {
+  // Abnahme 5.2.2: das breite Raster und die 15-px-Schrift gelten nur fuer die
+  // Lage unten; ein innerer Rollbalken (15a5bc4) verschob unter Windows die
+  // Zeilen gegen den Kopf.
+  const css = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'styles.blade.php'), 'utf8');
+  const block = css.match(/@container lmmitte \(min-width: \d+px\)\s*\{([\s\S]*?)\n\s*\}\n/);
+  assert.ok(block, 'Block ab 1000 px nicht gefunden');
+  const selektoren = [...block[1].matchAll(/^\s*([^{}\n]+?)\s*\{/gm)].map((m) => m[1]);
+  assert.ok(selektoren.length >= 4, 'Regeln im Block nicht gefunden');
+  for (const s of selektoren) for (const teil of s.split(',')) assert.match(teil.trim(), /^\.lm3-unten\s/, 'Regel ab 1000 px ausserhalb der Tafel unten: ' + teil.trim());
+  const grund = css.match(/^\s*\.lm3-unten \.lm3-zeilen\s*\{([^}]*)\}/m);
+  assert.ok(grund, '.lm3-unten .lm3-zeilen nicht gefunden');
+  assert.match(grund[1], /overflow:\s*visible/, 'Zeilen unten muessen overflow: visible haben');
+  for (const r of [...css.matchAll(/\.lm3-unten \.lm3-zeilen\s*\{([^}]*)\}/g)].map((m) => m[1])) {
+    assert.doesNotMatch(r, /overflow(-y)?:\s*(auto|scroll)/, 'Zeilen unten mit eigenem Rollbalken');
+    assert.match(r, /max-height:\s*none/, 'Zeilen unten mit Hoehendeckel');
+  }
+});
+
 test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
   const dep = { lat: 50, lon: 8 }, arr = { lat: 52, lon: 13 };
   const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, phase: 'CRUISE', pos: { lat, lon: 10, gs_kt: gs } });
