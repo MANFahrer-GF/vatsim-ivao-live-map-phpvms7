@@ -1,9 +1,22 @@
-LiveMap v5.2.1 - Install Package
+LiveMap v5.2.2 - Install Package
 ================================
 
 Contents:
   LiveMap/                     -> phpVMS module (copy to <phpvms-root>/modules/LiveMap/)
   live_map.blade.php           -> theme file (one line, copy into each theme in use)
+
+Changed in v5.2.2:
+
+  - Flight board below the map, from about 1000 px board width: columns
+    are spread evenly, pilot names and routes keep a minimum width, and
+    the font is larger. Narrower screens look exactly like 5.2.1.
+  - The map height follows the board: with few flights the map grows to
+    the window edge, with many it keeps at least 60 % of the height and
+    the list continues on the page. Admin min/max height still apply.
+  - ETA also for level flight below 5,000 ft above ground at up to
+    180 kt (shown as "Level" by ACARS clients, e.g. a C172).
+
+  UPDATE from 5.2.x or 5.1.x: only the folder modules/LiveMap changes.
 
 Fixed in v5.2.1:
 

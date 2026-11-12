@@ -1,6 +1,6 @@
 # VATSIM + IVAO Live Map for phpVMS 7
 
-Version: **5.2.1** (2026-11-12)
+Version: **5.2.2** (2026-11-12)
 
 Interactive live map widget for phpVMS 7 with VATSIM/IVAO traffic, FIR/UIR sectors, VA flight panels, weather overlays, and an admin-driven configuration module.
 
@@ -30,7 +30,7 @@ This repository ships two deployable parts:
 
 For convenience, versioned full packages contain both, for example:
 
-- `LiveMap-full-package-v5.2.1.zip`
+- `LiveMap-full-package-v5.2.2.zip`
 
 ## Installation (FTP + phpVMS admin, no SSH)
 
