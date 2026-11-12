@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.2.2] — 2026-11-12
+
+### Changed / Geändert
+- **Flugtafel unten mit Platz (ab 1000 px):** Spalten gleichmäßiger verteilt, Pilotennamen und
+  Routen behalten Mindestbreiten; Schrift größer (Zeilen 15 px, Kopf 12 px). Darunter wie 5.2.1.
+  *Bottom flight board: columns spread evenly, larger font from 1000 px.*
+- **Kartenhöhe passt sich der Tafel an:** Bei wenigen Flügen wächst die Karte bis zum
+  Fensterrand, bei vielen behält sie mindestens 60 % der Höhe, die Liste ist per Seitenscrollen
+  erreichbar (Admin-Grenzen gelten weiter). Kein eigener Rollbalken in der Tafel.
+  *Map grows when few flights are listed.*
+
+### Fixed / Behoben
+- **ETA bei „Level“ in niedriger Höhe:** Kleine Flugzeuge, die unter 5000 ft über Grund mit
+  höchstens 180 kt geradeaus fliegen, zeigt der ACARS-Client dauerhaft als „Level“ statt Cruise.
+  Sie bekommen jetzt eine ETA. Jets im Zwischenabfangen weiterhin nicht. *ETA for low, slow
+  level flight.*
+
+### Upgrade
+Nur `modules/LiveMap` tauschen. *Only replace `modules/LiveMap`.*
+
+---
+
 ## [5.2.1] — 2026-11-12
 
 ### Fixed / Behoben
