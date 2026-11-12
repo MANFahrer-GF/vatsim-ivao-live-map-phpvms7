@@ -4,12 +4,30 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.2.1] — 2026-11-12
+
+### Fixed / Behoben
+- **Tafel abgeschnitten:** In einigen Fensterbreiten war die Flugtafel breiter als ihr Platz,
+  „Pilot“ oder „Phase“ wurden rechts abgeschnitten. Die Tafel gibt jetzt rechtzeitig Spalten
+  ab: zuerst „Typ“, dann „ETA“; darunter genau wie 5.1.1. Ein Test rechnet jede Stufe gegen
+  ihre Breite. *Flight board no longer cut off; Type, then ETA are dropped first.*
+- **ETA erst ab Reiseflug** (Cruise, Holding, Descent, Approach, Final, Landing) oder im
+  Geradeausflug mit Reisegeschwindigkeit über 10 000 ft, wenn der ACARS-Client eine unbekannte Phase meldet. Im
+  Startlauf und Steigflug lag sie Stunden zu spät. *ETA from cruise onwards.*
+- **Keine ETA ohne Meldung seit 10 Minuten.** Bei Quelle phpVMS kommt „zuletzt gesehen“ jetzt
+  aus der letzten Position, nicht aus dem PIREP. *No ETA for flights silent for 10 minutes.*
+
+### Upgrade
+Nur `modules/LiveMap` tauschen, die Theme-Datei bleibt. *Only replace `modules/LiveMap`.*
+
+---
+
 ## [5.2.0] — 2026-11-12
 
 ### Added / Neu
 - **Spalten „Typ“ und „ETA“ in der Flugtafel** (Wunsch von Elisa): Typ aus dem ICAO-Code des
-  Flugzeugs, ETA = jetzt + Reststrecke / Geschwindigkeit über Grund, ab 50 kt (Startlauf),
-  in UTC („17:30z“). Großkreis-Rest, also eine Schätzung; offline leer. Beide Spalten
+  Flugzeugs, ETA = jetzt + Reststrecke / Geschwindigkeit über Grund, in UTC („17:30z“);
+  Schwelle seit 5.2.1: ab Reiseflug. Großkreis-Rest, also eine Schätzung; offline leer. Beide Spalten
   sortierbar; schmale Tafel gibt zuerst „Typ“ ab, ganz schmal auch „ETA“.
   *New flight board columns Type and ETA (now + distance to go / ground speed, from 50 kt,
   UTC). Both sortable; narrow boards drop Type first, very narrow ones ETA too.*
