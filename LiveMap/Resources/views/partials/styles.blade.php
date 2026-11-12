@@ -198,12 +198,20 @@
                     .lm3-unten { container-type: inline-size; container-name: lmmitte; border-top: 1px solid var(--lm-linie); background: var(--lm-flaeche); }
                     .lm3-unten .lm3-tafel {
                         width: 100%; max-width: none; max-height: none; border-radius: 0; box-shadow: none; border: 0; background: transparent;
-                        --lm-sp: minmax(148px, 1.4fr) minmax(104px, 1fr) 46px 60px 44px 110px 50px 92px minmax(72px, 1.2fr);
+                        /* Breit: Platz gleichmaessig auf alle Spalten, sonst blaeht sich nur FLUG auf.
+                           Mindestbreiten = Stufen-Raster, darunter greifen die @container-Stufen. */
+                        --lm-sp: minmax(148px, 1fr) minmax(104px, 1fr) minmax(46px, 1fr) minmax(60px, 1fr) minmax(44px, 1fr) minmax(110px, 1fr) minmax(50px, 1fr) minmax(92px, 1fr) minmax(72px, 1fr);
                     }
                     .lm3-unten .lm3-reiter { padding: 8px 10px; }
                     .lm3-unten .lm3-thead { background: var(--lm-flaeche-2); }
                     .lm3-unten .lm3-g-plan { grid-template-columns: minmax(150px, 1.4fr) minmax(110px, 1fr) 96px minmax(100px, 1.2fr); }
                     .lm3-unten .lm3-zeilen { max-height: none; overflow: visible; }
+                    /* Unten mit Platz: groessere Schrift (oben bleibt die kompakte Tafel) */
+                    @container lmmitte (min-width: 1000px) {
+                        .lm3-unten .lm3-zeile { font-size: 14px; }
+                        .lm3-unten .lm3-thead { font-size: 11.5px; }
+                        .lm3-unten .lm3-pille { font-size: 12px; }
+                    }
 
                     /* Tafel gibt Spalten ab, statt ueber die rechte Spalte zu wachsen
                        (Selektoren mit .lm3 davor, damit sie auch die Tafel unten treffen) */
