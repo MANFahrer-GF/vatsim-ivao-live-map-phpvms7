@@ -430,9 +430,16 @@
         function lueckenAusgleich(luecke, abstand) {
             return luecke > 16 ? abstand - (luecke - 16) : abstand;
         }
+        // Nach dem Setzen nachgemessen: nur so viel Ausgleich behalten, wie der Kasten
+        // darunter wirklich nachgerueckt ist (rueckt er nicht, bleibt der alte Abstand).
+        function wirksamerAusgleich(abstand, soll, lueckeVorher, lueckeNachher) {
+            var gerueckt = lueckeVorher - lueckeNachher;
+            if (gerueckt < 1) return abstand;
+            return Math.max(soll, abstand - gerueckt);
+        }
 
         wurzel.LM3 = {
-            kartenHoehe: kartenHoehe, lueckenAusgleich: lueckenAusgleich,
+            kartenHoehe: kartenHoehe, lueckenAusgleich: lueckenAusgleich, wirksamerAusgleich: wirksamerAusgleich,
             PHASE_COLOR: PHASE_COLOR, PHASE_LIST: PHASE_LIST, PHASE_LABEL: PHASE_LABEL,
             phaseColor: phaseColor, phaseLabel: phaseLabel, phaseForDisplay: phaseForDisplay,
             formatSimLabel: formatSimLabel, fmtQnhBoth: fmtQnhBoth, ageString: ageString, zahl: zahl,
@@ -2488,31 +2495,49 @@
                 // Kasten unter dem Widget; den Ausgleich bekommt die aeusserste Huelle, die nur
                 // das Widget enthaelt — am Widget selbst endete der Kartenrahmen mitten in der
                 // Tafel. Vorher immer zuruecksetzen, damit die Luecke frisch gemessen wird.
-                var huelle = null, huelleAlt = '';
+                // Waehrend der Ausgleich steht, ist der Uebergang der Huelle aus: sonst misst
+                // das Zuruecksetzen mitten in der Animation und jedes transitionend rechnet neu.
+                var huelle = null, huelleAlt = '', huelleUebergang = '';
                 function zaehltAlsInhalt(e) {
                     var st = getComputedStyle(e);
                     return e.offsetHeight > 0 && st.position !== 'fixed' && st.position !== 'absolute';
                 }
+                function gibHuelleFrei() {
+                    if (!huelle) return;
+                    huelle.style.marginBottom = huelleAlt;
+                    huelle.getBoundingClientRect();   // erst den Abstand setzen, dann den Uebergang zurueck — sonst animiert er
+                    huelle.style.transition = huelleUebergang;
+                    huelle = null;
+                }
                 function schliesseLuecke() {
-                    if (huelle) { huelle.style.marginBottom = huelleAlt; huelle = null; }
-                    var k = wrap.getBoundingClientRect(), naechst = null, grenze = null;
+                    gibHuelleFrei();
+                    var k = wrap.getBoundingClientRect(), naechst = null, naechstEl = null, grenze = null;
                     for (var a = wrap; a && a !== document.body && !naechst; a = a.parentElement) {
                         for (var s = a.nextElementSibling; s; s = s.nextElementSibling) {
                             var st = getComputedStyle(s);
                             if (st.position === 'fixed' || st.display === 'none') continue;
                             var r = s.getBoundingClientRect();
                             if (!r.height || r.right <= k.left || r.left >= k.right || r.top < k.bottom - 1) continue;
-                            if (!naechst || r.top < naechst.top) { naechst = r; grenze = a.parentElement; }
+                            if (!naechst || r.top < naechst.top) { naechst = r; naechstEl = s; grenze = a.parentElement; }
                         }
                     }
                     if (!naechst) return;
                     var h = wrap;
                     while (h.parentElement && h.parentElement !== grenze && [].filter.call(h.parentElement.children, zaehltAlsInhalt).length === 1) h = h.parentElement;
                     var jetzt = parseFloat(getComputedStyle(h).marginBottom) || 0;
-                    var soll = window.LM3.lueckenAusgleich(Math.round(naechst.top - k.bottom), jetzt);
+                    var luecke = Math.round(naechst.top - k.bottom);
+                    var soll = window.LM3.lueckenAusgleich(luecke, jetzt);
                     if (soll === jetzt) return;
-                    huelle = h; huelleAlt = h.style.marginBottom;
+                    huelle = h; huelleAlt = h.style.marginBottom; huelleUebergang = h.style.transition;
+                    h.style.transition = 'none';
                     h.style.marginBottom = soll + 'px';
+                    // Nachmessen: Haelt das Theme den Kasten fest (Seven: Fusszeile per
+                    // min-vh-100 unten, ebenso eine laengere Nachbarspalte), braechte der
+                    // Ausgleich nur leeren Scrollraum. Behalten wird nur, was nachgerueckt ist.
+                    var nachher = Math.round(naechstEl.getBoundingClientRect().top - wrap.getBoundingClientRect().bottom);
+                    var wirksam = window.LM3.wirksamerAusgleich(jetzt, soll, luecke, nachher);
+                    if (wirksam === jetzt) gibHuelleFrei();
+                    else if (wirksam !== soll) h.style.marginBottom = wirksam + 'px';
                 }
                 // Feste Leiste des Themes ueber der Kartenoberkante (Cookie-Hinweis oben bei
                 // Seven/Disposable, beim Scrollen die Navigationsleiste): Tafel, Zoom und
@@ -2778,7 +2803,7 @@
                 function obenSpaeter() { clearTimeout(obenTimer); obenTimer = setTimeout(function () { if (messeHoehe()) map.invalidateSize(); }, 120); }
                 window.addEventListener('scroll', obenSpaeter, { passive: true });
                 document.addEventListener('click', function () { setTimeout(obenSpaeter, 400); }, true);
-                document.addEventListener('transitionend', obenSpaeter, true);
+                document.addEventListener('transitionend', function (ev) { if (!/^margin/.test(ev.propertyName || '')) obenSpaeter(); }, true);
                 // Manche Themes haengen die Cookie-Leiste erst nach dem Laden in <body>
                 // (SPTheme) — dann neu messen, sonst laege sie ueber dem Tafelkopf unten.
                 if (window.MutationObserver && document.body) {

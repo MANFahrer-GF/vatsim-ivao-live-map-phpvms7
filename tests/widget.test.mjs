@@ -432,6 +432,44 @@ test('Kartenhoehe und Lueckenausgleich: Zahlen von GSG (Thomas 12.11.2026)', () 
   assert.equal(LM3.lueckenAusgleich(4, 10), 10);   // engere Themes bleiben, wie sie sind
 });
 
+test('schliesseLuecke: echte Funktion gegen nachgebaute Seiten (SPTheme, Seven, halbes Nachruecken)', () => {
+  // Pruefbefund 5.2.3: der Ausgleich wurde gesetzt, ohne nachzumessen; Seven haelt die
+  // Fusszeile per min-vh-100 fest, dann entstand leerer Scrollraum.
+  const start = skript.indexOf("var huelle = null, huelleAlt = ''");
+  const ende = skript.indexOf('// Feste Leiste des Themes', start);
+  assert.ok(start > 0 && ende > start, 'schliesseLuecke nicht gefunden');
+  const seite = (modus, vorgabe = '', uebergang = '') => {
+    const el = (name, kinder = [], hoehe = 10) => { const e = { name, children: kinder, offsetHeight: hoehe, style: { marginBottom: vorgabe && name === 'row' ? vorgabe : '', transition: name === 'row' ? uebergang : '' } };
+      kinder.forEach((k, i) => { k.parentElement = e; k.nextElementSibling = kinder[i + 1] || null; }); return e; };
+    const wrap = el('wrap'), card = el('card', [wrap]), row = el('row', [card]);
+    const basis = parseFloat(row.style.marginBottom) || 0;
+    const fuss = el('fuss'), inner = el('inner', [row, fuss]), body = el('body', [inner]);
+    body.parentElement = null; body.nextElementSibling = null;
+    const marge = () => parseFloat(row.style.marginBottom) || 0;
+    const fussOben = () => 830 + (modus === 'folgt' ? marge() - basis : modus === 'halb' ? Math.max(marge() - basis, -23) : 0);
+    wrap.getBoundingClientRect = () => ({ top: 158, bottom: 737, left: 263, right: 1450, height: 579 });
+    fuss.getBoundingClientRect = () => ({ top: fussOben(), bottom: fussOben() + 65, left: 263, right: 1450, height: 65 });
+    [card, row, inner, body].forEach((e) => { e.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, height: 0 }); });
+    const getComputedStyle = (e) => ({ position: e === fuss ? 'absolute' : 'static', display: 'block', marginBottom: e === row ? (row.style.marginBottom || '0px') : '0px' });
+    const ctx = { wrap, document: { body }, getComputedStyle, window: { LM3 } };
+    vm.runInNewContext(skript.slice(start, ende) + '; this.schliesseLuecke = schliesseLuecke;', ctx);
+    return { row, luecke: () => fussOben() - 737, lauf: ctx.schliesseLuecke };
+  };
+  const a = seite('folgt'); a.lauf();
+  assert.equal(a.row.style.marginBottom, '-77px'); assert.equal(a.luecke(), 16); assert.equal(a.row.style.transition, 'none');
+  a.lauf(); assert.equal(a.row.style.marginBottom, '-77px', 'zweiter Lauf aendert nichts');
+  const b = seite('haelt', '', 'margin .3s'); b.lauf();
+  assert.equal(b.row.style.marginBottom, '', 'Seven: kein Ausgleich, Fusszeile rueckt nicht');
+  assert.equal(b.row.style.transition, 'margin .3s', 'Uebergang zurueckgegeben');
+  const c = seite('halb'); c.lauf();
+  assert.equal(c.row.style.marginBottom, '-23px', 'nur das Nachgerueckte behalten'); assert.equal(c.luecke(), 70);
+  const d = seite('folgt', '30px'); d.lauf();
+  assert.equal(d.row.style.marginBottom, '-47px'); assert.equal(d.luecke(), 16);
+  assert.equal(LM3.wirksamerAusgleich(0, -77, 93, 93), 0);
+  assert.equal(LM3.wirksamerAusgleich(0, -77, 93, 16), -77);
+  assert.equal(LM3.wirksamerAusgleich(0, -77, 93, 70), -23);
+});
+
 test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
   const dep = { lat: 50, lon: 8 }, arr = { lat: 52, lon: 13 };
   const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, phase: 'CRUISE', pos: { lat, lon: 10, gs_kt: gs } });
