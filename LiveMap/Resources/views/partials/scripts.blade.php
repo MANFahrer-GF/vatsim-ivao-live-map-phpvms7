@@ -210,7 +210,9 @@
         function etaMinutenFuerFlug(f, weg, jetztMs) {
             if (!f || !weg || f.status === 'offline') return null;
             if (f.last_seen && jetztMs - f.last_seen > ETA_VERALTET_MS) return null;
-            if (!ETA_PHASEN[String(f.phase || '').toUpperCase()] && !imGeradeausflug(f)) return null;
+            // „Level" (Steig-/Sinkphase im Geradeausflug laut Phasen-Engine) zaehlt wie Reiseflug.
+            var reise = ETA_PHASEN[String(f.phase || '').toUpperCase()] || phaseForDisplay(f.phase, f.shadow_segment) === 'LEVEL';
+            if (!reise && !imGeradeausflug(f)) return null;
             return etaMinuten(weg.rest, f.pos ? f.pos.gs_kt : null);
         }
         function etaFuerFlug(f, weg, jetztMs) {
@@ -2438,14 +2440,37 @@
                         if (r.height < window.innerHeight / 2) untenFest = Math.max(untenFest, r.height);
                         break;
                     }
-                    // Tafel unten: ihre Kopfzeile soll noch im Fenster stehen, damit man
-                    // sieht, dass unter der Karte die Flugliste kommt.
-                    var kopfUnten = wrap.classList.contains('lm3--tafel-unten') && document.getElementById('lm3-tafel-kopf');
-                    if (kopfUnten && kopfUnten.offsetParent !== null) untenFest += kopfUnten.getBoundingClientRect().height;
                     var h = window.innerHeight - Math.max(0, oben) - untenFest - 16;
+                    // Tafel unten: Karte und Tafel teilen sich das Fenster. Die Tafel nimmt,
+                    // was ihre Fluege brauchen, hoechstens 40 %; darueber scrollen die Zeilen
+                    // in sich. Die Karte bekommt den Rest (wenige Fluege → grosse Karte).
+                    var unten = wrap.classList.contains('lm3--tafel-unten') && wrap.querySelector('.lm3-unten');
+                    if (unten && unten.offsetParent !== null) {
+                        var sig = wrap.querySelector('.lm3-signatur');
+                        var sigH = sig ? sig.getBoundingClientRect().height : 0;
+                        // Volle Hoehe ueber scrollHeight messen, ohne die Begrenzung zu loesen
+                        // (sonst springt eine gescrollte Liste bei jeder Aktualisierung nach oben).
+                        var zIst = 0, zVoll = 0;
+                        [].forEach.call(unten.querySelectorAll('.lm3-zeilen'), function (z) {
+                            if (z.offsetParent !== null && z.scrollHeight > zVoll) { zVoll = z.scrollHeight; zIst = z.getBoundingClientRect().height; }
+                        });
+                        var rahmen = unten.getBoundingClientRect().height + sigH - zIst;   // Reiter, Kopf, Signatur
+                        var deckel = Math.round(h * 0.4);
+                        var zeilen = zVoll;
+                        if (rahmen + zVoll > deckel) {
+                            zeilen = Math.max(72, deckel - rahmen);   // mindestens zwei Zeilen
+                            unten.style.setProperty('--lm-zeilen-max', zeilen + 'px');
+                        } else {
+                            unten.style.removeProperty('--lm-zeilen-max');
+                        }
+                        h -= rahmen + Math.min(zVoll, zeilen);
+                    }
                     h = Math.max(cfg.minHoehe || 420, Math.min(cfg.maxHoehe || 1000, h));
-                    flaeche.style.height = Math.round(h) + 'px';
+                    var neu = Math.round(h) + 'px';
+                    var geaendert = flaeche.style.height !== neu;
+                    flaeche.style.height = neu;
                     messeObenFrei();
+                    return geaendert;
                 }
                 // Feste Leiste des Themes ueber der Kartenoberkante (Cookie-Hinweis oben bei
                 // Seven/Disposable, beim Scrollen die Navigationsleiste): Tafel, Zoom und
@@ -2706,7 +2731,9 @@
                 // Oben frei: beim Scrollen (feste Navigationsleiste) und wenn der Cookie-
                 // Hinweis nach dem Klick ausblendet (Klasse + Uebergang, kein childList).
                 var obenTimer = null;
-                function obenSpaeter() { clearTimeout(obenTimer); obenTimer = setTimeout(messeObenFrei, 120); }
+                // messeHoehe misst auch „oben frei" und rechnet die Hoehe neu, wenn eine
+                // feste Leiste unten (Cookie-Hinweis) verschwindet.
+                function obenSpaeter() { clearTimeout(obenTimer); obenTimer = setTimeout(function () { if (messeHoehe()) map.invalidateSize(); }, 120); }
                 window.addEventListener('scroll', obenSpaeter, { passive: true });
                 document.addEventListener('click', function () { setTimeout(obenSpaeter, 400); }, true);
                 document.addEventListener('transitionend', obenSpaeter, true);
@@ -2718,6 +2745,17 @@
                         clearTimeout(hoeheTimer);
                         hoeheTimer = setTimeout(function () { messeHoehe(); map.invalidateSize(); }, 300);
                     }).observe(document.body, { childList: true });
+                }
+                // Tafel unten: neue/weggefallene Fluege oder Reiterwechsel aendern ihre
+                // Hoehe → Karte neu aufteilen (nur das Stilattribut der Tafel selbst
+                // aendert sich durch messeHoehe, das beobachten wir nicht → keine Schleife).
+                var untenBox = wrap && wrap.classList.contains('lm3--tafel-unten') && wrap.querySelector('.lm3-unten');
+                if (window.MutationObserver && untenBox) {
+                    var untenTimer = null;
+                    new MutationObserver(function () {
+                        clearTimeout(untenTimer);
+                        untenTimer = setTimeout(function () { if (messeHoehe()) map.invalidateSize(); }, 150);
+                    }).observe(untenBox, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
                 }
             })();
         });

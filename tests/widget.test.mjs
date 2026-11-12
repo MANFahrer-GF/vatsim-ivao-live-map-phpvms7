@@ -342,6 +342,13 @@ test('ETA je Flug: nur ab Reiseflug, nicht offline, nicht veraltet', () => {
   for (const p of ['CLIMB', 'TAKEOFF', 'TAKEOFF_ROLL', 'TAXI_OUT', 'TAXI_IN', 'BLOCKS_ON', 'ON_BLOCK'])
     assert.equal(LM3.etaFuerFlug(g(p, 280, 0, 12000), weg, jetzt), '', p);
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { pos: null }), weg, jetzt), '');
+  // Anzeige „Level" (Steig-/Sinkphase, Phasen-Engine meldet Geradeausflug): stabile GS,
+  // also ETA. GSG 1524 am 12.11.: C172 BGJN→BGAA auf 2300 ft blieb in CLIMB/level.
+  const lv = (phase, seg) => ({ phase, shadow_segment: seg, status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: 106, vs_fpm: 7, alt_ft: 2283 } });
+  assert.equal(LM3.etaFuerFlug({ ...lv('CLIMB', 'level') }, { rest: 38 }, jetzt), '18:01z');
+  assert.equal(LM3.etaFuerFlug(lv('CLIMB', 'climbing'), { rest: 38 }, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(lv('CLIMB', null), { rest: 38 }, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(lv('TAKEOFF', 'level'), { rest: 38 }, jetzt), '');   // nur Steig-/Sinkphase wird „Level"
 });
 
 test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
