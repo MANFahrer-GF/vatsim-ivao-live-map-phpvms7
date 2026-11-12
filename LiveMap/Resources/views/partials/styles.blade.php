@@ -208,9 +208,9 @@
                     .lm3-unten .lm3-zeilen { max-height: none; overflow: visible; }
                     /* Unten mit Platz: groessere Schrift (oben bleibt die kompakte Tafel) */
                     @container lmmitte (min-width: 1000px) {
-                        .lm3-unten .lm3-zeile { font-size: 14px; }
-                        .lm3-unten .lm3-thead { font-size: 11.5px; }
-                        .lm3-unten .lm3-pille { font-size: 12px; }
+                        .lm3-unten .lm3-zeile { font-size: 15px; }
+                        .lm3-unten .lm3-thead { font-size: 12px; }
+                        .lm3-unten .lm3-pille { font-size: 13px; }
                     }
 
                     /* Tafel gibt Spalten ab, statt ueber die rechte Spalte zu wachsen
