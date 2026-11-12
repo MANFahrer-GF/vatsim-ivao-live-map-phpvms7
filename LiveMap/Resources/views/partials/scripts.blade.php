@@ -197,10 +197,18 @@
         }
         // ETA eines Flugs fuer die Tafel: '' wenn offline, veraltet, nicht im
         // Reiseflug oder spaeter. `weg` = fortschritt(...) oder null.
+        // Rueckfall ohne passende Phase (phpVMS-Clients melden die Phase grob oder
+        // bleiben auf einem Status haengen): Geradeausflug mit Reisegeschwindigkeit
+        // zaehlt als Reiseflug. Startlauf und Boden nie.
+        function imGeradeausflug(f) {
+            var p = String(f.phase || '').toUpperCase(), pos = f.pos || {};
+            if (p === 'TAKEOFF_ROLL' || amBoden(p)) return false;
+            return pos.gs_kt != null && pos.gs_kt >= 150 && pos.vs_fpm != null && isFinite(pos.vs_fpm) && Math.abs(pos.vs_fpm) <= 500;
+        }
         function etaMinutenFuerFlug(f, weg, jetztMs) {
             if (!f || !weg || f.status === 'offline') return null;
             if (f.last_seen && jetztMs - f.last_seen > ETA_VERALTET_MS) return null;
-            if (!ETA_PHASEN[String(f.phase || '').toUpperCase()]) return null;
+            if (!ETA_PHASEN[String(f.phase || '').toUpperCase()] && !imGeradeausflug(f)) return null;
             return etaMinuten(weg.rest, f.pos ? f.pos.gs_kt : null);
         }
         function etaFuerFlug(f, weg, jetztMs) {

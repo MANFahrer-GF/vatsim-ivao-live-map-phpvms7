@@ -39,7 +39,7 @@
             <button type="button" class="lm3-th lm3-sp-alt" data-sort="hoehe">{{ $lmDe ? 'Höhe' : 'Alt' }}</button>
             <button type="button" class="lm3-th lm3-sp-gs" data-sort="gs">GS</button>
             <button type="button" class="lm3-th lm3-sp-dist" data-sort="rest">{{ $lmDe ? 'Rest' : 'To go' }}</button>
-            <button type="button" class="lm3-th lm3-sp-eta" data-sort="eta" title="{{ $lmDe ? 'Geschätzte Ankunft (UTC), ab 50 kt' : 'Estimated arrival (UTC), from 50 kt' }}">ETA</button>
+            <button type="button" class="lm3-th lm3-sp-eta" data-sort="eta" title="{{ $lmDe ? 'Geschätzte Ankunft (UTC), ab Reiseflug' : 'Estimated arrival (UTC), from cruise' }}">ETA</button>
             <button type="button" class="lm3-th lm3-sp-phase" data-sort="phase">Phase</button>
             <button type="button" class="lm3-th lm3-sp-pilot" data-sort="pilot">Pilot</button>
         </div>

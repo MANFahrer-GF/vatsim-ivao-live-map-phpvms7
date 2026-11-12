@@ -320,7 +320,7 @@ test('ETA-Rechnung: jetzt + Rest/GS in UTC, unter 30 kt leer', () => {
 test('ETA je Flug: nur ab Reiseflug, nicht offline, nicht veraltet', () => {
   const jetzt = Date.UTC(2026, 10, 12, 17, 40);
   const weg = { rest: 676 };
-  const f = (phase, gs, extra) => ({ phase, status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: gs }, ...extra });
+  const f = (phase, gs, extra, vs = 2000) => ({ phase, status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: gs, vs_fpm: vs }, ...extra });
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450), weg, jetzt), '19:10z');
   for (const p of ['DESCENT', 'APPROACH', 'FINAL', 'LANDING', 'HOLDING', 'cruise']) assert.notEqual(LM3.etaFuerFlug(f(p, 300), weg, jetzt), '', p);
   // Startlauf und Steigflug: GS noch klein, ETA waere Stunden zu spaet (Abnahme 5.2.0)
@@ -330,6 +330,14 @@ test('ETA je Flug: nur ab Reiseflug, nicht offline, nicht veraltet', () => {
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { last_seen: jetzt - 9 * 60000 }), weg, jetzt), '19:10z');
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { last_seen: null }), weg, jetzt), '19:10z');            // ohne Zeitstempel nicht verwerfen
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450), null, jetzt), '');
+  // Rueckfall: Client meldet die Phase grob oder bleibt haengen → Geradeausflug zaehlt
+  assert.equal(LM3.etaFuerFlug(f('CLIMB', 450, {}, 0), weg, jetzt), '19:10z');      // z. B. auf TKO stehen geblieben
+  assert.equal(LM3.etaFuerFlug(f(null, 450, {}, -300), weg, jetzt), '19:10z');      // unbekannter Status
+  assert.equal(LM3.etaFuerFlug(f('CLIMB', 300, {}, 1800), weg, jetzt), '');         // steigt wirklich
+  assert.equal(LM3.etaFuerFlug(f(null, 140, {}, 0), weg, jetzt), '');               // zu langsam fuer Reiseflug
+  assert.equal(LM3.etaFuerFlug(f('TAKEOFF_ROLL', 160, {}, 0), weg, jetzt), '');     // Startlauf nie
+  assert.equal(LM3.etaFuerFlug(f('TAXI_IN', 160, {}, 0), weg, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(f(null, 450, {}, null), weg, jetzt), '');            // ohne V/S kein Rueckfall
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { pos: null }), weg, jetzt), '');
 });
 
@@ -350,6 +358,16 @@ test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
   const voll = [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm)].map((m) => m[1]);   // oben und unten, ausserhalb der Stufen
   assert.equal(voll.length, 2);
   for (const sp of voll) assert.ok(mindest(sp) <= stufen[0].max + 1, 'volles Raster ' + mindest(sp) + ' px > ' + (stufen[0].max + 1));
+  // Neue Spalten (5.2) fallen zuerst: wo Pilot/Rest/Hoehe/GS fehlen, fehlen auch
+  // Typ und ETA; Pilot faellt nicht frueher als in 5.1.1 (Stufe 720 px).
+  const versteckt = (m) => new Set([...m.matchAll(/\.lm3-sp-(\w+)/g)].map((x) => x[1]));
+  const bloecke = [...css.matchAll(/@container lmmitte \(max-width: (\d+)px\)\s*\{([\s\S]*?)\n\s*\}\n/g)];
+  for (const [, max, inhalt] of bloecke) {
+    const weg = versteckt(inhalt.split('\n').filter((z) => z.includes('display: none') && z.includes('.lm3-tafel')).join(' '));
+    if (['pilot', 'dist', 'alt', 'gs'].some((k) => weg.has(k))) assert.ok(weg.has('typ') && weg.has('eta'), 'Stufe ' + max + ' versteckt alte Spalten vor Typ/ETA');
+    if (weg.has('pilot')) assert.ok(+max <= 720, 'Pilot faellt schon bei ' + max + ' px (5.1.1: 720)');
+    assert.equal(spalten(stufen.find((x) => x.max === +max).sp).length, 9 - weg.size, 'Stufe ' + max + ': Raster und sichtbare Spalten');
+  }
   for (let i = 0; i < stufen.length - 1; i++) {
     assert.ok(stufen[i].sp, 'Stufe ' + stufen[i].max + ' ohne Raster');
     assert.ok(mindest(stufen[i].sp) <= stufen[i + 1].max + 1, 'Stufe ' + stufen[i].max + ': ' + mindest(stufen[i].sp) + ' px > ' + (stufen[i + 1].max + 1));
