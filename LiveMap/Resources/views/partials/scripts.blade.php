@@ -197,13 +197,15 @@
         }
         // ETA eines Flugs fuer die Tafel: '' wenn offline, veraltet, nicht im
         // Reiseflug oder spaeter. `weg` = fortschritt(...) oder null.
-        // Rueckfall ohne passende Phase (phpVMS-Clients melden die Phase grob oder
-        // bleiben auf einem Status haengen): Geradeausflug mit Reisegeschwindigkeit
-        // zaehlt als Reiseflug. Startlauf und Boden nie.
+        // Rueckfall nur, wenn die Phase unbekannt ist (fremder ACARS-Client mit
+        // eigenem Status): Geradeausflug mit Reisegeschwindigkeit ueber 10 000 ft
+        // zaehlt als Reiseflug. Bekannte Start-/Steigphasen nie — auch nicht beim
+        // Abfangen im Steigflug (dort waere die GS noch klein, Abnahme 5.2.1).
         function imGeradeausflug(f) {
             var p = String(f.phase || '').toUpperCase(), pos = f.pos || {};
-            if (p === 'TAKEOFF_ROLL' || amBoden(p)) return false;
-            return pos.gs_kt != null && pos.gs_kt >= 150 && pos.vs_fpm != null && isFinite(pos.vs_fpm) && Math.abs(pos.vs_fpm) <= 500;
+            if (PHASE_LIST.indexOf(p) >= 0 || p === 'ON_BLOCK') return false;
+            return pos.gs_kt != null && pos.gs_kt >= 150 && pos.vs_fpm != null && isFinite(pos.vs_fpm) && Math.abs(pos.vs_fpm) <= 500
+                && pos.alt_ft != null && pos.alt_ft >= 10000;
         }
         function etaMinutenFuerFlug(f, weg, jetztMs) {
             if (!f || !weg || f.status === 'offline') return null;

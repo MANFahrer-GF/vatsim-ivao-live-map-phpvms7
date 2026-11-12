@@ -330,14 +330,17 @@ test('ETA je Flug: nur ab Reiseflug, nicht offline, nicht veraltet', () => {
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { last_seen: jetzt - 9 * 60000 }), weg, jetzt), '19:10z');
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { last_seen: null }), weg, jetzt), '19:10z');            // ohne Zeitstempel nicht verwerfen
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450), null, jetzt), '');
-  // Rueckfall: Client meldet die Phase grob oder bleibt haengen → Geradeausflug zaehlt
-  assert.equal(LM3.etaFuerFlug(f('CLIMB', 450, {}, 0), weg, jetzt), '19:10z');      // z. B. auf TKO stehen geblieben
-  assert.equal(LM3.etaFuerFlug(f(null, 450, {}, -300), weg, jetzt), '19:10z');      // unbekannter Status
-  assert.equal(LM3.etaFuerFlug(f('CLIMB', 300, {}, 1800), weg, jetzt), '');         // steigt wirklich
-  assert.equal(LM3.etaFuerFlug(f(null, 140, {}, 0), weg, jetzt), '');               // zu langsam fuer Reiseflug
-  assert.equal(LM3.etaFuerFlug(f('TAKEOFF_ROLL', 160, {}, 0), weg, jetzt), '');     // Startlauf nie
-  assert.equal(LM3.etaFuerFlug(f('TAXI_IN', 160, {}, 0), weg, jetzt), '');
-  assert.equal(LM3.etaFuerFlug(f(null, 450, {}, null), weg, jetzt), '');            // ohne V/S kein Rueckfall
+  // Rueckfall nur bei unbekannter Phase (fremder Client): Geradeausflug, >= 150 kt, >= 10 000 ft
+  const g = (phase, gs, vs, alt) => ({ phase, status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: gs, vs_fpm: vs, alt_ft: alt } });
+  assert.equal(LM3.etaFuerFlug(g(null, 450, -300, 36000), weg, jetzt), '19:10z');
+  assert.equal(LM3.etaFuerFlug(g('XYZ', 450, 0, 36000), weg, jetzt), '19:10z');
+  assert.equal(LM3.etaFuerFlug(g(null, 160, 0, 300), weg, jetzt), '');               // Startlauf ohne Phase: zu tief
+  assert.equal(LM3.etaFuerFlug(g(null, 140, 0, 36000), weg, jetzt), '');             // zu langsam
+  assert.equal(LM3.etaFuerFlug(g(null, 450, 1500, 36000), weg, jetzt), '');          // steigt
+  assert.equal(LM3.etaFuerFlug(g(null, 450, null, 36000), weg, jetzt), '');          // ohne V/S kein Rueckfall
+  // Bekannte Start-/Steigphasen nie, auch im Waagerechtflug (Abfangen im Steigflug, phpVMS TOF → TAKEOFF)
+  for (const p of ['CLIMB', 'TAKEOFF', 'TAKEOFF_ROLL', 'TAXI_OUT', 'TAXI_IN', 'BLOCKS_ON', 'ON_BLOCK'])
+    assert.equal(LM3.etaFuerFlug(g(p, 280, 0, 12000), weg, jetzt), '', p);
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { pos: null }), weg, jetzt), '');
 });
 
@@ -379,8 +382,47 @@ test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
   const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, phase: 'CRUISE', pos: { lat, lon: 10, gs_kt: gs } });
   const weg = (x) => LM3.fortschritt(dep, arr, x.pos);
   // C (450 kt, ~160 nm) kommt vor B (300 kt, ~130 nm); A steht
-  const liste = [f('A', 0, 50.5, 'B738'), f('B', 300, 51, 'A320'), f('C', 450, 50.2, null)];
-  assert.deepEqual(LM3.sortiereNach(liste, 'eta', 'auf', weg).map((x) => x.id), ['C', 'B', 'A']);
-  assert.deepEqual(LM3.sortiereNach(liste, 'eta', 'ab', weg).map((x) => x.id), ['B', 'C', 'A']);
-  assert.deepEqual(LM3.sortiereNach(liste, 'typ', 'auf', weg).map((x) => x.id), ['B', 'A', 'C']);
+  const liste = [f('A', 0, 50.5, 'B738'), f('B', 300, 51, 'A320'), f('C', 450, 50.2, null),
+    { ...f('D', 480, 50.1, 'A333'), phase: 'CLIMB' }];   // D: schnellste Rechnung, aber Steigflug → keine ETA, hinten
+  assert.deepEqual(LM3.sortiereNach(liste, 'eta', 'auf', weg).map((x) => x.id), ['C', 'B', 'A', 'D']);
+  assert.deepEqual(LM3.sortiereNach(liste, 'eta', 'ab', weg).map((x) => x.id), ['B', 'C', 'A', 'D']);
+  assert.deepEqual(LM3.sortiereNach(liste, 'typ', 'auf', weg).map((x) => x.id), ['B', 'D', 'A', 'C']);
+});
+
+test('Tafelzeile: echte zeileAktiv liefert die Zellen in Kopf-Reihenfolge, ETA nach Regel', () => {
+  const start = skript.indexOf('function zeileAktiv(f) {');
+  const ende = skript.indexOf('function zeileGeplant(', start);
+  assert.ok(start > 0 && ende > start, 'zeileAktiv nicht gefunden');
+  const jetzt = Date.now();
+  const knoten = () => ({ style: { setProperty() {} }, setAttribute() {}, addEventListener() {}, innerHTML: '' });
+  const ctx = {
+    LM3, LM_SPRACHE: 'de', LM_T: { pilot: 'Pilot' }, zustand: { auswahl: null }, waehle() {},
+    document: { createElement: knoten },
+    logoFuer: () => null, logoHtml: () => '',
+    weg: (f) => LM3.fortschritt({ lat: 50, lon: 8 }, { lat: 41, lon: 2 }, f.pos),
+    Date,
+  };
+  const esc = skript.slice(skript.indexOf('function lmEsc(s) {'), skript.indexOf('function lmKurzname('));
+  vm.runInNewContext(esc + skript.slice(start, ende) + '; this.zeileAktiv = zeileAktiv;', ctx);
+  const zeile = (phase, extra) => ctx.zeileAktiv({ id: 'x', callsign: 'GSG1', dep: 'EDDF', arr: 'LEBL', aircraft_icao: 'A20N', pilot_name: 'Max S.',
+    phase, status: 'online', last_seen: jetzt - 5000, pos: { lat: 48, lon: 6, alt_ft: 36000, gs_kt: 450, vs_fpm: 0 }, ...extra }).innerHTML;
+
+  // Spalten der Zeile (oberste Ebene) gegen die Spaltenkoepfe aus tafel.blade.php
+  const tafel = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'tafel.blade.php'), 'utf8');
+  const kopfBlock = tafel.slice(tafel.indexOf('id="lm3-kopf-aktiv"'), tafel.indexOf('id="lm3-kopf-geplant"'));
+  const kopf = [...kopfBlock.matchAll(/class="lm3-th(?: (lm3-sp-\w+))?" data-sort="(\w+)"/g)].map((m) => m[1] || '');
+  const oben = (html) => { const out = []; let tiefe = 0; for (const m of html.matchAll(/<(\/?)span(?: class="([^"]*)")?[^>]*>/g)) { if (m[1]) tiefe--; else { if (tiefe === 0) out.push((m[2] || '').split(' ').find((k) => k.startsWith('lm3-sp-')) || ''); tiefe++; } } return out; };
+  const html = zeile('CRUISE');
+  assert.deepEqual(oben(html), kopf, 'Zellen der Zeile = Spaltenkoepfe');
+  const css = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'styles.blade.php'), 'utf8');
+  for (const sp of [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm)].map((m) => m[1]))
+    assert.equal(sp.split(/\s+(?![^()]*\))/).length, kopf.length, 'volles Raster = Spaltenzahl');
+
+  const zelle = (h, k) => { const m = h.match(new RegExp('<span class="' + k + '">([^<]*)</span>')); return m ? m[1] : null; };
+  assert.equal(zelle(html, 'lm3-sp-typ'), 'A20N');
+  assert.match(zelle(html, 'lm3-sp-eta'), /^\d\d:\d\dz$/);
+  assert.equal(zelle(zeile('CLIMB'), 'lm3-sp-eta'), '');
+  assert.equal(zelle(zeile('CRUISE', { status: 'offline' }), 'lm3-sp-eta'), '');
+  assert.equal(zelle(zeile('CRUISE', { last_seen: jetzt - 11 * 60000 }), 'lm3-sp-eta'), '');
+  assert.equal(zelle(zeile('CRUISE', { aircraft_icao: '<b>' }), 'lm3-sp-typ'), '&lt;b&gt;');   // escaped
 });
