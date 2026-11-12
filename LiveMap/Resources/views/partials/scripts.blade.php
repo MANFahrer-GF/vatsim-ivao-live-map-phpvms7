@@ -183,6 +183,19 @@
             var geflogen = Math.max(0, gesamt - rest);
             return { gesamt: gesamt, rest: rest, geflogen: geflogen, anteil: geflogen / gesamt };
         }
+        // ── ETA: jetzt + Rest / GS, erst ab 50 kt (Startlauf), sonst keine ──
+        // Grosskreis-Rest, also eine Schaetzung; Anzeige in UTC wie die
+        // Flugplanzeiten in phpVMS. Idee und Schwelle: Elisa (12.11.2026).
+        function etaMinuten(rest, gs) {
+            if (rest == null || !isFinite(rest) || gs == null || !isFinite(gs) || gs < 50) return null;
+            return rest / gs * 60;
+        }
+        function etaText(rest, gs, jetztMs) {
+            var min = etaMinuten(rest, gs);
+            if (min == null) return '';
+            var d = new Date(jetztMs + min * 60000);
+            return ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2) + 'z';
+        }
 
         // ── Flugzeugklassen (Form + Groesse des Symbols) ──
         // ICAO-Typ → Klasse nach der Doc-8643-Beschreibung (L1P/L2P, L2T,
@@ -221,6 +234,7 @@
         var SORT_WERT = {
             flug: function (f) { return f.callsign || f.id; },
             route: function (f) { return (f.dep || '') + ' ' + (f.arr || ''); },
+            typ: function (f) { return f.aircraft_icao; },
             hoehe: function (f) { return f.pos ? f.pos.alt_ft : null; },
             gs: function (f) { return f.pos ? f.pos.gs_kt : null; },
             pilot: function (f) { return f.pilot_name || f.pilot; },
@@ -255,6 +269,9 @@
                     if (Math.abs(c) === 2) return c;
                 } else if (schluessel === 'rest') {
                     c = stufe(vergleicheWert(rest(a), rest(b)));
+                } else if (schluessel === 'eta') {
+                    var eta = function (f) { return etaMinuten(rest(f), f.pos ? f.pos.gs_kt : null); };
+                    c = stufe(vergleicheWert(eta(a), eta(b)));
                 } else {
                     c = stufe(vergleicheWert((SORT_WERT[schluessel] || SORT_WERT.flug)(a), (SORT_WERT[schluessel] || SORT_WERT.flug)(b)));
                 }
@@ -368,6 +385,7 @@
             neben: neben, fortlaufend: fortlaufend, verschiebeNahe: verschiebeNahe,
             fehlerIstVoruebergehend: fehlerIstVoruebergehend, filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiereNach: sortiereNach, phasenRang: phasenRang,
             rufzeichenSchluessel: rufzeichenSchluessel, hoeheText: hoeheText, distanzNm: distanzNm, fortschritt: fortschritt,
+            etaMinuten: etaMinuten, etaText: etaText,
             KLASSEN: KLASSEN, flugzeugKlasse: flugzeugKlasse, klassenInfo: klassenInfo, amBoden: amBoden,
             aufSprechfrequenz: aufSprechfrequenz, vatspyLesen: vatspyLesen, firTreffer: firTreffer,
             grenzenFuerLotse: grenzenFuerLotse, firFlaeche: firFlaeche
@@ -1813,11 +1831,14 @@
                     b.innerHTML =
                         '<span class="lm3-flug">' + logoHtml(logoFuer(f), '', f.callsign) + '<b>' + lmEsc(f.callsign || (LM_T.pilot + ' ' + f.pilot)) + '</b></span>' +
                         '<span>' + lmEsc(f.dep || '?') + ' <span class="lm3-pfeil">›</span> ' + lmEsc(f.arr || '?') + '</span>' +
+                        '<span class="lm3-sp-typ">' + lmEsc(f.aircraft_icao || '') + '</span>' +
                         '<span class="lm3-sp-alt">' + lmEsc(LM3.hoeheText(pos.alt_ft, LM_SPRACHE)) + '</span>' +
                         '<span class="lm3-sp-gs">' + (pos.gs_kt != null ? Math.round(pos.gs_kt) : '') + '</span>' +
                         // Rest-Strecke und Fortschritt (Balken = geflogener Anteil)
                         '<span class="lm3-sp-dist">' + (w ? '<span class="lm3-rest">' + Math.round(w.rest) + ' nm</span>' +
                             '<i class="lm3-fort" aria-hidden="true"><i style="width:' + Math.round(w.anteil * 100) + '%"></i></i>' : '') + '</span>' +
+                        // ETA nur online: nach Abbruch waere die GS veraltet
+                        '<span class="lm3-sp-eta">' + (w && f.status !== 'offline' ? lmEsc(LM3.etaText(w.rest, pos.gs_kt, Date.now())) : '') + '</span>' +
                         '<span class="lm3-sp-phase"><span class="lm3-pille">' + lmEsc(LM3.phaseLabel(phase)) + '</span></span>' +
                         '<span class="lm3-sp-pilot">' + lmEsc(f.pilot_name || '') + '</span>';
                     b.addEventListener('click', function () { waehle(f.id, true); });

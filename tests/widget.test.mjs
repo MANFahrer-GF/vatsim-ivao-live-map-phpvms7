@@ -301,3 +301,25 @@ test('Widget gruppiert Lotsen nach aufgeloester Stelle und laesst Beobachter ohn
   assert.match(skript, /if\(!window\.LM3\.aufSprechfrequenz\(a\.frequency\)\) return;/);
   assert.doesNotMatch(skript, /raw\.githubusercontent\.com\/vatsimnetwork/);
 });
+
+test('ETA: jetzt + Rest/GS ab 50 kt, in UTC; sonst leer', () => {
+  const jetzt = Date.UTC(2026, 10, 12, 17, 40);
+  assert.equal(LM3.etaText(450, 450, jetzt), '18:40z');          // 450 nm bei 450 kt = 60 min
+  assert.equal(LM3.etaText(716, 0, jetzt), '');                  // Boarding: keine ETA
+  assert.equal(LM3.etaText(716, 49, jetzt), '');                 // Rollen unter 50 kt
+  assert.equal(LM3.etaText(100, 50, jetzt), '19:40z');           // Schwelle zaehlt mit
+  assert.equal(LM3.etaText(420, 420, Date.UTC(2026, 10, 12, 23, 30)), '00:30z'); // ueber Mitternacht
+  assert.equal(LM3.etaText(null, 400, jetzt), '');
+  assert.equal(LM3.etaMinuten(200, 400), 30);
+});
+
+test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
+  const dep = { lat: 50, lon: 8 }, arr = { lat: 52, lon: 13 };
+  const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, pos: { lat, lon: 10, gs_kt: gs } });
+  const weg = (x) => LM3.fortschritt(dep, arr, x.pos);
+  // C (450 kt, ~160 nm) kommt vor B (300 kt, ~130 nm); A steht
+  const liste = [f('A', 0, 50.5, 'B738'), f('B', 300, 51, 'A320'), f('C', 450, 50.2, null)];
+  assert.deepEqual(LM3.sortiereNach(liste, 'eta', 'auf', weg).map((x) => x.id), ['C', 'B', 'A']);
+  assert.deepEqual(LM3.sortiereNach(liste, 'eta', 'ab', weg).map((x) => x.id), ['B', 'C', 'A']);
+  assert.deepEqual(LM3.sortiereNach(liste, 'typ', 'auf', weg).map((x) => x.id), ['B', 'A', 'C']);
+});
