@@ -183,12 +183,28 @@
             var geflogen = Math.max(0, gesamt - rest);
             return { gesamt: gesamt, rest: rest, geflogen: geflogen, anteil: geflogen / gesamt };
         }
-        // ── ETA: jetzt + Rest / GS, erst ab 50 kt (Startlauf), sonst keine ──
+        // ── ETA: jetzt + Rest / GS (Idee: Elisa, 12.11.2026) ──
         // Grosskreis-Rest, also eine Schaetzung; Anzeige in UTC wie die
-        // Flugplanzeiten in phpVMS. Idee und Schwelle: Elisa (12.11.2026).
+        // Flugplanzeiten in phpVMS. Nur ab Reiseflug: im Startlauf und
+        // Steigflug ist die GS noch klein und die ETA Stunden zu spaet
+        // (Abnahme 5.2.0: 60 kt im Startlauf → 04:56z statt 19:09z).
+        var ETA_PHASEN = { CRUISE: 1, HOLDING: 1, DESCENT: 1, APPROACH: 1, FINAL: 1, LANDING: 1 };
+        var ETA_MIN_GS = 30;              // darunter keine sinnvolle Rechnung
+        var ETA_VERALTET_MS = 10 * 60000; // keine Meldung seit 10 min → keine ETA
         function etaMinuten(rest, gs) {
-            if (rest == null || !isFinite(rest) || gs == null || !isFinite(gs) || gs < 50) return null;
+            if (rest == null || !isFinite(rest) || gs == null || !isFinite(gs) || gs < ETA_MIN_GS) return null;
             return rest / gs * 60;
+        }
+        // ETA eines Flugs fuer die Tafel: '' wenn offline, veraltet, nicht im
+        // Reiseflug oder spaeter. `weg` = fortschritt(...) oder null.
+        function etaMinutenFuerFlug(f, weg, jetztMs) {
+            if (!f || !weg || f.status === 'offline') return null;
+            if (f.last_seen && jetztMs - f.last_seen > ETA_VERALTET_MS) return null;
+            if (!ETA_PHASEN[String(f.phase || '').toUpperCase()]) return null;
+            return etaMinuten(weg.rest, f.pos ? f.pos.gs_kt : null);
+        }
+        function etaFuerFlug(f, weg, jetztMs) {
+            return etaMinutenFuerFlug(f, weg, jetztMs) == null ? '' : etaText(weg.rest, f.pos.gs_kt, jetztMs);
         }
         function etaText(rest, gs, jetztMs) {
             var min = etaMinuten(rest, gs);
@@ -270,7 +286,8 @@
                 } else if (schluessel === 'rest') {
                     c = stufe(vergleicheWert(rest(a), rest(b)));
                 } else if (schluessel === 'eta') {
-                    var eta = function (f) { return etaMinuten(rest(f), f.pos ? f.pos.gs_kt : null); };
+                    var jetzt = Date.now();
+                    var eta = function (f) { return etaMinutenFuerFlug(f, weg ? weg(f) : null, jetzt); };
                     c = stufe(vergleicheWert(eta(a), eta(b)));
                 } else {
                     c = stufe(vergleicheWert((SORT_WERT[schluessel] || SORT_WERT.flug)(a), (SORT_WERT[schluessel] || SORT_WERT.flug)(b)));
@@ -385,7 +402,7 @@
             neben: neben, fortlaufend: fortlaufend, verschiebeNahe: verschiebeNahe,
             fehlerIstVoruebergehend: fehlerIstVoruebergehend, filterNachPhase: filterNachPhase, geplanteOhneAktive: geplanteOhneAktive, sortiereNach: sortiereNach, phasenRang: phasenRang,
             rufzeichenSchluessel: rufzeichenSchluessel, hoeheText: hoeheText, distanzNm: distanzNm, fortschritt: fortschritt,
-            etaMinuten: etaMinuten, etaText: etaText,
+            etaMinuten: etaMinuten, etaText: etaText, etaFuerFlug: etaFuerFlug,
             KLASSEN: KLASSEN, flugzeugKlasse: flugzeugKlasse, klassenInfo: klassenInfo, amBoden: amBoden,
             aufSprechfrequenz: aufSprechfrequenz, vatspyLesen: vatspyLesen, firTreffer: firTreffer,
             grenzenFuerLotse: grenzenFuerLotse, firFlaeche: firFlaeche
@@ -1837,8 +1854,7 @@
                         // Rest-Strecke und Fortschritt (Balken = geflogener Anteil)
                         '<span class="lm3-sp-dist">' + (w ? '<span class="lm3-rest">' + Math.round(w.rest) + ' nm</span>' +
                             '<i class="lm3-fort" aria-hidden="true"><i style="width:' + Math.round(w.anteil * 100) + '%"></i></i>' : '') + '</span>' +
-                        // ETA nur online: nach Abbruch waere die GS veraltet
-                        '<span class="lm3-sp-eta">' + (w && f.status !== 'offline' ? lmEsc(LM3.etaText(w.rest, pos.gs_kt, Date.now())) : '') + '</span>' +
+                        '<span class="lm3-sp-eta">' + lmEsc(LM3.etaFuerFlug(f, w, Date.now())) + '</span>' +
                         '<span class="lm3-sp-phase"><span class="lm3-pille">' + lmEsc(LM3.phaseLabel(phase)) + '</span></span>' +
                         '<span class="lm3-sp-pilot">' + lmEsc(f.pilot_name || '') + '</span>';
                     b.addEventListener('click', function () { waehle(f.id, true); });

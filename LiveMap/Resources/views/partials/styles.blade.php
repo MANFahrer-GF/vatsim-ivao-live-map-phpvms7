@@ -207,17 +207,17 @@
 
                     /* Tafel gibt Spalten ab, statt ueber die rechte Spalte zu wachsen
                        (Selektoren mit .lm3 davor, damit sie auch die Tafel unten treffen) */
-                    @container lmmitte (max-width: 720px) {
+                    @container lmmitte (max-width: 940px) {
                         .lm3 .lm3-tafel { --lm-sp: 140px 100px 60px 44px 110px 50px minmax(80px, 1fr); }
                         .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-typ { display: none; }
                     }
-                    @container lmmitte (max-width: 600px) {
+                    @container lmmitte (max-width: 670px) {
                         .lm3 .lm3-tafel { --lm-sp: 140px 100px 60px 44px 50px minmax(80px, 1fr); }
                         .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist, .lm3-tafel .lm3-sp-typ { display: none !important; }
                         .lm3 .lm3-g-plan { grid-template-columns: 140px 100px minmax(60px, 1fr); }
                         .lm3 .lm3-g-plan .lm3-sp-pilot { display: none; }
                     }
-                    @container lmmitte (max-width: 480px) {
+                    @container lmmitte (max-width: 550px) {
                         .lm3 .lm3-tafel { --lm-sp: minmax(0, 1fr) 96px minmax(70px, 96px); }
                         .lm3 .lm3-tafel .lm3-sp-pilot, .lm3-tafel .lm3-sp-dist, .lm3-tafel .lm3-sp-alt, .lm3-tafel .lm3-sp-gs, .lm3-tafel .lm3-sp-typ, .lm3-tafel .lm3-sp-eta { display: none !important; }
                         .lm3 .lm3-g-plan { grid-template-columns: minmax(0, 1fr) 96px; }

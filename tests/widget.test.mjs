@@ -302,20 +302,63 @@ test('Widget gruppiert Lotsen nach aufgeloester Stelle und laesst Beobachter ohn
   assert.doesNotMatch(skript, /raw\.githubusercontent\.com\/vatsimnetwork/);
 });
 
-test('ETA: jetzt + Rest/GS ab 50 kt, in UTC; sonst leer', () => {
+test('ETA-Rechnung: jetzt + Rest/GS in UTC, unter 30 kt leer', () => {
+  const alt = process.env.TZ;
+  process.env.TZ = 'Asia/Kolkata';                                 // UTC+5:30: Ortszeit waere sichtbar falsch
+  try {
+    const jetzt = Date.UTC(2026, 10, 12, 17, 40);
+    assert.equal(LM3.etaText(450, 450, jetzt), '18:40z');          // 450 nm bei 450 kt = 60 min
+    assert.equal(LM3.etaText(100, 30, jetzt), '21:00z');           // Schwelle zaehlt mit
+    assert.equal(LM3.etaText(100, 29, jetzt), '');
+    assert.equal(LM3.etaText(420, 420, Date.UTC(2026, 10, 12, 23, 30)), '00:30z'); // ueber Mitternacht
+    assert.equal(LM3.etaText(null, 400, jetzt), '');
+    assert.equal(LM3.etaText(100, NaN, jetzt), '');
+    assert.equal(LM3.etaMinuten(200, 400), 30);
+  } finally { if (alt === undefined) delete process.env.TZ; else process.env.TZ = alt; }
+});
+
+test('ETA je Flug: nur ab Reiseflug, nicht offline, nicht veraltet', () => {
   const jetzt = Date.UTC(2026, 10, 12, 17, 40);
-  assert.equal(LM3.etaText(450, 450, jetzt), '18:40z');          // 450 nm bei 450 kt = 60 min
-  assert.equal(LM3.etaText(716, 0, jetzt), '');                  // Boarding: keine ETA
-  assert.equal(LM3.etaText(716, 49, jetzt), '');                 // Rollen unter 50 kt
-  assert.equal(LM3.etaText(100, 50, jetzt), '19:40z');           // Schwelle zaehlt mit
-  assert.equal(LM3.etaText(420, 420, Date.UTC(2026, 10, 12, 23, 30)), '00:30z'); // ueber Mitternacht
-  assert.equal(LM3.etaText(null, 400, jetzt), '');
-  assert.equal(LM3.etaMinuten(200, 400), 30);
+  const weg = { rest: 676 };
+  const f = (phase, gs, extra) => ({ phase, status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: gs }, ...extra });
+  assert.equal(LM3.etaFuerFlug(f('CRUISE', 450), weg, jetzt), '19:10z');
+  for (const p of ['DESCENT', 'APPROACH', 'FINAL', 'LANDING', 'HOLDING', 'cruise']) assert.notEqual(LM3.etaFuerFlug(f(p, 300), weg, jetzt), '', p);
+  // Startlauf und Steigflug: GS noch klein, ETA waere Stunden zu spaet (Abnahme 5.2.0)
+  for (const p of ['TAKEOFF_ROLL', 'TAKEOFF', 'CLIMB', 'TAXI_OUT', 'BOARDING', 'TAXI_IN', null]) assert.equal(LM3.etaFuerFlug(f(p, 140), weg, jetzt), '', String(p));
+  assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { status: 'offline' }), weg, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { last_seen: jetzt - 11 * 60000 }), weg, jetzt), '');   // Sim abgestuerzt, PIREP haengt
+  assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { last_seen: jetzt - 9 * 60000 }), weg, jetzt), '19:10z');
+  assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { last_seen: null }), weg, jetzt), '19:10z');            // ohne Zeitstempel nicht verwerfen
+  assert.equal(LM3.etaFuerFlug(f('CRUISE', 450), null, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { pos: null }), weg, jetzt), '');
+});
+
+test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
+  // Mindestbreite = feste/Mindest-px der Spalten + 6 px Spaltenabstand + 28 px
+  // Zeilen-Innenabstand + 2 px Rahmen. Abnahme 5.2.0: Typ/ETA machten die Tafel
+  // breiter als die Stufe, Pilot/Phase wurden abgeschnitten.
+  const css = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'styles.blade.php'), 'utf8');
+  const spalten = (sp) => sp.split(/\s+(?![^()]*\))/).filter(Boolean);
+  const mindest = (sp) => {
+    const t = spalten(sp);
+    const px = t.reduce((s, x) => { const m = x.match(/^(?:minmax\()?(\d+)px/); return s + (m ? +m[1] : 0); }, 0);
+    return px + 6 * (t.length - 1) + 28 + 2;
+  };
+  const stufen = [...css.matchAll(/@container lmmitte \(max-width: (\d+)px\)\s*\{([\s\S]*?)\n\s*\}\n/g)]
+    .map((m) => ({ max: +m[1], sp: (m[2].match(/--lm-sp:\s*([^;]+);/) || [])[1] }));
+  assert.ok(stufen.length >= 3, 'Stufen nicht gefunden');
+  const voll = [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm)].map((m) => m[1]);   // oben und unten, ausserhalb der Stufen
+  assert.equal(voll.length, 2);
+  for (const sp of voll) assert.ok(mindest(sp) <= stufen[0].max + 1, 'volles Raster ' + mindest(sp) + ' px > ' + (stufen[0].max + 1));
+  for (let i = 0; i < stufen.length - 1; i++) {
+    assert.ok(stufen[i].sp, 'Stufe ' + stufen[i].max + ' ohne Raster');
+    assert.ok(mindest(stufen[i].sp) <= stufen[i + 1].max + 1, 'Stufe ' + stufen[i].max + ': ' + mindest(stufen[i].sp) + ' px > ' + (stufen[i + 1].max + 1));
+  }
 });
 
 test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
   const dep = { lat: 50, lon: 8 }, arr = { lat: 52, lon: 13 };
-  const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, pos: { lat, lon: 10, gs_kt: gs } });
+  const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, phase: 'CRUISE', pos: { lat, lon: 10, gs_kt: gs } });
   const weg = (x) => LM3.fortschritt(dep, arr, x.pos);
   // C (450 kt, ~160 nm) kommt vor B (300 kt, ~130 nm); A steht
   const liste = [f('A', 0, 50.5, 'B738'), f('B', 300, 51, 'A320'), f('C', 450, 50.2, null)];

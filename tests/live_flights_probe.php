@@ -217,10 +217,15 @@ $pireps = [(object) [
     'user' => (object) ['id' => 7, 'pilot_id' => 1003, 'name' => 'Anna Maria Fischer', 'name_private' => 'Anna F.'],
     'aircraft' => (object) ['icao' => 'A320', 'registration' => 'D-AGSG'], 'source_name' => 'AeroACARS',
     'dpt_airport_id' => 'EDDF', 'arr_airport_id' => 'EDDM', 'status' => 'ENR',
-    'position' => (object) ['lat' => 49.5, 'lon' => 9.5, 'altitude' => 35000, 'ias' => 280, 'gs' => 450, 'vs' => 0, 'heading' => 120],
-    'updated_at' => Carbon::now(), 'created_at' => Carbon::now(),
+    // PIREP seit 2 h nicht gespeichert, letzte Position frisch: phpVMS speichert den
+    // PIREP bei Positionsmeldungen ohne Aenderung nicht neu (5.2.1).
+    'position' => (object) ['lat' => 49.5, 'lon' => 9.5, 'altitude' => 35000, 'ias' => 280, 'gs' => 450, 'vs' => 0, 'heading' => 120,
+        'updated_at' => Carbon::now()->subSeconds(20), 'created_at' => Carbon::now()->subSeconds(20)],
+    'updated_at' => Carbon::now()->subHours(2), 'created_at' => Carbon::now()->subHours(3),
 ]];
 [$code, $j] = hole('/livemap/api/fluege');
+$alter = isset($j['fluege'][0]['last_seen']) ? (int) round((Carbon::now()->getTimestampMs() - $j['fluege'][0]['last_seen']) / 1000) : null;
+pruefe('phpVMS: last_seen = letzte Position, nicht PIREP-Speicherzeit', $alter !== null && $alter >= 15 && $alter <= 60, $alter);
 pruefe('phpVMS: 200, ok, Quelle phpvms', $code === 200 && ($j['ok'] ?? null) === true && ($j['quelle'] ?? '') === 'phpvms', [$code, $j]);
 pruefe('phpVMS: ein Flug, Kennung phpvms/<PIREP>, Rufzeichen GSG1234', count($j['fluege'] ?? []) === 1 && ($j['fluege'][0]['id'] ?? '') === 'phpvms/PIREP0000000001' && ($j['fluege'][0]['callsign'] ?? '') === 'GSG1234', $j['fluege'] ?? null);
 pruefe('phpVMS: Phase ENR → CRUISE, Name gekuerzt, voller Name nicht in der Antwort', ($j['fluege'][0]['phase'] ?? '') === 'CRUISE' && ($j['fluege'][0]['pilot_name'] ?? '') === 'Anna F.' && !str_contains(json_encode($j), 'Fischer'), [$j['fluege'][0]['phase'] ?? null, $j['fluege'][0]['pilot_name'] ?? null]);

@@ -362,7 +362,13 @@ class LiveFlightsController extends Controller
                     'gs'            => $pos->gs,
                     'vs'            => $pos->vs,
                     'heading'       => $pos->heading,
-                    'updated_ms'    => optional($p->updated_at)->getTimestampMs(),
+                    // Juengste von PIREP und letzter Position: phpVMS speichert den
+                    // PIREP bei Positionsmeldungen ohne Aenderung nicht neu
+                    // (AcarsController::acars_store, save() ohne dirty-Felder).
+                    'updated_ms'    => max(
+                        optional($p->updated_at)->getTimestampMs() ?? 0,
+                        optional($pos->updated_at ?? $pos->created_at ?? null)->getTimestampMs() ?? 0
+                    ) ?: null,
                     'created_ms'    => optional($p->created_at)->getTimestampMs(),
                     'logo'          => self::absolut(optional($p->airline)->logo),
                     'pirep_url'     => url('/pireps/'.$p->id),
