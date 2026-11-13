@@ -1,9 +1,21 @@
-LiveMap v5.2.2 - Install Package
+LiveMap v5.2.3 - Install Package
 ================================
 
 Contents:
   LiveMap/                     -> phpVMS module (copy to <phpvms-root>/modules/LiveMap/)
   live_map.blade.php           -> theme file (one line, copy into each theme in use)
+
+Changed in v5.2.3:
+
+  - No empty band below the flight board: some themes (e.g. SPTheme) put
+    a large padding below the widget. LiveMap now reduces the gap to the
+    next visible box below to 16 px, measures again and takes it back if
+    the content below does not move up.
+  - Board on top or no board: the signature below the map now counts
+    towards the map height. Before, the widget was 27 px too tall and
+    extended past the window edge. Board below the map: unchanged.
+
+  UPDATE from 5.2.x or 5.1.x: only the folder modules/LiveMap changes.
 
 Changed in v5.2.2:
 
