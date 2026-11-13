@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.2.3] — 2026-11-13
+
+### Changed / Geändert
+- **Kein leeres Band mehr unter der Flugtafel:** Manche Themes (z. B. SPTheme) setzen unter
+  das Widget ein großes Polster (bei GSG 93 px bis zur Fußzeile). LiveMap misst jetzt den
+  nächsten sichtbaren Kasten unter dem Widget und gleicht den Abstand auf 16 px an. Danach
+  wird nachgemessen: Rückt der Inhalt darunter nicht nach (Fußzeile vom Theme festgehalten,
+  längere Nachbarspalte), wird der Ausgleich zurückgenommen, damit kein leerer Scrollraum
+  entsteht. *No empty band below the flight board: theme padding below the widget is reduced
+  to 16 px, measured and reverted when the content below does not move up.*
+- Die Kartenhöhe wird in einer eigenen, getesteten Funktion berechnet (gleiche Regel wie
+  5.2.2). *Map height calculation moved into a tested function, same rule as 5.2.2.*
+
+### Upgrade
+Nur `modules/LiveMap` tauschen. *Only replace `modules/LiveMap`.*
+
+---
+
 ## [5.2.2] — 2026-11-12
 
 ### Changed / Geändert
