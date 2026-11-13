@@ -423,6 +423,13 @@ test('Kartenhoehe und Lueckenausgleich: Zahlen von GSG (Thomas 12.11.2026)', () 
   assert.equal(p(900, 137), 589);
   assert.equal(p(900, 600), 436);          // viele Fluege: Karte behaelt 60 %
   assert.equal(p(900, null), 726);         // Lage oben: keine Tafel unter der Karte
+  // Lage oben auf test 13.11.: Karte ab 157,5, Signatur 26,7 zaehlt voll → 527,8 + 26,7
+  // endet bei 712 = 728 - 16 (vorher 555, Widget ragte 11 px ueber den Fensterrand)
+  const oben = (fenster, tafel) => LM3.kartenHoehe({ fenster, oben: 157.5, untenFest: 0, tafel, signatur: 26.7, min: 420, max: 1000 });
+  assert.equal(oben(728, null), 528);
+  assert.equal(oben(950, null), 750);
+  assert.equal(oben(600, null), 420);      // kleines Fenster: Mindesthoehe greift weiter
+  assert.equal(oben(900, 600), 436);       // mit Tafel unten aendert die Signatur nichts (steckt in tafel)
   assert.equal(LM3.kartenHoehe({ fenster: 3000, oben: 0, tafel: 100, min: 420, max: 1000 }), 1000);
   assert.equal(LM3.kartenHoehe({ fenster: 900, oben: -300, untenFest: 50, tafel: null }), 834);   // gescrollt: oben zaehlt nicht negativ
   // SPTheme: 93 px bis zur Fusszeile, Huelle (row) ohne eigenen Abstand → -77, Luecke danach 16

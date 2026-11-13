@@ -419,9 +419,13 @@
         // fest am Fenster klebt (Cookie-Leiste) und 16 px Luft. Tafel unten teilt sich
         // den Platz: wenige Fluege, grosse Karte; viele Fluege, Karte mindestens 60 %
         // und die Liste geht auf der Seite weiter. Danach Mindest-/Hoechsthoehe.
+        // Ohne Tafel unten (Lage oben/aus) zaehlt die Signatur unter der Karte voll mit,
+        // sonst ragte das Widget um ihre Hoehe ueber den Fensterrand (gemessen 13.11.2026);
+        // mit Tafel steckt sie schon in p.tafel.
         function kartenHoehe(p) {
             var h = p.fenster - Math.max(0, p.oben || 0) - (p.untenFest || 0) - 16;
             if (p.tafel != null) h = Math.max(h - p.tafel, h * 0.6);
+            else h -= p.signatur || 0;
             return Math.round(Math.max(p.min || 420, Math.min(p.max || 1000, h)));
         }
         // Polster des Themes unter dem Widget auf 16 px schliessen (SPTheme liess
@@ -2477,12 +2481,11 @@
                     // die Zeilen gegen den Kopf, Abnahme 5.2.2), sie zaehlt mit Signatur.
                     var unten = wrap.classList.contains('lm3--tafel-unten') && wrap.querySelector('.lm3-unten');
                     var tafelH = null;
-                    if (unten && unten.offsetParent !== null) {
-                        var sig = wrap.querySelector('.lm3-signatur');
-                        tafelH = unten.getBoundingClientRect().height + (sig ? sig.getBoundingClientRect().height : 0);
-                    }
+                    var sig = wrap.querySelector('.lm3-signatur');
+                    var sigH = sig && sig.offsetParent !== null ? sig.getBoundingClientRect().height : 0;
+                    if (unten && unten.offsetParent !== null) tafelH = unten.getBoundingClientRect().height + sigH;
                     var neu = window.LM3.kartenHoehe({ fenster: window.innerHeight, oben: oben, untenFest: untenFest,
-                        tafel: tafelH, min: cfg.minHoehe, max: cfg.maxHoehe }) + 'px';
+                        tafel: tafelH, signatur: sigH, min: cfg.minHoehe, max: cfg.maxHoehe }) + 'px';
                     var geaendert = flaeche.style.height !== neu;
                     flaeche.style.height = neu;
                     schliesseLuecke();
