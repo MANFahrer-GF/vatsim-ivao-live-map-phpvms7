@@ -60,6 +60,14 @@ $app['env'] = 'dev';
 
 $fehler = 0;
 $anzahl = 0;
+// Bricht die Probe vor der Summenzeile ab (Ausnahme, fehlende Datei), endet sie mit Code 1 statt 0.
+$probeFertig = false;
+register_shutdown_function(static function (): void {
+    if (!$GLOBALS['probeFertig']) {
+        echo "\nABBRUCH: Probe vor der Summenzeile beendet ({$GLOBALS['anzahl']} Pruefungen bis dahin)\n";
+        exit(1);
+    }
+});
 function pruefe(string $name, bool $ok, $ist = null): void
 {
     global $fehler, $anzahl;
@@ -475,16 +483,39 @@ foreach (['Klassen fehlen (Modul fehlt)' => ['LiveMapProbe\\Fehlt\\', true], 'Mo
     pruefe("SC $name: Antwort unveraendert, kein Log, Crew::where nie aufgerufen", $code === 200 && $ohneStand($j) === $basis && $scLogZeilen() === $logVorher
         && LiveMapProbe\Zaehler::$where === 0, [array_column($j['fluege'] ?? [], 'id'), LiveMapProbe\Zaehler::$where]);
 }
-// Echte Standard-Quelle gegen das lokale phpVMS: dort liegt SharedCockpit main
-// (= heutiger Livestand, ohne CrewAuskunft). Ohne Attrappe → unveraendert.
+// Echte Standard-Quelle gegen das lokale phpVMS. Ohne CrewAuskunft (Stand vor Weg B):
+// Antwort unveraendert. Mit Weg B: echte Quelle gegen eine echte Crew-Zeile.
 zurueck();
 $einstellungen['acars.livemap_quelle'] = 'phpvms';
 $pireps = $scPaar;
 $app->forgetInstance(SC_QUELLE);
 if (class_exists('Modules\\SharedCockpit\\Support\\CrewAuskunft')) {
-    // Lokal liegt schon Weg B: der Livestand ohne CrewAuskunft laesst sich hier nicht nachstellen
-    // (abgedeckt durch „Klassen fehlen“ oben). Sichtbar, aber kein Fehler.
-    echo "skip SC Standard-Quelle: lokales SharedCockpit hat CrewAuskunft\n";
+    // Lokal liegt Weg B (SharedCockpit main seit 13.11.): Der Livestand ohne CrewAuskunft deckt
+    // „Klassen fehlen“ oben ab. Hier laeuft die echte Quelle mit echtem CrewAuskunft::daten und
+    // Spurtraeger::gastgeberLebt ueber eine Crew-Zeile in einer Transaktion (danach zurueck).
+    $echteNutzer = \App\Models\User::orderBy('id')->take(2)->get();
+    pruefe('SC echte Quelle: lokal zwei Nutzer fuer die Crew-Zeile', $echteNutzer->count() === 2, $echteNutzer->count());
+    \Illuminate\Support\Facades\DB::beginTransaction();
+    try {
+        [$gast, $mit] = [$echteNutzer[0], $echteNutzer[1]];
+        $jetzt = now();
+        $crewId = \Illuminate\Support\Facades\DB::table('sc_crews')->insertGetId([
+            'flight_id' => 'PROBEFLUG1', 'gastgeber_id' => $gast->id, 'partner_id' => $mit->id, 'rolle_gastgeber' => 'PM',
+            'status' => 'angenommen', 'fuehrender_pirep_id' => 'PROBEGAST1', 'spur_pirep_id' => 'PROBESPUR1',
+            'gastgeber_gesehen_at' => $jetzt, 'spur_gesehen_at' => $jetzt->copy()->addSeconds(30), 'created_at' => $jetzt, 'updated_at' => $jetzt,
+        ]);
+        $echt = new Modules\LiveMap\Support\SharedCockpitQuelle();
+        $aus = $echt->crews(['PROBESPUR1']);
+        pruefe('SC echte Quelle: eine Crew mit Daten aus CrewAuskunft', count($aus) === 1 && ($aus[0]['status'] ?? null) === 'angenommen'
+            && $aus[0]['spur_pirep_id'] === 'PROBESPUR1' && $aus[0]['fuehrender_pirep_id'] === 'PROBEGAST1' && $aus[0]['rolle_gastgeber'] === 'PM'
+            && $aus[0]['partner_name'] === $mit->name_private && $aus[0]['gastgeber_user_id'] === (int) $gast->id && $aus[0]['gastgeber_lebt'] === true, $aus);
+        pruefe('SC echte Quelle: fremder Bericht → keine Crew', $echt->crews(['PROBEANDERS']) === []);
+        \Illuminate\Support\Facades\DB::table('sc_crews')->where('id', $crewId)->update(['spur_gesehen_at' => $jetzt->copy()->addSeconds(200)]);
+        pruefe('SC echte Quelle: Gastgeber 200 s hinter dem Spurtraeger → nicht frisch', ($echt->crews(['PROBESPUR1'])[0]['gastgeber_lebt'] ?? null) === false);
+    } finally {
+        \Illuminate\Support\Facades\DB::rollBack();
+    }
+    pruefe('SC echte Quelle: Crew-Zeile zurueckgerollt', \Illuminate\Support\Facades\DB::table('sc_crews')->where('spur_pirep_id', 'PROBESPUR1')->doesntExist());
 } else {
     [$code, $j] = hole('/livemap/api/fluege');
     pruefe('SC Standard-Quelle gegen lokales SharedCockpit main: Antwort unveraendert', $code === 200 && $ohneStand($j) === $basis, array_column($j['fluege'] ?? [], 'id'));
@@ -857,5 +888,6 @@ Cache::flush();
 
 // ─────────────────────────────────────────────────────────────────────────
 Carbon::setTestNow();
+$probeFertig = true;
 echo "\n$anzahl Pruefungen, $fehler Fehler\n";
 exit($fehler > 0 ? 1 : 0);
