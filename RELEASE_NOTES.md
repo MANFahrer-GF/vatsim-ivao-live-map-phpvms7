@@ -1,4 +1,4 @@
-## v5.2.3 - No empty band below the flight board
+## v5.3.0 - Shared Cockpit on the map
 
 Release date: 2026-11-13
 
@@ -6,10 +6,10 @@ Release date: 2026-11-13
 
 ## English
 
-### Changed
+### Added
 
-* **No empty band below the flight board.** Some themes (for example SPTheme) put a large padding below the widget, on German Sky Group 93 px up to the footer. LiveMap now measures the next visible box below the widget and reduces the gap to 16 px. Then it measures again: if the content below does not move up (footer held by the theme, longer column next to it), the change is taken back, so no empty scroll space is left.
-* **Board on top or no board.** The signature below the map now counts towards the map height. Before, the widget was 27 px too tall and extended past the window edge. With the board below the map the height is calculated as in 5.2.2.
+* **Shared Cockpit on the map.** When two pilots fly one flight together with the SharedCockpit module, the map shows one aircraft instead of two. The host's flight shows "Shared Cockpit · with <name> · Host PF" (or PM) behind the pilot name in the flight board and as "Crew" in the flight detail. In the board the text is cut at the column edge, the full text appears when you point at it. This works with the data sources phpVMS, live and both.
+* **Without the SharedCockpit module nothing changes.** If the module is not installed or no crew is flying, the map looks exactly like 5.2.3.
 
 ### Update from 5.2.x or 5.1.x (FTP, no SSH)
 
@@ -17,16 +17,16 @@ Release date: 2026-11-13
 2. The theme file `live_map.blade.php` stays as it is.
 3. Admin → Maintenance → *Clear all caches*.
 
-Install ZIP attached: `LiveMap-full-package-v5.2.3.zip`.
+Install ZIP attached: `LiveMap-full-package-v5.3.0.zip`.
 
 ---
 
 ## Deutsch
 
-### Geändert
+### Neu
 
-* **Kein leeres Band mehr unter der Flugtafel.** Manche Themes (zum Beispiel SPTheme) setzen unter das Widget ein großes Polster, bei German Sky Group 93 px bis zur Fußzeile. LiveMap misst jetzt den nächsten sichtbaren Kasten unter dem Widget und verkleinert den Abstand auf 16 px. Danach misst es nach: Rückt der Inhalt darunter nicht nach (Fußzeile vom Theme festgehalten, längere Spalte daneben), wird die Änderung zurückgenommen, damit kein leerer Scrollraum bleibt.
-* **Tafel oben oder ohne Tafel.** Die Signatur unter der Karte zählt jetzt bei der Kartenhöhe mit. Vorher war das Widget um 27 px zu hoch und ragte über den Fensterrand. Mit der Tafel unter der Karte wird die Höhe gerechnet wie in 5.2.2.
+* **Shared Cockpit auf der Karte.** Fliegen zwei Piloten mit dem Modul SharedCockpit einen Flug gemeinsam, zeigt die Karte ein Flugzeug statt zwei. Am Flug des Gastgebers steht in der Flugtafel hinter dem Pilotennamen und im Flugdetail unter „Crew“: „Shared Cockpit · mit <Name> · Gastgeber PF“ (oder PM). In der Tafel wird der Text am Spaltenrand abgeschnitten, der volle Text erscheint, wenn man mit der Maus darauf zeigt. Das gilt für die Datenquellen phpVMS, live und beide.
+* **Ohne das Modul SharedCockpit ändert sich nichts.** Ist das Modul nicht installiert oder fliegt gerade keine Crew, sieht die Karte genau aus wie in 5.2.3.
 
 ### Aktualisieren von 5.2.x oder 5.1.x (FTP, ohne SSH)
 
@@ -34,4 +34,4 @@ Install ZIP attached: `LiveMap-full-package-v5.2.3.zip`.
 2. Die Theme-Datei `live_map.blade.php` bleibt, wie sie ist.
 3. Admin → Maintenance → *Clear all caches*.
 
-Installations-ZIP im Anhang: `LiveMap-full-package-v5.2.3.zip`.
+Installations-ZIP im Anhang: `LiveMap-full-package-v5.3.0.zip`.

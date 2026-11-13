@@ -30,7 +30,7 @@ This repository ships two deployable parts:
 
 For convenience, versioned full packages contain both, for example:
 
-- `LiveMap-full-package-v5.2.3.zip`
+- `LiveMap-full-package-v5.3.0.zip`
 
 ## Installation (FTP + phpVMS admin, no SSH)
 
