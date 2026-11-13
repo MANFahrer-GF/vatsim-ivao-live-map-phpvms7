@@ -477,6 +477,31 @@ test('schliesseLuecke: echte Funktion gegen nachgebaute Seiten (SPTheme, Seven, 
   assert.equal(LM3.wirksamerAusgleich(0, -77, 93, 70), -23);
 });
 
+test('messeHoehe: echte Funktion gibt die Signatur in Lage oben/aus an kartenHoehe weiter', () => {
+  // Pruefbefund 5.2.3: nur die reine Funktion war getestet; fiel die Uebergabe der
+  // Signatur in messeHoehe weg, ragte das Widget wieder ueber den Fensterrand.
+  const start = skript.indexOf('function messeHoehe() {');
+  const ende = skript.indexOf('// Unter dem Widget folgt im Theme oft', start);
+  assert.ok(start > 0 && ende > start, 'messeHoehe nicht gefunden');
+  const lauf = (tafelUnten) => {
+    const rechteck = (h, top = 0) => () => ({ top, bottom: top + h, height: h });
+    const sig = { offsetParent: {}, getBoundingClientRect: rechteck(26.7) };
+    const unten = { offsetParent: {}, getBoundingClientRect: rechteck(110) };
+    const flaeche = { style: { height: '' }, getBoundingClientRect: rechteck(0, 157.5) };
+    const wrap = { classList: { contains: (k) => tafelUnten && k === 'lm3--tafel-unten' }, contains: () => false,
+      querySelector: (s) => (s === '.lm3-signatur' ? sig : s === '.lm3-unten' ? unten : null) };
+    const ctx = { flaeche, wrap, cfg: { minHoehe: 420, maxHoehe: 1000 }, schliesseLuecke() {}, messeObenFrei() {},
+      getComputedStyle: () => ({ position: 'static', display: 'block', visibility: 'visible' }),
+      document: { body: { querySelectorAll: () => [] }, elementFromPoint: () => null },
+      window: { innerHeight: 728, innerWidth: 1470, pageYOffset: 0, LM3 } };
+    vm.runInNewContext(skript.slice(start, ende) + '; this.messeHoehe = messeHoehe;', ctx);
+    ctx.messeHoehe();
+    return flaeche.style.height;
+  };
+  assert.equal(lauf(false), '528px', 'Lage oben: Karte + Signatur enden 16 px ueber dem Fensterrand');
+  assert.equal(lauf(true), '420px', 'Tafel unten: wie 5.2.2 (Mindesthoehe bei 728)');
+});
+
 test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
   const dep = { lat: 50, lon: 8 }, arr = { lat: 52, lon: 13 };
   const f = (id, gs, lat, typ) => ({ id, callsign: id, aircraft_icao: typ, phase: 'CRUISE', pos: { lat, lon: 10, gs_kt: gs } });

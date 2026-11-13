@@ -15,10 +15,10 @@ All notable changes to this project are documented in this file.
   entsteht. *No empty band below the flight board: theme padding below the widget is reduced
   to 16 px, measured and reverted when the content below does not move up.*
 - **Lage oben / ohne Tafel:** Die Signatur unter der Karte zählt jetzt bei der Kartenhöhe mit.
-  Vorher ragte das Widget um ihre Höhe (27 px) über den Fensterrand. Mit Tafel unten bleibt
-  die Rechnung wie in 5.2.2. *Top / no board: the signature below the map now counts towards
-  the map height; the widget no longer extends 27 px past the window edge. Bottom board
-  unchanged.*
+  Vorher war das Widget um ihre Höhe (27 px) zu lang und ragte über den Fensterrand. Mit
+  Tafel unten bleibt die Rechnung wie in 5.2.2. *Top / no board: the signature below the map
+  now counts towards the map height; the widget was 27 px too tall and extended past the
+  window edge. Bottom board unchanged.*
 - Die Kartenhöhe wird in einer eigenen, getesteten Funktion berechnet. *Map height calculation
   moved into a tested function.*
 
