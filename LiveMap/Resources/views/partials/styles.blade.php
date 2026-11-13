@@ -205,6 +205,16 @@
                     .lm3-unten .lm3-thead { background: var(--lm-flaeche-2); }
                     .lm3-unten .lm3-g-plan { grid-template-columns: minmax(150px, 1.4fr) minmax(110px, 1fr) 96px minmax(100px, 1.2fr); }
                     .lm3-unten .lm3-zeilen { max-height: none; overflow: visible; }
+                    /* Unten mit Platz: groessere Schrift, Textspalten mit Mindestbreiten fuer
+                       lange Namen/Routen bei 15 px (Abnahme 5.2.2), Rest gewichtet verteilt —
+                       sonst schluckt eine Spalte den ganzen Platz. Summe der Minima 856 px
+                       + 8 x 6 px Abstand + 28 px Innenabstand = 932 <= 1000. */
+                    @container lmmitte (min-width: 1000px) {
+                        .lm3-unten .lm3-tafel { --lm-sp: minmax(148px, 1.2fr) minmax(124px, 1fr) minmax(52px, .6fr) minmax(72px, .7fr) minmax(48px, .6fr) minmax(116px, 1fr) minmax(60px, .6fr) minmax(104px, .9fr) minmax(132px, 1.2fr); }
+                        .lm3-unten .lm3-zeile { font-size: 15px; }
+                        .lm3-unten .lm3-thead { font-size: 12px; }
+                        .lm3-unten .lm3-pille { font-size: 13px; }
+                    }
 
                     /* Tafel gibt Spalten ab, statt ueber die rechte Spalte zu wachsen
                        (Selektoren mit .lm3 davor, damit sie auch die Tafel unten treffen) */

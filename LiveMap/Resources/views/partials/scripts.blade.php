@@ -207,10 +207,21 @@
             return pos.gs_kt != null && pos.gs_kt >= 150 && pos.vs_fpm != null && isFinite(pos.vs_fpm) && Math.abs(pos.vs_fpm) <= 500
                 && pos.alt_ft != null && pos.alt_ft >= 10000;
         }
+        // „Level" im Steigflug unter 5000 ft AGL: Die AeroACARS-Phasen-Engine schaltet
+        // dort nie auf Cruise (phase_v2.rs CRUISE_MIN_AGL_FT), ein VFR-Reiseflug (C172
+        // auf 2300 ft, GSG 1524 am 12.11.) bliebe sonst ohne ETA. Darueber wird aus
+        // „Level" nach 4–10 min von selbst Cruise; ein abfangender Jet bekommt seine
+        // ETA erst dann (sonst Stunden zu spaet bei langer Reststrecke).
+        function tieferReiseflug(f) {
+            var pos = f.pos || {}, agl = pos.agl_ft != null ? pos.agl_ft : pos.alt_ft;
+            return phaseForDisplay(f.phase, f.shadow_segment) === 'LEVEL' && String(f.phase).toUpperCase() === 'CLIMB'
+                && agl != null && agl < 5000 && pos.gs_kt != null && pos.gs_kt <= 180;
+        }
         function etaMinutenFuerFlug(f, weg, jetztMs) {
             if (!f || !weg || f.status === 'offline') return null;
             if (f.last_seen && jetztMs - f.last_seen > ETA_VERALTET_MS) return null;
-            if (!ETA_PHASEN[String(f.phase || '').toUpperCase()] && !imGeradeausflug(f)) return null;
+            var reise = ETA_PHASEN[String(f.phase || '').toUpperCase()] || tieferReiseflug(f);
+            if (!reise && !imGeradeausflug(f)) return null;
             return etaMinuten(weg.rest, f.pos ? f.pos.gs_kt : null);
         }
         function etaFuerFlug(f, weg, jetztMs) {
@@ -416,8 +427,35 @@
             if (sc.rolle_gastgeber === 'PF' || sc.rolle_gastgeber === 'PM') teile.push((en ? 'Host ' : 'Gastgeber ') + sc.rolle_gastgeber);
             return teile.join(' · ');
         }
+        // Hoehe der Kartenflaeche: Fenster minus was ueber der Karte steht, was unten
+        // fest am Fenster klebt (Cookie-Leiste) und 16 px Luft. Tafel unten teilt sich
+        // den Platz: wenige Fluege, grosse Karte; viele Fluege, Karte mindestens 60 %
+        // und die Liste geht auf der Seite weiter. Danach Mindest-/Hoechsthoehe.
+        // Ohne Tafel unten (Lage oben/aus) zaehlt die Signatur unter der Karte voll mit,
+        // sonst ragte das Widget um ihre Hoehe ueber den Fensterrand (gemessen 13.11.2026);
+        // mit Tafel steckt sie schon in p.tafel.
+        function kartenHoehe(p) {
+            var h = p.fenster - Math.max(0, p.oben || 0) - (p.untenFest || 0) - 16;
+            if (p.tafel != null) h = Math.max(h - p.tafel, h * 0.6);
+            else h -= p.signatur || 0;
+            return Math.round(Math.max(p.min || 420, Math.min(p.max || 1000, h)));
+        }
+        // Polster des Themes unter dem Widget auf 16 px schliessen (SPTheme liess
+        // 93 px leer bis zur Fusszeile, Thomas 12.11.2026): neuer Aussenabstand
+        // unten fuer die Huelle des Widgets.
+        function lueckenAusgleich(luecke, abstand) {
+            return luecke > 16 ? abstand - (luecke - 16) : abstand;
+        }
+        // Nach dem Setzen nachgemessen: nur so viel Ausgleich behalten, wie der Kasten
+        // darunter wirklich nachgerueckt ist (rueckt er nicht, bleibt der alte Abstand).
+        function wirksamerAusgleich(abstand, soll, lueckeVorher, lueckeNachher) {
+            var gerueckt = lueckeVorher - lueckeNachher;
+            if (gerueckt < 1) return abstand;
+            return Math.max(soll, abstand - gerueckt);
+        }
 
         wurzel.LM3 = {
+            kartenHoehe: kartenHoehe, lueckenAusgleich: lueckenAusgleich, wirksamerAusgleich: wirksamerAusgleich,
             PHASE_COLOR: PHASE_COLOR, PHASE_LIST: PHASE_LIST, PHASE_LABEL: PHASE_LABEL,
             phaseColor: phaseColor, phaseLabel: phaseLabel, phaseForDisplay: phaseForDisplay,
             formatSimLabel: formatSimLabel, fmtQnhBoth: fmtQnhBoth, ageString: ageString, zahl: zahl,
@@ -2458,14 +2496,70 @@
                         if (r.height < window.innerHeight / 2) untenFest = Math.max(untenFest, r.height);
                         break;
                     }
-                    // Tafel unten: ihre Kopfzeile soll noch im Fenster stehen, damit man
-                    // sieht, dass unter der Karte die Flugliste kommt.
-                    var kopfUnten = wrap.classList.contains('lm3--tafel-unten') && document.getElementById('lm3-tafel-kopf');
-                    if (kopfUnten && kopfUnten.offsetParent !== null) untenFest += kopfUnten.getBoundingClientRect().height;
-                    var h = window.innerHeight - Math.max(0, oben) - untenFest - 16;
-                    h = Math.max(cfg.minHoehe || 420, Math.min(cfg.maxHoehe || 1000, h));
-                    flaeche.style.height = Math.round(h) + 'px';
+                    // Tafel unten: kein Rollbalken in der Tafel (der verschob unter Windows
+                    // die Zeilen gegen den Kopf, Abnahme 5.2.2), sie zaehlt mit Signatur.
+                    var unten = wrap.classList.contains('lm3--tafel-unten') && wrap.querySelector('.lm3-unten');
+                    var tafelH = null;
+                    var sig = wrap.querySelector('.lm3-signatur');
+                    var sigH = sig && sig.offsetParent !== null ? sig.getBoundingClientRect().height : 0;
+                    if (unten && unten.offsetParent !== null) tafelH = unten.getBoundingClientRect().height + sigH;
+                    var neu = window.LM3.kartenHoehe({ fenster: window.innerHeight, oben: oben, untenFest: untenFest,
+                        tafel: tafelH, signatur: sigH, min: cfg.minHoehe, max: cfg.maxHoehe }) + 'px';
+                    var geaendert = flaeche.style.height !== neu;
+                    flaeche.style.height = neu;
+                    schliesseLuecke();
                     messeObenFrei();
+                    return geaendert;
+                }
+                // Unter dem Widget folgt im Theme oft ein Polster bis zur Fusszeile (SPTheme:
+                // 93 px). Die Karte reicht bis an den Fensterrand, beim Scrollen kam darunter
+                // ein leeres Band (Thomas 12.11.2026). Gemessen wird der naechste sichtbare
+                // Kasten unter dem Widget; den Ausgleich bekommt die aeusserste Huelle, die nur
+                // das Widget enthaelt — am Widget selbst endete der Kartenrahmen mitten in der
+                // Tafel. Vorher immer zuruecksetzen, damit die Luecke frisch gemessen wird.
+                // Waehrend der Ausgleich steht, ist der Uebergang der Huelle aus: sonst misst
+                // das Zuruecksetzen mitten in der Animation und jedes transitionend rechnet neu.
+                var huelle = null, huelleAlt = '', huelleUebergang = '';
+                function zaehltAlsInhalt(e) {
+                    var st = getComputedStyle(e);
+                    return e.offsetHeight > 0 && st.position !== 'fixed' && st.position !== 'absolute';
+                }
+                function gibHuelleFrei() {
+                    if (!huelle) return;
+                    huelle.style.marginBottom = huelleAlt;
+                    huelle.getBoundingClientRect();   // erst den Abstand setzen, dann den Uebergang zurueck — sonst animiert er
+                    huelle.style.transition = huelleUebergang;
+                    huelle = null;
+                }
+                function schliesseLuecke() {
+                    gibHuelleFrei();
+                    var k = wrap.getBoundingClientRect(), naechst = null, naechstEl = null, grenze = null;
+                    for (var a = wrap; a && a !== document.body && !naechst; a = a.parentElement) {
+                        for (var s = a.nextElementSibling; s; s = s.nextElementSibling) {
+                            var st = getComputedStyle(s);
+                            if (st.position === 'fixed' || st.display === 'none') continue;
+                            var r = s.getBoundingClientRect();
+                            if (!r.height || r.right <= k.left || r.left >= k.right || r.top < k.bottom - 1) continue;
+                            if (!naechst || r.top < naechst.top) { naechst = r; naechstEl = s; grenze = a.parentElement; }
+                        }
+                    }
+                    if (!naechst) return;
+                    var h = wrap;
+                    while (h.parentElement && h.parentElement !== grenze && [].filter.call(h.parentElement.children, zaehltAlsInhalt).length === 1) h = h.parentElement;
+                    var jetzt = parseFloat(getComputedStyle(h).marginBottom) || 0;
+                    var luecke = Math.round(naechst.top - k.bottom);
+                    var soll = window.LM3.lueckenAusgleich(luecke, jetzt);
+                    if (soll === jetzt) return;
+                    huelle = h; huelleAlt = h.style.marginBottom; huelleUebergang = h.style.transition;
+                    h.style.transition = 'none';
+                    h.style.marginBottom = soll + 'px';
+                    // Nachmessen: Haelt das Theme den Kasten fest (Seven: Fusszeile per
+                    // min-vh-100 unten, ebenso eine laengere Nachbarspalte), braechte der
+                    // Ausgleich nur leeren Scrollraum. Behalten wird nur, was nachgerueckt ist.
+                    var nachher = Math.round(naechstEl.getBoundingClientRect().top - wrap.getBoundingClientRect().bottom);
+                    var wirksam = window.LM3.wirksamerAusgleich(jetzt, soll, luecke, nachher);
+                    if (wirksam === jetzt) gibHuelleFrei();
+                    else if (wirksam !== soll) h.style.marginBottom = wirksam + 'px';
                 }
                 // Feste Leiste des Themes ueber der Kartenoberkante (Cookie-Hinweis oben bei
                 // Seven/Disposable, beim Scrollen die Navigationsleiste): Tafel, Zoom und
@@ -2726,10 +2820,12 @@
                 // Oben frei: beim Scrollen (feste Navigationsleiste) und wenn der Cookie-
                 // Hinweis nach dem Klick ausblendet (Klasse + Uebergang, kein childList).
                 var obenTimer = null;
-                function obenSpaeter() { clearTimeout(obenTimer); obenTimer = setTimeout(messeObenFrei, 120); }
+                // messeHoehe misst auch „oben frei" und rechnet die Hoehe neu, wenn eine
+                // feste Leiste unten (Cookie-Hinweis) verschwindet.
+                function obenSpaeter() { clearTimeout(obenTimer); obenTimer = setTimeout(function () { if (messeHoehe()) map.invalidateSize(); }, 120); }
                 window.addEventListener('scroll', obenSpaeter, { passive: true });
                 document.addEventListener('click', function () { setTimeout(obenSpaeter, 400); }, true);
-                document.addEventListener('transitionend', obenSpaeter, true);
+                document.addEventListener('transitionend', function (ev) { if (!/^margin/.test(ev.propertyName || '')) obenSpaeter(); }, true);
                 // Manche Themes haengen die Cookie-Leiste erst nach dem Laden in <body>
                 // (SPTheme) — dann neu messen, sonst laege sie ueber dem Tafelkopf unten.
                 if (window.MutationObserver && document.body) {
@@ -2738,6 +2834,17 @@
                         clearTimeout(hoeheTimer);
                         hoeheTimer = setTimeout(function () { messeHoehe(); map.invalidateSize(); }, 300);
                     }).observe(document.body, { childList: true });
+                }
+                // Tafel unten: neue/weggefallene Fluege oder Reiterwechsel aendern ihre
+                // Hoehe → Karte neu aufteilen (nur das Stilattribut der Tafel selbst
+                // aendert sich durch messeHoehe, das beobachten wir nicht → keine Schleife).
+                var untenBox = wrap && wrap.classList.contains('lm3--tafel-unten') && wrap.querySelector('.lm3-unten');
+                if (window.MutationObserver && untenBox) {
+                    var untenTimer = null;
+                    new MutationObserver(function () {
+                        clearTimeout(untenTimer);
+                        untenTimer = setTimeout(function () { if (messeHoehe()) map.invalidateSize(); }, 150);
+                    }).observe(untenBox, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
                 }
             })();
         });

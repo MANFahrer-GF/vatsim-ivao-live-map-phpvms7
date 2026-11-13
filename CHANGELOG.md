@@ -4,6 +4,51 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [5.2.3] — 2026-11-13
+
+### Changed / Geändert
+- **Kein leeres Band mehr unter der Flugtafel:** Manche Themes (z. B. SPTheme) setzen unter
+  das Widget ein großes Polster (bei GSG 93 px bis zur Fußzeile). LiveMap misst jetzt den
+  nächsten sichtbaren Kasten unter dem Widget und gleicht den Abstand auf 16 px an. Danach
+  wird nachgemessen: Rückt der Inhalt darunter nicht nach (Fußzeile vom Theme festgehalten,
+  längere Nachbarspalte), wird der Ausgleich zurückgenommen, damit kein leerer Scrollraum
+  entsteht. *No empty band below the flight board: theme padding below the widget is reduced
+  to 16 px, measured and reverted when the content below does not move up.*
+- **Lage oben / ohne Tafel:** Die Signatur unter der Karte zählt jetzt bei der Kartenhöhe mit.
+  Vorher war das Widget um ihre Höhe (27 px) zu lang und ragte über den Fensterrand. Mit
+  Tafel unten bleibt die Rechnung wie in 5.2.2. *Top / no board: the signature below the map
+  now counts towards the map height; the widget was 27 px too tall and extended past the
+  window edge. Bottom board unchanged.*
+- Die Kartenhöhe wird in einer eigenen, getesteten Funktion berechnet. *Map height calculation
+  moved into a tested function.*
+
+### Upgrade
+Nur `modules/LiveMap` tauschen. *Only replace `modules/LiveMap`.*
+
+---
+
+## [5.2.2] — 2026-11-12
+
+### Changed / Geändert
+- **Flugtafel unten mit Platz (ab 1000 px):** Spalten gleichmäßiger verteilt, Pilotennamen und
+  Routen behalten Mindestbreiten; Schrift größer (Zeilen 15 px, Kopf 12 px). Darunter wie 5.2.1.
+  *Bottom flight board: columns spread evenly, larger font from 1000 px.*
+- **Kartenhöhe passt sich der Tafel an:** Bei wenigen Flügen wächst die Karte bis zum
+  Fensterrand, bei vielen behält sie mindestens 60 % der Höhe, die Liste ist per Seitenscrollen
+  erreichbar (Admin-Grenzen gelten weiter). Kein eigener Rollbalken in der Tafel.
+  *Map grows when few flights are listed.*
+
+### Fixed / Behoben
+- **ETA bei „Level“ in niedriger Höhe:** Kleine Flugzeuge, die unter 5000 ft über Grund mit
+  höchstens 180 kt geradeaus fliegen, zeigt der ACARS-Client dauerhaft als „Level“ statt Cruise.
+  Sie bekommen jetzt eine ETA. Jets im Zwischenabfangen weiterhin nicht. *ETA for low, slow
+  level flight.*
+
+### Upgrade
+Nur `modules/LiveMap` tauschen. *Only replace `modules/LiveMap`.*
+
+---
+
 ## [5.2.1] — 2026-11-12
 
 ### Fixed / Behoben

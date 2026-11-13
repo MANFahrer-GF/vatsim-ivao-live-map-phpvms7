@@ -342,6 +342,20 @@ test('ETA je Flug: nur ab Reiseflug, nicht offline, nicht veraltet', () => {
   for (const p of ['CLIMB', 'TAKEOFF', 'TAKEOFF_ROLL', 'TAXI_OUT', 'TAXI_IN', 'BLOCKS_ON', 'ON_BLOCK'])
     assert.equal(LM3.etaFuerFlug(g(p, 280, 0, 12000), weg, jetzt), '', p);
   assert.equal(LM3.etaFuerFlug(f('CRUISE', 450, { pos: null }), weg, jetzt), '');
+  // Anzeige „Level" (Steig-/Sinkphase, Phasen-Engine meldet Geradeausflug): stabile GS,
+  // also ETA. GSG 1524 am 12.11.: C172 BGJN→BGAA auf 2300 ft blieb in CLIMB/level.
+  const lv = (phase, seg) => ({ phase, shadow_segment: seg, status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: 106, vs_fpm: 7, alt_ft: 2283 } });
+  assert.equal(LM3.etaFuerFlug({ ...lv('CLIMB', 'level') }, { rest: 38 }, jetzt), '18:01z');
+  assert.equal(LM3.etaFuerFlug(lv('CLIMB', 'climbing'), { rest: 38 }, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(lv('CLIMB', null), { rest: 38 }, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(lv('TAKEOFF', 'level'), { rest: 38 }, jetzt), '');   // nur Steig-/Sinkphase wird „Level"
+  // Jet faengt im Steigflug ab: keine ETA (waere bei langer Reststrecke Stunden zu spaet);
+  // ueber 5000 ft AGL wird daraus nach 4–10 min von selbst Cruise.
+  const jet = (alt, gs, agl) => ({ phase: 'CLIMB', shadow_segment: 'level', status: 'online', last_seen: jetzt - 5000, pos: { gs_kt: gs, vs_fpm: 0, alt_ft: alt, agl_ft: agl } });
+  assert.equal(LM3.etaFuerFlug(jet(10000, 290), { rest: 3300 }, jetzt), '');
+  assert.equal(LM3.etaFuerFlug(jet(3000, 210), { rest: 580 }, jetzt), '');            // tief, aber schnell
+  assert.equal(LM3.etaFuerFlug(jet(6500, 150, 6000), { rest: 40 }, jetzt), '');       // langsam, aber ueber 5000 ft AGL
+  assert.equal(LM3.etaFuerFlug(jet(5500, 110, 2100), { rest: 38 }, jetzt), '18:00z'); // hoher Platz: AGL zaehlt
 });
 
 test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
@@ -361,6 +375,11 @@ test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
   const voll = [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm)].map((m) => m[1]);   // oben und unten, ausserhalb der Stufen
   assert.equal(voll.length, 2);
   for (const sp of voll) assert.ok(mindest(sp) <= stufen[0].max + 1, 'volles Raster ' + mindest(sp) + ' px > ' + (stufen[0].max + 1));
+  // Tafel unten ab 1000 px (5.2.2): eigenes Raster mit Mindestbreiten fuer lange Namen
+  const breit = css.match(/@container lmmitte \(min-width: (\d+)px\)\s*\{[\s\S]*?--lm-sp:\s*([^;]+);/);
+  assert.ok(breit, 'Raster ab 1000 px nicht gefunden');
+  assert.equal(spalten(breit[2]).length, 9, 'Raster ab ' + breit[1] + ' px: 9 Spalten');
+  assert.ok(mindest(breit[2]) <= +breit[1], 'Raster ab ' + breit[1] + ' px braucht ' + mindest(breit[2]) + ' px');
   // Neue Spalten (5.2) fallen zuerst: wo Pilot/Rest/Hoehe/GS fehlen, fehlen auch
   // Typ und ETA; Pilot faellt nicht frueher als in 5.1.1 (Stufe 720 px).
   const versteckt = (m) => new Set([...m.matchAll(/\.lm3-sp-(\w+)/g)].map((x) => x[1]));
@@ -375,6 +394,112 @@ test('Tafel-Raster: jede Stufe passt in die Breite, ab der sie gilt', () => {
     assert.ok(stufen[i].sp, 'Stufe ' + stufen[i].max + ' ohne Raster');
     assert.ok(mindest(stufen[i].sp) <= stufen[i + 1].max + 1, 'Stufe ' + stufen[i].max + ': ' + mindest(stufen[i].sp) + ' px > ' + (stufen[i + 1].max + 1));
   }
+});
+
+test('Tafel unten: Raster ab 1000 px trifft nur unten, Zeilen ohne eigenen Rollbalken', () => {
+  // Abnahme 5.2.2: das breite Raster und die 15-px-Schrift gelten nur fuer die
+  // Lage unten; ein innerer Rollbalken (15a5bc4) verschob unter Windows die
+  // Zeilen gegen den Kopf.
+  const css = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'styles.blade.php'), 'utf8');
+  const block = css.match(/@container lmmitte \(min-width: \d+px\)\s*\{([\s\S]*?)\n\s*\}\n/);
+  assert.ok(block, 'Block ab 1000 px nicht gefunden');
+  const selektoren = [...block[1].matchAll(/^\s*([^{}\n]+?)\s*\{/gm)].map((m) => m[1]);
+  assert.ok(selektoren.length >= 4, 'Regeln im Block nicht gefunden');
+  for (const s of selektoren) for (const teil of s.split(',')) assert.match(teil.trim(), /^\.lm3-unten\s/, 'Regel ab 1000 px ausserhalb der Tafel unten: ' + teil.trim());
+  const grund = css.match(/^\s*\.lm3-unten \.lm3-zeilen\s*\{([^}]*)\}/m);
+  assert.ok(grund, '.lm3-unten .lm3-zeilen nicht gefunden');
+  assert.match(grund[1], /overflow:\s*visible/, 'Zeilen unten muessen overflow: visible haben');
+  for (const r of [...css.matchAll(/\.lm3-unten \.lm3-zeilen\s*\{([^}]*)\}/g)].map((m) => m[1])) {
+    assert.doesNotMatch(r, /overflow(-y)?:\s*(auto|scroll)/, 'Zeilen unten mit eigenem Rollbalken');
+    assert.match(r, /max-height:\s*none/, 'Zeilen unten mit Hoehendeckel');
+  }
+});
+
+test('Kartenhoehe und Lueckenausgleich: Zahlen von GSG (Thomas 12.11.2026)', () => {
+  // GSG eingeloggt: Karte ab 158 px, Tafel mit 1 Flug 110 + Signatur 27.
+  const p = (fenster, tafel) => LM3.kartenHoehe({ fenster, oben: 158, untenFest: 0, tafel, min: 420, max: 1000 });
+  assert.equal(p(753, 137), 442);          // Chrome 1490x753: endet 16 px ueber dem Fensterrand
+  assert.equal(p(728, 137), 420);          // Thomas' Edge: Mindesthoehe greift
+  assert.equal(p(900, 137), 589);
+  assert.equal(p(900, 600), 436);          // viele Fluege: Karte behaelt 60 %
+  assert.equal(p(900, null), 726);         // Lage oben: keine Tafel unter der Karte
+  // Lage oben auf test 13.11.: Karte ab 157,5, Signatur 26,7 zaehlt voll → 527,8 + 26,7
+  // endet bei 712 = 728 - 16 (vorher 555, Widget ragte 11 px ueber den Fensterrand)
+  const oben = (fenster, tafel) => LM3.kartenHoehe({ fenster, oben: 157.5, untenFest: 0, tafel, signatur: 26.7, min: 420, max: 1000 });
+  assert.equal(oben(728, null), 528);
+  assert.equal(oben(950, null), 750);
+  assert.equal(oben(600, null), 420);      // kleines Fenster: Mindesthoehe greift weiter
+  assert.equal(oben(900, 600), 436);       // mit Tafel unten aendert die Signatur nichts (steckt in tafel)
+  assert.equal(LM3.kartenHoehe({ fenster: 3000, oben: 0, tafel: 100, min: 420, max: 1000 }), 1000);
+  assert.equal(LM3.kartenHoehe({ fenster: 900, oben: -300, untenFest: 50, tafel: null }), 834);   // gescrollt: oben zaehlt nicht negativ
+  // SPTheme: 93 px bis zur Fusszeile, Huelle (row) ohne eigenen Abstand → -77, Luecke danach 16
+  assert.equal(LM3.lueckenAusgleich(93, 0), -77);
+  assert.equal(LM3.lueckenAusgleich(93, 16), -61);
+  assert.equal(LM3.lueckenAusgleich(16, 0), 0);
+  assert.equal(LM3.lueckenAusgleich(4, 10), 10);   // engere Themes bleiben, wie sie sind
+});
+
+test('schliesseLuecke: echte Funktion gegen nachgebaute Seiten (SPTheme, Seven, halbes Nachruecken)', () => {
+  // Pruefbefund 5.2.3: der Ausgleich wurde gesetzt, ohne nachzumessen; Seven haelt die
+  // Fusszeile per min-vh-100 fest, dann entstand leerer Scrollraum.
+  const start = skript.indexOf("var huelle = null, huelleAlt = ''");
+  const ende = skript.indexOf('// Feste Leiste des Themes', start);
+  assert.ok(start > 0 && ende > start, 'schliesseLuecke nicht gefunden');
+  const seite = (modus, vorgabe = '', uebergang = '') => {
+    const el = (name, kinder = [], hoehe = 10) => { const e = { name, children: kinder, offsetHeight: hoehe, style: { marginBottom: vorgabe && name === 'row' ? vorgabe : '', transition: name === 'row' ? uebergang : '' } };
+      kinder.forEach((k, i) => { k.parentElement = e; k.nextElementSibling = kinder[i + 1] || null; }); return e; };
+    const wrap = el('wrap'), card = el('card', [wrap]), row = el('row', [card]);
+    const basis = parseFloat(row.style.marginBottom) || 0;
+    const fuss = el('fuss'), inner = el('inner', [row, fuss]), body = el('body', [inner]);
+    body.parentElement = null; body.nextElementSibling = null;
+    const marge = () => parseFloat(row.style.marginBottom) || 0;
+    const fussOben = () => 830 + (modus === 'folgt' ? marge() - basis : modus === 'halb' ? Math.max(marge() - basis, -23) : 0);
+    wrap.getBoundingClientRect = () => ({ top: 158, bottom: 737, left: 263, right: 1450, height: 579 });
+    fuss.getBoundingClientRect = () => ({ top: fussOben(), bottom: fussOben() + 65, left: 263, right: 1450, height: 65 });
+    [card, row, inner, body].forEach((e) => { e.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, height: 0 }); });
+    const getComputedStyle = (e) => ({ position: e === fuss ? 'absolute' : 'static', display: 'block', marginBottom: e === row ? (row.style.marginBottom || '0px') : '0px' });
+    const ctx = { wrap, document: { body }, getComputedStyle, window: { LM3 } };
+    vm.runInNewContext(skript.slice(start, ende) + '; this.schliesseLuecke = schliesseLuecke;', ctx);
+    return { row, luecke: () => fussOben() - 737, lauf: ctx.schliesseLuecke };
+  };
+  const a = seite('folgt'); a.lauf();
+  assert.equal(a.row.style.marginBottom, '-77px'); assert.equal(a.luecke(), 16); assert.equal(a.row.style.transition, 'none');
+  a.lauf(); assert.equal(a.row.style.marginBottom, '-77px', 'zweiter Lauf aendert nichts');
+  const b = seite('haelt', '', 'margin .3s'); b.lauf();
+  assert.equal(b.row.style.marginBottom, '', 'Seven: kein Ausgleich, Fusszeile rueckt nicht');
+  assert.equal(b.row.style.transition, 'margin .3s', 'Uebergang zurueckgegeben');
+  const c = seite('halb'); c.lauf();
+  assert.equal(c.row.style.marginBottom, '-23px', 'nur das Nachgerueckte behalten'); assert.equal(c.luecke(), 70);
+  const d = seite('folgt', '30px'); d.lauf();
+  assert.equal(d.row.style.marginBottom, '-47px'); assert.equal(d.luecke(), 16);
+  assert.equal(LM3.wirksamerAusgleich(0, -77, 93, 93), 0);
+  assert.equal(LM3.wirksamerAusgleich(0, -77, 93, 16), -77);
+  assert.equal(LM3.wirksamerAusgleich(0, -77, 93, 70), -23);
+});
+
+test('messeHoehe: echte Funktion gibt die Signatur in Lage oben/aus an kartenHoehe weiter', () => {
+  // Pruefbefund 5.2.3: nur die reine Funktion war getestet; fiel die Uebergabe der
+  // Signatur in messeHoehe weg, ragte das Widget wieder ueber den Fensterrand.
+  const start = skript.indexOf('function messeHoehe() {');
+  const ende = skript.indexOf('// Unter dem Widget folgt im Theme oft', start);
+  assert.ok(start > 0 && ende > start, 'messeHoehe nicht gefunden');
+  const lauf = (tafelUnten) => {
+    const rechteck = (h, top = 0) => () => ({ top, bottom: top + h, height: h });
+    const sig = { offsetParent: {}, getBoundingClientRect: rechteck(26.7) };
+    const unten = { offsetParent: {}, getBoundingClientRect: rechteck(110) };
+    const flaeche = { style: { height: '' }, getBoundingClientRect: rechteck(0, 157.5) };
+    const wrap = { classList: { contains: (k) => tafelUnten && k === 'lm3--tafel-unten' }, contains: () => false,
+      querySelector: (s) => (s === '.lm3-signatur' ? sig : s === '.lm3-unten' ? unten : null) };
+    const ctx = { flaeche, wrap, cfg: { minHoehe: 420, maxHoehe: 1000 }, schliesseLuecke() {}, messeObenFrei() {},
+      getComputedStyle: () => ({ position: 'static', display: 'block', visibility: 'visible' }),
+      document: { body: { querySelectorAll: () => [] }, elementFromPoint: () => null },
+      window: { innerHeight: 728, innerWidth: 1470, pageYOffset: 0, LM3 } };
+    vm.runInNewContext(skript.slice(start, ende) + '; this.messeHoehe = messeHoehe;', ctx);
+    ctx.messeHoehe();
+    return flaeche.style.height;
+  };
+  assert.equal(lauf(false), '528px', 'Lage oben: Karte + Signatur enden 16 px ueber dem Fensterrand');
+  assert.equal(lauf(true), '420px', 'Tafel unten: wie 5.2.2 (Mindesthoehe bei 728)');
 });
 
 test('Sortierung nach ETA und Typ: fehlende Werte hinten', () => {
@@ -415,7 +540,7 @@ test('Tafelzeile: echte zeileAktiv liefert die Zellen in Kopf-Reihenfolge, ETA n
   const html = zeile('CRUISE');
   assert.deepEqual(oben(html), kopf, 'Zellen der Zeile = Spaltenkoepfe');
   const css = fs.readFileSync(path.join(HIER, '..', 'LiveMap', 'Resources', 'views', 'partials', 'styles.blade.php'), 'utf8');
-  for (const sp of [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm)].map((m) => m[1]))
+  for (const sp of [...css.matchAll(/^\s*--lm-sp:\s*([^;]+);/gm), ...css.matchAll(/@container lmmitte \(min-width: \d+px\)\s*\{[\s\S]*?--lm-sp:\s*([^;]+);/g)].map((m) => m[1]))
     assert.equal(sp.split(/\s+(?![^()]*\))/).length, kopf.length, 'volles Raster = Spaltenzahl');
 
   const zelle = (h, k) => { const m = h.match(new RegExp('<span class="' + k + '">([^<]*)</span>')); return m ? m[1] : null; };
